@@ -73,9 +73,9 @@ export const SERVICES: ServiceSpec[] = [
 
 export const APP_EXAMPLE = {
   eyebrow: "Ejemplo de app a medida",
-  title: "Inspección de aspas de aerogenerador",
+  title: "Inspección de palas de aerogenerador",
   lede:
-    "Una app instalada en el control DJI que guía al piloto por las cuatro caras de cada aspa. Mantiene la distancia a la superficie con el medidor láser del dron y toma fotos a intervalos fijos, para que todas las inspecciones se hagan igual.",
+    "Una app instalada en el control DJI que guía al piloto por las cuatro caras de cada pala. Mantiene la distancia a la superficie con el medidor láser del dron y toma fotos a intervalos fijos, para que todas las inspecciones se hagan igual.",
   steps: [
     { code: "TE", label: "Borde de salida" },
     { code: "PS", label: "Concha de presión" },
@@ -89,11 +89,11 @@ export const APP_EXAMPLE = {
     },
     {
       title: "Distancia constante",
-      body: "El láser mide la distancia al aspa en tiempo real, así todas las fotos tienen el mismo nivel de detalle.",
+      body: "El láser mide la distancia a la pala en tiempo real, así todas las fotos tienen el mismo nivel de detalle.",
     },
     {
       title: "Fotos por intervalo",
-      body: "La captura es automática mientras dura cada pasada. Al terminar, las imágenes quedan ordenadas por aerogenerador, aspa y cara.",
+      body: "La captura es automática mientras dura cada pasada. Al terminar, las imágenes quedan ordenadas por aerogenerador, pala y cara.",
     },
     {
       title: "Control del piloto",

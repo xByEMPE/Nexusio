@@ -21,7 +21,7 @@ export function AppShowcase() {
               <ControllerVideo
                 src="/media/app-inspeccion-aspas.webm"
                 poster="/media/app-inspeccion-aspas-poster.jpg"
-                label="Grabación de pantalla de la app de inspección de aspas durante un vuelo"
+                label="Grabación de pantalla de la app de inspección de palas durante un vuelo"
               />
             </RevealItem>
           </Reveal>
