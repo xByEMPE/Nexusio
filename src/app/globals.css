@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background-base: 0 0% 0%;
+    --surface-layer: 220 14% 4%;
+    --surface-raised: 225 10% 7%;
+    --border-subtle: 0 0% 15%;
+    --border-strong: 0 0% 23%;
+    --accent-primary: 218 99% 59%;
+    --accent-deep: 218 100% 10%;
+    --accent-muted: 222 26% 50%;
+    --telemetry-active: 218 100% 72%;
+    --signal-critical: 4 100% 65%;
+    --signal-caution: 39 77% 60%;
+    --foreground: 0 0% 100%;
+    --foreground-muted: 0 0% 66%;
+    --foreground-subtle: 0 0% 44%;
+    /* Texto sobre fondos de acento (botón primario): blanco en ambos temas */
+    --on-accent: 0 0% 100%;
+
+    color-scheme: dark;
+  }
+
+  /* Tema claro. Mismos nombres de token, otros valores: ningún componente
+     necesita clases distintas por tema. El atributo lo fija el script de
+     `ThemeScript` antes del primer pintado. */
+  html[data-theme="light"] {
+    --background-base: 220 20% 97%;
+    --surface-layer: 0 0% 100%;
+    --surface-raised: 220 22% 95%;
+    --border-subtle: 220 14% 88%;
+    --border-strong: 220 10% 76%;
+    --accent-primary: 218 79% 51%;
+    --accent-deep: 218 100% 95%;
+    --accent-muted: 222 26% 50%;
+    --telemetry-active: 218 85% 42%;
+    --signal-critical: 4 72% 48%;
+    --signal-caution: 33 90% 36%;
+    --foreground: 222 25% 8%;
+    --foreground-muted: 220 9% 33%;
+    --foreground-subtle: 220 7% 46%;
+
+    color-scheme: light;
+  }
+
+  /* Transición de colores solo durante el cambio de tema (no al cargar). */
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition:
+      background-color 320ms ease,
+      border-color 320ms ease,
+      color 320ms ease,
+      fill 320ms ease,
+      stroke 320ms ease !important;
+  }
+
+  html {
+    @apply bg-background-base text-foreground antialiased;
+    /* Sin scroll-behavior: smooth. La navegación interna la resuelve
+       InPageNavigation con un resorte propio que siempre llega a destino. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply min-h-dvh font-sans;
+    font-feature-settings: "ss01", "cv11";
+    /* Ningún adorno o elemento ancho debe provocar desplazamiento lateral.
+       `clip` (y no `hidden`) no crea contenedor de scroll: no rompe `sticky`. */
+    overflow-x: clip;
+  }
+
+  /* Los hijos de una grilla pueden encogerse por debajo de su ancho mínimo de
+     contenido. Sin esto, una tabla o un bloque de código ensancha toda la
+     columna y el teléfono reduce la página completa para que quepa. */
+  .grid > * {
+    min-width: 0;
+  }
+
+  ::selection {
+    background: hsl(var(--accent-primary) / 0.35);
+    color: hsl(var(--foreground));
+  }
+
+  :focus-visible {
+    outline: 1px solid hsl(var(--accent-primary));
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .label-caps {
+    @apply font-mono text-2xs uppercase tracking-label text-foreground-subtle;
+  }
+
+  .panel {
+    @apply rounded-[2px] border border-border-subtle bg-surface-layer;
+  }
+
+  /* Esquinas de retícula tipo visor de instrumento */
+  .reticle {
+    position: relative;
+  }
+  .reticle::before,
+  .reticle::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-color: hsl(var(--foreground) / 0.5);
+    pointer-events: none;
+  }
+  .reticle::before {
+    top: -1px;
+    left: -1px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+  }
+  .reticle::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom-width: 1px;
+    border-right-width: 1px;
+  }
+}

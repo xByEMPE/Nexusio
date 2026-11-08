@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.env
+.env.local
+*.tsbuildinfo
+next-env.d.ts
+supabase/.temp
+
+# Material fuente pesado (el video web optimizado está en public/media)
+material/*.mp4
+
+.claude/
