@@ -66,16 +66,25 @@ export function AppShowcase() {
         <Reveal className="mt-24">
           <RevealItem>
             <div id="compatibilidad" className="panel relative scroll-mt-20 overflow-hidden">
-              <div className="relative aspect-[4/3] w-full bg-black sm:aspect-[16/9] lg:aspect-[3584/1280]">
+              <div className="relative aspect-[1600/889] w-full bg-black lg:aspect-[3584/1280]">
+                {/* Teléfono y tablet: recorte ajustado a los dos drones, sin perder contenido */}
                 <Image
-                  src="/images/matrice-4-series.webp"
+                  src="/images/matrice-4-series-mobile.webp"
                   alt="Drones DJI"
                   fill
-                  sizes="(min-width: 1360px) 1300px, 100vw"
-                  // Se sirve el original (3584 px, WebP q92, 144 KB) sin reprocesar:
-                  // la recompresión del optimizador suaviza el detalle de los drones.
+                  sizes="(min-width: 1024px) 1px, 100vw"
                   unoptimized
-                  className="object-cover object-center"
+                  className="object-cover object-center lg:hidden"
+                />
+                {/* Escritorio: panorámica completa (3584 px, WebP q92, sin reprocesar) */}
+                <Image
+                  src="/images/matrice-4-series.webp"
+                  alt=""
+                  aria-hidden
+                  fill
+                  sizes="(min-width: 1360px) 1300px, 100vw"
+                  unoptimized
+                  className="hidden object-cover object-center lg:block"
                 />
                 <div
                   aria-hidden

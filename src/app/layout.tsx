@@ -1,10 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Geist, JetBrains_Mono } from "next/font/google";
 import { MotionConfig } from "motion/react";
-import { SiteHeader } from "@/components/layout/SiteHeader";
-import { InPageNavigation } from "@/components/layout/InPageNavigation";
-import { Mascot } from "@/components/mascot/Mascot";
-import { SiteFooter } from "@/components/layout/SiteFooter";
 import { WebVitalsReporter } from "@/components/observability/WebVitalsReporter";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
@@ -19,7 +15,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://nexus.example"),
+  metadataBase: new URL(process.env.SITE_URL ?? "https://nexusio.com.mx"),
   title: {
     default: "NEXUS — Apps para drones DJI y plataformas de inspección",
     template: "%s · NEXUS",
@@ -28,7 +24,7 @@ export const metadata: Metadata = {
     "Apps a medida para controles DJI con Mobile SDK v5, plataformas para gestionar proyectos de inspección con drones y desarrollo de páginas y servicios web.",
   openGraph: {
     type: "website",
-    locale: "es_CL",
+    locale: "es_MX",
     title: "NEXUS — Software · AI · Drones",
     description: "Apps para controles DJI, portales para ver resultados de inspección y desarrollo web.",
   },
@@ -56,19 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body>
-        <a
-          href="#contenido"
-          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:bg-accent-primary focus:px-4 focus:py-2 focus:text-on-accent"
-        >
-          Saltar al contenido
-        </a>
-        <MotionConfig reducedMotion="user">
-          <SiteHeader />
-          <main id="contenido">{children}</main>
-          <SiteFooter />
-          <Mascot />
-        </MotionConfig>
-        <InPageNavigation />
+        <MotionConfig reducedMotion="user">{children}</MotionConfig>
         <WebVitalsReporter />
       </body>
     </html>

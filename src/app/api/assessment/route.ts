@@ -5,6 +5,7 @@ import { createLogger } from "@/lib/observability/logger";
 import { newTraceId, traceIdFromHeader } from "@/lib/observability/ids";
 import { clientIp, createRateLimiter } from "@/lib/rate-limit";
 import { createServiceClient } from "@/services/supabase/server";
+import { isEmailConfigured, sendNewRequestEmail } from "@/services/notify/email";
 
 export const runtime = "nodejs";
 
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest) {
       trace_id: traceId,
       source_ip_hash: await hashIp(ip),
     })
-    .select("reference")
+    .select("id, reference")
     .single();
 
   if (error || !row) {
@@ -106,7 +107,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  span.end({ status: 201, persisted: true, industry: data.industry, fleetSize: data.fleetSize });
+  // Aviso por correo. Si falla, la solicitud ya quedó guardada: se registra
+  // el error y el visitante recibe igualmente su confirmación.
+  let emailed = false;
+  if (isEmailConfigured()) {
+    try {
+      await sendNewRequestEmail(data, { id: row.id, reference: row.reference });
+      emailed = true;
+    } catch (err) {
+      log.error("assessment.email_failed", {
+        reference: row.reference,
+        reason: err instanceof Error ? err.message.slice(0, 200) : "unknown",
+      });
+    }
+  } else {
+    log.warn("assessment.email_not_configured", { reference: row.reference });
+  }
+
+  span.end({ status: 201, persisted: true, emailed, industry: data.industry, fleetSize: data.fleetSize });
   return reply({ ok: true, reference: row.reference, traceId }, 201, traceId);
 }
 
