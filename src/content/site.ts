@@ -78,9 +78,9 @@ export const APP_EXAMPLE = {
     "Una app instalada en el control DJI que guía al piloto por las cuatro caras de cada aspa. Mantiene la distancia a la superficie con el medidor láser del dron y toma fotos a intervalos fijos, para que todas las inspecciones se hagan igual.",
   steps: [
     { code: "TE", label: "Borde de salida" },
-    { code: "PS", label: "Cara de presión" },
+    { code: "PS", label: "Concha de presión" },
     { code: "LE", label: "Borde de ataque" },
-    { code: "SS", label: "Cara de succión" },
+    { code: "SS", label: "Concha de succión" },
   ],
   features: [
     {
@@ -106,7 +106,7 @@ export const COMPATIBILITY = {
   title: "Drones y controles compatibles",
   body:
     "Trabajamos con DJI Mobile SDK v5, el kit oficial de DJI para crear apps en sus controles. Confirmamos la compatibilidad de su modelo en la evaluación inicial.",
-  aircraft: ["Matrice 4E / 4T", "Matrice 350 RTK", "Matrice 300 RTK", "Matrice 30 / 30T", "Mavic 3 Enterprise"],
+  aircraft: ["Matrice 4E / 4T", "Matrice 400", "Matrice 350 RTK", "Matrice 300 RTK", "Matrice 30 / 30T", "Mavic 3 Enterprise"],
   controllers: ["DJI RC Plus 2 Enterprise", "DJI RC Plus", "DJI RC Pro Enterprise"],
 } as const;
 

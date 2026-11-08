@@ -11,7 +11,7 @@ export function AppShowcase() {
         <SectionHeader
           index="02"
           eyebrow="Apps para controles DJI"
-          title="Su proceso de inspección, convertido en una app en el control."
+          title="Su proceso de inspección, convertido en una app para su equipo."
           lede="Cada app se diseña alrededor de una tarea concreta de su operación. Este es un ejemplo grabado en vuelo real."
         />
 
@@ -69,7 +69,7 @@ export function AppShowcase() {
               <div className="relative aspect-[4/3] w-full bg-black sm:aspect-[16/9] lg:aspect-[3584/1280]">
                 <Image
                   src="/images/matrice-4-series.webp"
-                  alt="Drones DJI Matrice 4T y Matrice 4E"
+                  alt="Drones DJI"
                   fill
                   sizes="(min-width: 1360px) 1300px, 100vw"
                   // Se sirve el original (3584 px, WebP q92, 144 KB) sin reprocesar:
@@ -86,7 +86,6 @@ export function AppShowcase() {
                 <CompatibilityBody />
               </div>
             </div>
-            <p className="mt-3 font-mono text-2xs text-foreground-subtle">Matrice 4T y Matrice 4E</p>
           </RevealItem>
         </Reveal>
       </div>
