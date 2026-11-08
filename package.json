@@ -5,7 +5,7 @@
   "description": "NEXUS — software a medida para drones DJI, inspección estructural automatizada y SaaS geoespacial.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:types": "supabase gen types typescript --local > src/services/supabase/database.types.ts"
