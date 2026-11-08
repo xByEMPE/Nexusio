@@ -73,7 +73,7 @@ export const PORTAL_PROJECTS: PortalProject[] = [
   {
     id: "wind",
     name: "Parque eólico Los Cerros",
-    site: "Región de Coquimbo",
+    site: "Oaxaca",
     assetLabel: "Aerogeneradores",
     assets: windAssets,
     progress: 0.75,
@@ -82,8 +82,8 @@ export const PORTAL_PROJECTS: PortalProject[] = [
   },
   {
     id: "line",
-    name: "Línea 220 kV Cardones",
-    site: "Región de Atacama",
+    name: "Línea 230 kV Norte",
+    site: "Sonora",
     assetLabel: "Torres",
     assets: lineAssets,
     progress: 1,
@@ -93,7 +93,7 @@ export const PORTAL_PROJECTS: PortalProject[] = [
   {
     id: "solar",
     name: "Planta fotovoltaica El Llano",
-    site: "Región de Atacama",
+    site: "Coahuila",
     assetLabel: "Mesas",
     assets: solarAssets,
     progress: 0.4,
@@ -103,9 +103,9 @@ export const PORTAL_PROJECTS: PortalProject[] = [
 ];
 
 export const PORTAL_REPORTS: PortalReport[] = [
-  { id: "r1", title: "Inspección trimestral de aspas · Q4", project: "Parque eólico Los Cerros", date: "06/11/2026", status: "in_review", pages: 48 },
-  { id: "r2", title: "Inspección de torres y aisladores", project: "Línea 220 kV Cardones", date: "02/11/2026", status: "published", pages: 36 },
+  { id: "r1", title: "Inspección trimestral de palas · Q4", project: "Parque eólico Los Cerros", date: "06/11/2026", status: "in_review", pages: 48 },
+  { id: "r2", title: "Inspección de torres y aisladores", project: "Línea 230 kV Norte", date: "02/11/2026", status: "published", pages: 36 },
   { id: "r3", title: "Termografía de módulos · Sector A", project: "Planta fotovoltaica El Llano", date: "07/11/2026", status: "draft", pages: 12 },
-  { id: "r4", title: "Inspección trimestral de aspas · Q3", project: "Parque eólico Los Cerros", date: "08/08/2026", status: "published", pages: 51 },
-  { id: "r5", title: "Volumetría de acopios · Octubre", project: "Rajo Norte", date: "31/10/2026", status: "published", pages: 9 },
+  { id: "r4", title: "Inspección trimestral de palas · Q3", project: "Parque eólico Los Cerros", date: "08/08/2026", status: "published", pages: 51 },
+  { id: "r5", title: "Volumetría de acopios · Octubre", project: "Tajo Norte", date: "31/10/2026", status: "published", pages: 9 },
 ];

@@ -183,10 +183,14 @@ export function Mascot() {
   }, []);
 
   const goTo = useCallback((href: string) => {
-    const id = href.replace(/^#/, "");
+    const id = href.replace(/^\/?#/, "");
     const reducedNow = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (scrollToSection(id, { smooth: !reducedNow }) && window.location.hash !== href) {
-      window.history.pushState(null, "", href);
+    if (!document.getElementById(id)) {
+      window.location.assign(`/#${id}`);
+      return;
+    }
+    if (scrollToSection(id, { smooth: !reducedNow }) && window.location.hash !== `#${id}`) {
+      window.history.pushState(null, "", `#${id}`);
     }
   }, []);
 
@@ -307,7 +311,7 @@ export function Mascot() {
                       <button
                         type="button"
                         onClick={tourNext}
-                        className="rounded-[2px] bg-accent-primary px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-telemetry-active"
+                        className="rounded-[2px] bg-accent-button px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-telemetry-active"
                       >
                         {bubble.step + 1 === TOUR_STEPS.length ? "Terminar" : "Siguiente"}
                       </button>
@@ -382,7 +386,7 @@ export function Mascot() {
                             closePanel();
                             goTo(answer.link!.href);
                           }}
-                          className="mt-4 inline-flex items-center gap-2 rounded-[2px] bg-accent-primary px-3 py-2 text-xs font-medium text-on-accent hover:bg-telemetry-active"
+                          className="mt-4 inline-flex items-center gap-2 rounded-[2px] bg-accent-button px-3 py-2 text-xs font-medium text-on-accent hover:bg-telemetry-active"
                         >
                           {answer.link.label} →
                         </button>

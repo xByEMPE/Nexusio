@@ -1,5 +1,5 @@
 const nf = (digits: number) =>
-  new Intl.NumberFormat("es-CL", {
+  new Intl.NumberFormat("es-MX", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
@@ -23,7 +23,7 @@ export function signed(value: number, digits = 1): string {
 }
 
 export function compact(value: number): string {
-  return new Intl.NumberFormat("es-CL", { notation: "compact", maximumFractionDigits: 1 }).format(
+  return new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 }).format(
     value,
   );
 }

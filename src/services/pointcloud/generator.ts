@@ -2,7 +2,7 @@ import type { PointCloudStats } from "@/contracts/platform";
 
 /**
  * Genera una nube de puntos sintética de un sector minero: terreno base con
- * ondulación, un banco de rajo escalonado y dos acopios cónicos. Calcula la
+ * ondulación, un banco de tajo escalonado y dos acopios cónicos. Calcula la
  * volumetría de los acopios integrando la altura sobre la superficie base,
  * igual que el módulo de producción sobre una nube clasificada real.
  */
@@ -45,7 +45,7 @@ const PILES: Pile[] = [
 
 function baseSurface(x: number, y: number): number {
   const undulation = Math.sin(x * 0.06) * 0.8 + Math.cos(y * 0.05) * 0.6;
-  // Banco escalonado del rajo hacia el sur (y negativo)
+  // Banco escalonado del tajo hacia el sur (y negativo)
   const bench = y < -14 ? -Math.min(3, Math.floor((-14 - y) / 6)) * 3.5 : 0;
   return undulation + bench;
 }

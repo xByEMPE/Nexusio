@@ -28,7 +28,7 @@ const PointCloudViewer = dynamic(
 const VIEWS = [
   { id: "overview", label: "Resumen", path: "resumen", icon: "M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z" },
   { id: "findings", label: "Hallazgos", path: "hallazgos/torre-t-0412", icon: "M8 2l6 11H2zM8 6v3M8 11v.5" },
-  { id: "model", label: "Modelo 3D", path: "modelos/acopios-rajo-norte", icon: "M8 2l6 3v6l-6 3-6-3V5zM2 5l6 3 6-3M8 8v6" },
+  { id: "model", label: "Modelo 3D", path: "modelos/acopios-tajo-norte", icon: "M8 2l6 3v6l-6 3-6-3V5zM2 5l6 3 6-3M8 8v6" },
   { id: "reports", label: "Reportes", path: "reportes", icon: "M4 2h6l3 3v9H4zM10 2v3h3M6 8h5M6 11h5" },
 ] as const;
 
@@ -37,7 +37,7 @@ type ViewId = (typeof VIEWS)[number]["id"];
 const TITLES: Record<ViewId, { title: string; subtitle: string }> = {
   overview: { title: "Resumen", subtitle: "Estado de todos sus proyectos" },
   findings: { title: "Hallazgos", subtitle: "Revise cada detección y confírmela o descártela" },
-  model: { title: "Modelo 3D", subtitle: "Acopios Rajo Norte · volumen calculado automáticamente" },
+  model: { title: "Modelo 3D", subtitle: "Acopios Tajo Norte · volumen calculado automáticamente" },
   reports: { title: "Reportes", subtitle: "Descargue los reportes aprobados" },
 };
 
@@ -61,7 +61,7 @@ export function ClientPortalPreview() {
           <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         </div>
         <div className="min-w-0 flex-1 truncate rounded-[2px] bg-background-base px-3 py-1 font-mono text-2xs text-foreground-subtle">
-          portal.suempresa.cl/<span className="text-foreground-muted">{current.path}</span>
+          portal.suempresa.mx/<span className="text-foreground-muted">{current.path}</span>
         </div>
       </div>
 
@@ -79,7 +79,7 @@ export function ClientPortalPreview() {
             {VIEWS.map((v) => {
               const active = v.id === view;
               return (
-                <li key={v.id} className="relative">
+                <li key={v.id} role="presentation" className="relative">
                   {active && (
                     <motion.span
                       layoutId="portal-nav"

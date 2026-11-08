@@ -14,7 +14,7 @@ interface Props {
  * Número que se desplaza hacia su valor con el resorte `telemetry`.
  * Escribe directamente en el nodo de texto: no provoca renders por fotograma.
  */
-export function AnimatedNumber({ value, format = (n) => Math.round(n).toLocaleString("es-CL"), className }: Props) {
+export function AnimatedNumber({ value, format = (n) => Math.round(n).toLocaleString("es-MX"), className }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
   const reduced = useReducedMotion();

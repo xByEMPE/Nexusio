@@ -16,28 +16,28 @@ export function Hero() {
       />
 
       <div className="container relative grid items-start gap-14 lg:grid-cols-12 lg:gap-10">
-        <Reveal className="lg:col-span-5 lg:pt-6" stagger={0.08}>
-          <RevealItem>
+        <div className="lg:col-span-5 lg:pt-6">
+          <div>
             <p className="font-mono text-2xs uppercase tracking-[0.35em] text-foreground-muted">{HERO.eyebrow}</p>
             <div className="mt-3 h-px w-24 bg-accent-muted" aria-hidden />
-          </RevealItem>
-          <RevealItem>
+          </div>
+          <div>
             <h1 id="hero-title" className="mt-8 text-balance text-[2rem] font-medium leading-[1.08] tracking-[-0.025em] sm:text-display-sm md:text-display-md">
               {HERO.title}
             </h1>
-          </RevealItem>
-          <RevealItem>
+          </div>
+          <div>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-foreground-muted md:text-lg">{HERO.lede}</p>
-          </RevealItem>
-          <RevealItem className="mt-9 flex flex-wrap gap-3">
+          </div>
+          <div className="mt-9 flex flex-wrap gap-3">
             <ButtonLink href={HERO.primaryCta.href} arrow>
               {HERO.primaryCta.label}
             </ButtonLink>
             <ButtonLink href={HERO.secondaryCta.href} variant="secondary">
               {HERO.secondaryCta.label}
             </ButtonLink>
-          </RevealItem>
-        </Reveal>
+          </div>
+        </div>
 
         <Reveal className="lg:col-span-7" delay={0.15}>
           <RevealItem>

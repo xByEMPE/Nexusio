@@ -102,7 +102,7 @@ export default async function RequestDetailPage({ params }: { params: Promise<{ 
           <aside className="flex flex-col gap-4">
             <a
               href={mailto}
-              className="inline-flex items-center justify-center rounded-[2px] bg-accent-primary px-4 py-3 text-sm font-medium text-on-accent hover:bg-telemetry-active"
+              className="inline-flex items-center justify-center rounded-[2px] bg-accent-button px-4 py-3 text-sm font-medium text-on-accent hover:bg-telemetry-active"
             >
               Responder por correo
             </a>

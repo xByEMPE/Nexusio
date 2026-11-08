@@ -53,7 +53,7 @@ function Readout({
 
 function LinkBars({ quality }: { quality: number }) {
   return (
-    <span className="inline-flex items-end gap-[2px]" aria-label={`Enlace ${quality} de 5`}>
+    <span role="img" className="inline-flex items-end gap-[2px]" aria-label={`Enlace ${quality} de 5`}>
       {[1, 2, 3, 4, 5].map((b) => (
         <span
           key={b}

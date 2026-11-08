@@ -63,7 +63,7 @@ export const QUICK_ANSWERS: readonly {
 /** Recorrido guiado: una frase por sección clave. */
 export const TOUR_STEPS: readonly { readonly href: string; readonly text: string }[] = [
   { href: "#servicios", text: "Empezamos por lo que hacemos: apps para controles DJI, plataformas de gestión y desarrollo web." },
-  { href: "#apps", text: "Este es un ejemplo de app a medida: guía al piloto para inspeccionar las aspas de un aerogenerador." },
+  { href: "#apps", text: "Este es un ejemplo de app a medida: guía al piloto para inspeccionar las palas de un aerogenerador." },
   { href: "#portal", text: "Y así se ven los resultados en un portal propio. Pruébelo: es interactivo." },
   { href: "#nosotros", text: "Detrás hay un equipo con un objetivo claro: acercar esta tecnología a más empresas." },
   { href: "#proceso", text: "Trabajamos por etapas, con entregas que usted revisa antes de avanzar." },

@@ -20,7 +20,7 @@ export function AppShowcase() {
             <RevealItem>
               <ControllerVideo
                 src="/media/app-inspeccion-aspas.webm"
-                poster="/media/app-inspeccion-aspas-poster.jpg"
+                poster="/media/app-inspeccion-aspas-poster.webp"
                 label="Grabación de pantalla de la app de inspección de palas durante un vuelo"
               />
             </RevealItem>
@@ -48,17 +48,17 @@ export function AppShowcase() {
             </RevealItem>
 
             <RevealItem>
-              <dl className="mt-8 space-y-5">
+              <ul className="mt-8 space-y-5">
                 {APP_EXAMPLE.features.map((f) => (
-                  <div key={f.title} className="grid grid-cols-[12px_1fr] gap-3">
+                  <li key={f.title} className="grid grid-cols-[12px_1fr] gap-3">
                     <span className="mt-[9px] h-1 w-1 bg-accent-primary" aria-hidden />
                     <div>
-                      <dt className="font-medium">{f.title}</dt>
-                      <dd className="mt-1 text-sm leading-relaxed text-foreground-muted">{f.body}</dd>
+                      <h4 className="font-medium">{f.title}</h4>
+                      <p className="mt-1 text-sm leading-relaxed text-foreground-muted">{f.body}</p>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </dl>
+              </ul>
             </RevealItem>
           </Reveal>
         </div>

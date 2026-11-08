@@ -17,9 +17,11 @@
     --signal-caution: 39 77% 60%;
     --foreground: 0 0% 100%;
     --foreground-muted: 0 0% 66%;
-    --foreground-subtle: 0 0% 44%;
+    --foreground-subtle: 0 0% 53%;
     /* Texto sobre fondos de acento (botón primario): blanco en ambos temas */
     --on-accent: 0 0% 100%;
+    /* Fondo de botones con texto blanco: contraste AA (>= 4.5:1) */
+    --accent-button: 218 80% 50%;
 
     color-scheme: dark;
   }
@@ -41,7 +43,8 @@
     --signal-caution: 33 90% 36%;
     --foreground: 222 25% 8%;
     --foreground-muted: 220 9% 33%;
-    --foreground-subtle: 220 7% 46%;
+    --foreground-subtle: 220 8% 40%;
+    --accent-button: 218 79% 48%;
 
     color-scheme: light;
   }

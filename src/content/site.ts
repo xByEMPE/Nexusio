@@ -1,11 +1,11 @@
 import type { ProcessStep, ServiceSpec, ValuePoint } from "@/contracts/platform";
 
 export const NAV = [
-  { href: "#servicios", label: "Servicios" },
-  { href: "#apps", label: "Apps DJI" },
-  { href: "#portal", label: "Portal de clientes" },
-  { href: "#nosotros", label: "Nosotros" },
-  { href: "#proceso", label: "Cómo trabajamos" },
+  { href: "/#servicios", label: "Servicios" },
+  { href: "/#apps", label: "Apps DJI" },
+  { href: "/#portal", label: "Portal de clientes" },
+  { href: "/#nosotros", label: "Nosotros" },
+  { href: "/#proceso", label: "Cómo trabajamos" },
 ] as const;
 
 export const HERO = {
@@ -36,8 +36,8 @@ export const SERVICES: ServiceSpec[] = [
       "Listas de verificación antes de volar",
       "Fotos ordenadas por activo y fecha",
     ],
-    href: "#apps",
-    cta: "Ver ejemplo",
+    href: "/servicios/apps-para-drones-dji",
+    cta: "Conocer el servicio",
   },
   {
     id: "platforms",
@@ -51,8 +51,8 @@ export const SERVICES: ServiceSpec[] = [
       "Reportes listos para descargar",
       "Usuarios con permisos según su rol",
     ],
-    href: "#portal",
-    cta: "Ver portal de ejemplo",
+    href: "/servicios/plataforma-inspeccion-drones",
+    cta: "Conocer el servicio",
   },
   {
     id: "web",
@@ -66,8 +66,8 @@ export const SERVICES: ServiceSpec[] = [
       "Conexión con planillas y sistemas actuales",
       "Alojamiento y mantenimiento",
     ],
-    href: "#evaluacion",
-    cta: "Conversemos su proyecto",
+    href: "/servicios/desarrollo-web",
+    cta: "Conocer el servicio",
   },
 ];
 

@@ -1,12 +1,13 @@
 import { NAV } from "@/content/site";
+import { SERVICE_PAGES } from "@/content/service-pages";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
 
 export function SiteFooter() {
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-border-subtle">
-      <div className="container grid gap-10 py-14 md:grid-cols-12">
-        <div className="md:col-span-5">
+      <div className="container grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-12">
+        <div className="sm:col-span-2 md:col-span-4">
           <div className="flex items-center gap-3">
             <NexusMark className="h-9 w-9" animated={false} spinning={false} />
             <Wordmark className="text-xl" />
@@ -21,7 +22,20 @@ export function SiteFooter() {
           </p>
         </div>
 
-        <nav aria-label="Pie de página" className="md:col-span-3">
+        <nav aria-label="Servicios" className="md:col-span-3">
+          <div className="label-caps mb-4">Servicios</div>
+          <ul className="space-y-2 text-sm">
+            {SERVICE_PAGES.map((p) => (
+              <li key={p.slug}>
+                <a href={`/servicios/${p.slug}`} className="text-foreground-muted hover:text-foreground">
+                  {p.eyebrow}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <nav aria-label="Pie de página" className="md:col-span-2">
           <div className="label-caps mb-4">Secciones</div>
           <ul className="space-y-2 text-sm">
             {NAV.map((n) => (
@@ -34,7 +48,7 @@ export function SiteFooter() {
           </ul>
         </nav>
 
-        <div className="md:col-span-4">
+        <div className="sm:col-span-2 md:col-span-3">
           <div className="label-caps mb-4">Aviso</div>
           <p className="text-xs leading-relaxed text-foreground-subtle">
             DJI, Matrice, Mavic y DJI RC son marcas de SZ DJI Technology Co., Ltd. NEXUS es un desarrollador

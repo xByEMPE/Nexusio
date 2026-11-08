@@ -10,7 +10,7 @@ const base =
   "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-accent-primary text-on-accent hover:bg-telemetry-active hover:text-background-base",
+  primary: "bg-accent-button text-on-accent hover:bg-telemetry-active hover:text-background-base",
   secondary:
     "border border-border-strong bg-transparent text-foreground hover:border-foreground/70 hover:bg-surface-raised",
   ghost: "px-3 text-foreground-muted hover:text-foreground",

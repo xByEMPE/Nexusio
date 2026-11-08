@@ -5,7 +5,7 @@ import type { InspectionFrame } from "@/contracts/platform";
 export const INSPECTION_FRAMES: Record<"zoom" | "thermal", InspectionFrame> = {
   zoom: {
     id: "img-0412-z-0193",
-    assetLabel: "Torre T-0412 · Línea 220 kV",
+    assetLabel: "Torre T-0412 · Línea 230 kV",
     assetKind: "transmission_tower",
     sensor: "zoom",
     capturedAt: "2026-10-14T15:42:08Z",
@@ -42,7 +42,7 @@ export const INSPECTION_FRAMES: Record<"zoom" | "thermal", InspectionFrame> = {
   },
   thermal: {
     id: "img-0412-t-0194",
-    assetLabel: "Torre T-0412 · Línea 220 kV",
+    assetLabel: "Torre T-0412 · Línea 230 kV",
     assetKind: "transmission_tower",
     sensor: "thermal",
     capturedAt: "2026-10-14T15:42:09Z",

@@ -56,7 +56,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <ButtonLink
-            href="#evaluacion"
+            href="/#evaluacion"
             variant="secondary"
             className="hidden py-2 text-xs lg:inline-flex"
             onClick={() => track("#evaluacion")}
@@ -114,7 +114,7 @@ export function SiteHeader() {
                 </li>
               ))}
               <li className="pt-4">
-                <ButtonLink href="#evaluacion" className="w-full" arrow onClick={() => track("#evaluacion")}>
+                <ButtonLink href="/#evaluacion" className="w-full" arrow onClick={() => track("#evaluacion")}>
                   Solicitar evaluación
                 </ButtonLink>
               </li>

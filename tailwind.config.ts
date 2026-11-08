@@ -46,6 +46,7 @@ const config: Config = {
         "signal-critical": token("signal-critical"),
         "signal-caution": token("signal-caution"),
         "on-accent": token("on-accent"),
+        "accent-button": token("accent-button"),
         foreground: {
           DEFAULT: token("foreground"),
           muted: token("foreground-muted"),
