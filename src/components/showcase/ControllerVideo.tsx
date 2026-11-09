@@ -6,6 +6,7 @@ import { useReducedMotion } from "motion/react";
 import { useInViewport } from "@/hooks/useInViewport";
 import { createLogger } from "@/lib/observability/logger";
 import { cn } from "@/lib/cn";
+import { useDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 
@@ -27,6 +28,7 @@ interface Props {
  * reproduce solo y muestra un botón de reproducción.
  */
 export function ControllerVideo({ src, poster, label }: Props) {
+  const t = useDict().apps;
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const inView = useInViewport(wrapRef, "200px");
@@ -69,7 +71,7 @@ export function ControllerVideo({ src, poster, label }: Props) {
       />
       <Image
         src="/images/control-rc-plus.webp"
-        alt="Control remoto DJI RC Plus sostenido con ambas manos"
+        alt={t.controllerAlt}
         fill
         sizes="(min-width: 1024px) 680px, 100vw"
         className="select-none object-contain"
@@ -103,7 +105,7 @@ export function ControllerVideo({ src, poster, label }: Props) {
         <button
           type="button"
           onClick={toggle}
-          aria-label={playing ? "Pausar video de la app" : "Reproducir video de la app"}
+          aria-label={playing ? t.pauseVideo : t.playVideo}
           className={cn(
             "absolute inset-0 grid place-items-center transition-opacity duration-spring-actuator ease-spring-actuator focus-visible:opacity-100",
             playing ? "opacity-0 hover:opacity-100" : "opacity-100",

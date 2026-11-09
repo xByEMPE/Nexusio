@@ -4,6 +4,7 @@ import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttri
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
+import { useDict } from "@/i18n/LocaleProvider";
 
 interface FieldProps {
   readonly label: string;
@@ -104,12 +105,13 @@ export function ChoiceGroup<T extends string>({
   columns = 2,
 }: ChoiceProps<T>) {
   const errId = useId();
+  const multipleLabel = useDict().form.multiple;
   const isOn = (v: T) => (Array.isArray(selected) ? selected.includes(v) : selected === v);
   return (
     <fieldset aria-describedby={error ? errId : undefined} className="flex flex-col gap-2">
       <legend className="label-caps mb-2">
         {legend}
-        {multiple && <span className="ml-2 normal-case tracking-normal text-foreground-subtle">(múltiple)</span>}
+        {multiple && <span className="ml-2 normal-case tracking-normal text-foreground-subtle">{multipleLabel}</span>}
       </legend>
       <div
         className={cn(

@@ -8,12 +8,12 @@ import { elevationColor, palette } from "@/lib/palette";
 import { compact, fixed } from "@/lib/format";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 type ColorMode = "elevation" | "class";
 
 const CLASS_COLORS = [palette.borderStrong, palette.accentPrimary, palette.foreground] as const;
-const CLASS_LABELS = ["Suelo", "Acopio", "Estructura"] as const;
 
 /**
  * Visor de nube de puntos en Canvas 2D con proyección en perspectiva.
@@ -21,6 +21,7 @@ const CLASS_LABELS = ["Suelo", "Acopio", "Estructura"] as const;
  * El render se detiene fuera de viewport.
  */
 export function PointCloudViewer() {
+  const t = useDict().pointCloud;
   const reduced = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -161,33 +162,33 @@ export function PointCloudViewer() {
           onPointerUp={onUp}
           onPointerCancel={onUp}
           role="img"
-          aria-label="Nube de puntos de un sector minero con dos acopios y un banco escalonado. Arrastre para orbitar."
+          aria-label={t.aria}
         />
         <div className="absolute left-3 top-3">
           <SegmentedControl<ColorMode>
             size="sm"
-            label="Modo de color"
+            label={t.colorMode}
             value={mode}
             onChange={changeMode}
             options={[
-              { value: "elevation", label: "Altura" },
-              { value: "class", label: "Por tipo" },
+              { value: "elevation", label: t.byHeight },
+              { value: "class", label: t.byType },
             ]}
           />
         </div>
         <div className="pointer-events-none absolute bottom-3 left-3 font-mono text-2xs text-white/50">
-          Arrastrar para orbitar
+          {t.dragHint}
         </div>
       </div>
 
       <aside className="flex flex-col gap-5 border-t border-border-subtle p-5 lg:border-l lg:border-t-0">
-        <div className="label-caps">Vuelo del 31/10/2026</div>
+        <div className="label-caps">{t.flightDate}</div>
         <dl className="grid grid-cols-2 gap-x-3 gap-y-4 lg:grid-cols-1">
           {[
-            ["Volumen de acopios", `${fixed(cloud.stats.volumeM3, 0)} m³`],
-            ["Superficie medida", `${fixed(((cloud.extent * 2) ** 2) / 10_000, 2)} ha`],
-            ["Precisión", `± ${fixed(cloud.stats.rmseCm, 1)} cm`],
-            ["Puntos medidos", compact(cloud.stats.points)],
+            [t.volume, `${fixed(cloud.stats.volumeM3, 0)} m³`],
+            [t.area, `${fixed(((cloud.extent * 2) ** 2) / 10_000, 2)} ha`],
+            [t.accuracy, `± ${fixed(cloud.stats.rmseCm, 1)} cm`],
+            [t.points, compact(cloud.stats.points)],
           ].map(([k, v]) => (
             <div key={k}>
               <dt className="label-caps">{k}</dt>
@@ -211,7 +212,7 @@ export function PointCloudViewer() {
             </>
           ) : (
             <ul className="space-y-1.5">
-              {CLASS_LABELS.map((l, i) => (
+              {t.classes.map((l, i) => (
                 <li key={l} className="flex items-center gap-2 font-mono text-2xs text-foreground-muted">
                   <span className="h-2 w-2" style={{ background: CLASS_COLORS[i] }} />
                   {l}

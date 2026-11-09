@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { MASCOT_NAME, QUICK_ANSWERS, SECTION_TIPS, TOUR_STEPS } from "@/content/mascot";
+import { useDict } from "@/i18n/LocaleProvider";
 import { scrollToSection } from "@/lib/scroll-to-section";
 import { spring } from "@/lib/motion";
 import { cn } from "@/lib/cn";
@@ -45,6 +45,10 @@ function markSeen(section: string) {
  * guiado. No usa servicios externos: todo el contenido sale de `content/`.
  */
 export function Mascot() {
+  const dict = useDict();
+  const m = dict.mascot;
+  const homePath = dict.meta.homePath;
+  const { name: MASCOT_NAME, quickAnswers: QUICK_ANSWERS, sectionTips: SECTION_TIPS, tour: TOUR_STEPS, ui: u } = m;
   const reduced = useReducedMotion();
   const launcherRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -186,13 +190,13 @@ export function Mascot() {
     const id = href.replace(/^\/?#/, "");
     const reducedNow = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!document.getElementById(id)) {
-      window.location.assign(`/#${id}`);
+      window.location.assign(`${homePath}#${id}`);
       return;
     }
     if (scrollToSection(id, { smooth: !reducedNow }) && window.location.hash !== `#${id}`) {
       window.history.pushState(null, "", `#${id}`);
     }
-  }, []);
+  }, [homePath]);
 
   const startTour = () => {
     setOpen(false);
@@ -293,7 +297,7 @@ export function Mascot() {
                     type="button"
                     onClick={bubble.kind === "tour" ? exitTour : () => setBubble(null)}
                     className="grid h-6 w-6 place-items-center text-foreground-subtle hover:text-foreground"
-                    aria-label={bubble.kind === "tour" ? "Salir del recorrido" : "Cerrar sugerencia"}
+                    aria-label={bubble.kind === "tour" ? u.exitTourAria : u.closeTipAria}
                   >
                     ×
                   </button>
@@ -306,14 +310,14 @@ export function Mascot() {
                     </span>
                     <div className="flex gap-2">
                       <button type="button" onClick={exitTour} className="px-2 py-1.5 text-xs text-foreground-muted hover:text-foreground">
-                        Salir
+                        {u.exit}
                       </button>
                       <button
                         type="button"
                         onClick={tourNext}
                         className="rounded-[2px] bg-accent-button px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-telemetry-active"
                       >
-                        {bubble.step + 1 === TOUR_STEPS.length ? "Terminar" : "Siguiente"}
+                        {bubble.step + 1 === TOUR_STEPS.length ? u.finish : u.next}
                       </button>
                     </div>
                   </div>
@@ -333,7 +337,7 @@ export function Mascot() {
               <motion.div
                 ref={panelRef}
                 role="dialog"
-                aria-label={`Ayuda de ${MASCOT_NAME}`}
+                aria-label={`${u.helpOf} ${MASCOT_NAME}`}
                 className="panel w-[min(360px,calc(100vw-2rem))] overflow-hidden shadow-2xl"
                 initial={{ opacity: 0, y: 14, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -343,14 +347,14 @@ export function Mascot() {
               >
                 <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
                   <div>
-                    <div className="text-sm font-medium">Hola, soy {MASCOT_NAME}</div>
-                    <div className="text-2xs text-foreground-subtle">Su guía en el sitio de NEXUS</div>
+                    <div className="text-sm font-medium">{u.hello} {MASCOT_NAME}</div>
+                    <div className="text-2xs text-foreground-subtle">{u.subtitle}</div>
                   </div>
                   <button
                     type="button"
                     onClick={closePanel}
                     className="grid h-8 w-8 place-items-center rounded-[2px] text-foreground-subtle hover:bg-surface-raised hover:text-foreground"
-                    aria-label="Cerrar ayuda"
+                    aria-label={u.closeHelp}
                   >
                     ×
                   </button>
@@ -371,7 +375,7 @@ export function Mascot() {
                         onClick={() => setAnswerId(null)}
                         className="mb-3 text-xs text-foreground-muted hover:text-foreground"
                       >
-                        ← Otras preguntas
+                        ← {u.otherQuestions}
                       </button>
                       <div className="text-sm font-medium">{answer.question}</div>
                       <div className="mt-2 max-h-[40vh] space-y-2 overflow-y-auto text-sm leading-relaxed text-foreground-muted">
@@ -401,7 +405,7 @@ export function Mascot() {
                       exit={{ opacity: 0, x: 10 }}
                       transition={spring("gimbal")}
                     >
-                      <p className="px-2 pb-2 pt-1 text-xs text-foreground-subtle">¿En qué le ayudo?</p>
+                      <p className="px-2 pb-2 pt-1 text-xs text-foreground-subtle">{u.howCanIHelp}</p>
                       <ul>
                         {QUICK_ANSWERS.map((q) => (
                           <li key={q.id}>
@@ -427,10 +431,10 @@ export function Mascot() {
                           onClick={startTour}
                           className="w-full rounded-[2px] border border-accent-primary/60 bg-accent-deep px-3 py-2.5 text-sm font-medium hover:border-accent-primary"
                         >
-                          Hacer un recorrido guiado (1 min)
+                          {u.startTour}
                         </button>
                         <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 pb-1 text-xs text-foreground-muted">
-                          Mostrar sugerencias mientras navego
+                          {u.showTips}
                           <input type="checkbox" checked={tipsEnabled} onChange={toggleTips} className="h-4 w-4 accent-[hsl(var(--accent-primary))]" />
                         </label>
                       </div>
@@ -451,7 +455,7 @@ export function Mascot() {
             onFocus={() => setHover(true)}
             onBlur={() => setHover(false)}
             aria-expanded={open}
-            aria-label={open ? `Cerrar ayuda de ${MASCOT_NAME}` : `Abrir ayuda de ${MASCOT_NAME}`}
+            aria-label={`${open ? u.closeHelpOf : u.openHelpOf} ${MASCOT_NAME}`}
             className="relative grid h-16 w-16 place-items-center rounded-full border border-border-subtle bg-surface-layer/90 shadow-xl backdrop-blur-md sm:h-[72px] sm:w-[72px]"
             animate={{ scale: shrink ? 0.78 : 1, opacity: shrink ? 0.85 : 1 }}
             whileHover={reduced ? undefined : { scale: shrink ? 0.84 : 1.06 }}

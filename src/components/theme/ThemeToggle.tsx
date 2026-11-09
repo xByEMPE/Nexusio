@@ -6,6 +6,7 @@ import { readTheme, setTheme, subscribeTheme, type Theme } from "@/lib/theme";
 import { spring } from "@/lib/motion";
 import { cn } from "@/lib/cn";
 import { createLogger } from "@/lib/observability/logger";
+import { useOptionalDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 
@@ -52,7 +53,8 @@ function Moon() {
 export function ThemeToggle({ className, withLabel = false }: { className?: string; withLabel?: boolean }) {
   const theme = useTheme();
   const next: Theme = theme === "dark" ? "light" : "dark";
-  const label = next === "light" ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+  const tt = useOptionalDict()?.theme ?? { toLight: "Cambiar a tema claro", toDark: "Cambiar a tema oscuro", light: "Tema claro", dark: "Tema oscuro" };
+  const label = next === "light" ? tt.toLight : tt.toDark;
 
   const toggle = () => {
     setTheme(next);
@@ -86,7 +88,7 @@ export function ThemeToggle({ className, withLabel = false }: { className?: stri
           </motion.span>
         </AnimatePresence>
       </span>
-      {withLabel && <span suppressHydrationWarning>{next === "light" ? "Tema claro" : "Tema oscuro"}</span>}
+      {withLabel && <span suppressHydrationWarning>{next === "light" ? tt.light : tt.dark}</span>}
     </button>
   );
 }

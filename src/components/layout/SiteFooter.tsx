@@ -1,8 +1,8 @@
-import { NAV } from "@/content/site";
-import { SERVICE_PAGES } from "@/content/service-pages";
+import type { Dictionary } from "@/i18n";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
 
-export function SiteFooter() {
+export function SiteFooter({ t }: { t: Dictionary }) {
+  const f = t.footer;
   const year = new Date().getFullYear();
   return (
     <footer className="border-t border-border-subtle">
@@ -16,18 +16,15 @@ export function SiteFooter() {
           <p className="mt-3 font-mono text-2xs uppercase tracking-[0.35em] text-foreground-muted">
             Software · AI · Drones
           </p>
-          <p className="mt-6 max-w-sm text-sm leading-relaxed text-foreground-subtle">
-            Apps a medida para controles DJI, plataformas para gestionar proyectos de inspección y desarrollo de
-            páginas y servicios web.
-          </p>
+          <p className="mt-6 max-w-sm text-sm leading-relaxed text-foreground-subtle">{f.tagline}</p>
         </div>
 
-        <nav aria-label="Servicios" className="md:col-span-3">
-          <div className="label-caps mb-4">Servicios</div>
+        <nav aria-label={f.services} className="md:col-span-3">
+          <div className="label-caps mb-4">{f.services}</div>
           <ul className="space-y-2 text-sm">
-            {SERVICE_PAGES.map((p) => (
+            {t.servicePages.map((p) => (
               <li key={p.slug}>
-                <a href={`/servicios/${p.slug}`} className="text-foreground-muted hover:text-foreground">
+                <a href={`${t.meta.servicesBase}/${p.slug}`} className="text-foreground-muted hover:text-foreground">
                   {p.eyebrow}
                 </a>
               </li>
@@ -35,10 +32,10 @@ export function SiteFooter() {
           </ul>
         </nav>
 
-        <nav aria-label="Pie de página" className="md:col-span-2">
-          <div className="label-caps mb-4">Secciones</div>
+        <nav aria-label={f.sections} className="md:col-span-2">
+          <div className="label-caps mb-4">{f.sections}</div>
           <ul className="space-y-2 text-sm">
-            {NAV.map((n) => (
+            {t.nav.items.map((n) => (
               <li key={n.href}>
                 <a href={n.href} className="text-foreground-muted hover:text-foreground">
                   {n.label}
@@ -49,11 +46,8 @@ export function SiteFooter() {
         </nav>
 
         <div className="sm:col-span-2 md:col-span-3">
-          <div className="label-caps mb-4">Aviso</div>
-          <p className="text-xs leading-relaxed text-foreground-subtle">
-            DJI, Matrice, Mavic y DJI RC son marcas de SZ DJI Technology Co., Ltd. NEXUS es un desarrollador
-            independiente y no está afiliado a DJI. El portal y el visualizador de esta página usan datos de ejemplo.
-          </p>
+          <div className="label-caps mb-4">{f.notice}</div>
+          <p className="text-xs leading-relaxed text-foreground-subtle">{f.noticeBody}</p>
         </div>
       </div>
       <div className="border-t border-border-subtle">

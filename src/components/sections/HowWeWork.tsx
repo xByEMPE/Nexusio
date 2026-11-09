@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { motion, useMotionValueEvent, useReducedMotion, useScroll, useSpring } from "motion/react";
-import { DATA_CARE, HOSTING, PROCESS, ROLE_MATRIX } from "@/content/site";
+import { useDict } from "@/i18n/LocaleProvider";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { spring } from "@/lib/motion";
@@ -10,6 +10,7 @@ import { springs } from "@/lib/motion-tokens";
 
 /** Pasos del proyecto con una línea de avance ligada al scroll. */
 function ProcessTimeline() {
+  const PROCESS = useDict().process.steps;
   const ref = useRef<HTMLOListElement>(null);
   const reduced = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start 75%", "end 55%"] });
@@ -60,14 +61,16 @@ function ProcessTimeline() {
 }
 
 export function HowWeWork() {
+  const t = useDict().process;
+  const { dataCare: DATA_CARE, hosting: HOSTING, roleMatrix: ROLE_MATRIX } = t;
   return (
     <section id="proceso" className="scroll-mt-20 border-t border-border-subtle py-24 md:py-32">
       <div className="container">
         <SectionHeader
           index="05"
-          eyebrow="Cómo trabajamos"
-          title="De la primera conversación a la app instalada en sus controles."
-          lede="Un proceso por etapas, con entregas que puede revisar y probar antes de pasar a la siguiente."
+          eyebrow={t.eyebrow}
+          title={t.title}
+          lede={t.lede}
         />
 
         <div className="mt-16">
@@ -76,7 +79,7 @@ export function HowWeWork() {
 
         <Reveal className="mt-24 grid gap-12 lg:grid-cols-12">
           <RevealItem className="lg:col-span-5">
-            <h3 className="text-2xl font-medium">Sus datos, bajo su control</h3>
+            <h3 className="text-2xl font-medium">{t.dataTitle}</h3>
             <div className="mt-8 space-y-6">
               {DATA_CARE.map((d, i) => (
                 <div key={d.title} className="grid grid-cols-[32px_1fr] gap-3">
@@ -89,7 +92,7 @@ export function HowWeWork() {
               ))}
             </div>
 
-            <h3 className="mt-14 text-xl font-medium">¿Dónde se aloja la plataforma?</h3>
+            <h3 className="mt-14 text-xl font-medium">{t.hostingTitle}</h3>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {HOSTING.map((h) => (
                 <div key={h.id} className="panel p-5">
@@ -101,10 +104,9 @@ export function HowWeWork() {
           </RevealItem>
 
           <RevealItem className="lg:col-span-7">
-            <h3 className="text-2xl font-medium">Cada persona ve lo que le corresponde</h3>
+            <h3 className="text-2xl font-medium">{t.rolesTitle}</h3>
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-foreground-muted">
-              Los permisos se definen por rol. Un piloto puede subir sus fotos sin ver los reportes en borrador, y un cliente
-              puede consultar sus reportes sin acceder a los de otros.
+              {t.rolesLede}
             </p>
             {/* Móvil: cada acción con los roles que la pueden realizar */}
             <ul className="panel mt-6 divide-y divide-border-subtle sm:hidden">
@@ -125,12 +127,10 @@ export function HowWeWork() {
             </ul>
             <div className="panel mt-6 hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[520px] border-collapse text-sm">
-                <caption className="sr-only">Permisos por rol</caption>
+                <caption className="sr-only">{t.rolesCaption}</caption>
                 <thead>
                   <tr className="border-b border-border-subtle">
-                    <th scope="col" className="px-4 py-3 text-left text-xs font-normal text-foreground-subtle">
-                      Acción
-                    </th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-normal text-foreground-subtle">{t.colAction}</th>
                     {ROLE_MATRIX.roles.map((r) => (
                       <th key={r} scope="col" className="px-3 py-3 text-center text-xs font-normal text-foreground-subtle">
                         {r}
@@ -147,9 +147,9 @@ export function HowWeWork() {
                       {p.grants.map((g, i) => (
                         <td key={i} className="px-3 py-3 text-center">
                           {g ? (
-                            <span className="inline-block h-2 w-2 bg-accent-primary" aria-label="Sí" />
+                            <span className="inline-block h-2 w-2 bg-accent-primary" aria-label={t.yes} />
                           ) : (
-                            <span className="inline-block h-px w-2 bg-border-strong align-middle" aria-label="No" />
+                            <span className="inline-block h-px w-2 bg-border-strong align-middle" aria-label={t.no} />
                           )}
                         </td>
                       ))}

@@ -1,18 +1,19 @@
 import Image from "next/image";
-import { APP_EXAMPLE, COMPATIBILITY } from "@/content/site";
+import type { Dictionary } from "@/i18n";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { ControllerVideo } from "@/components/showcase/ControllerVideo";
 
-export function AppShowcase() {
+export function AppShowcase({ t }: { t: Dictionary }) {
+  const APP_EXAMPLE = t.apps.example;
   return (
     <section id="apps" className="relative scroll-mt-20 overflow-hidden border-t border-border-subtle py-24 md:py-32">
       <div className="container">
         <SectionHeader
           index="02"
-          eyebrow="Apps para controles DJI"
-          title="Su proceso de inspección, convertido en una app para su equipo."
-          lede="Cada app se diseña alrededor de una tarea concreta de su operación. Este es un ejemplo grabado en vuelo real."
+          eyebrow={t.apps.eyebrow}
+          title={t.apps.title}
+          lede={t.apps.lede}
         />
 
         <div className="mt-14 grid items-center gap-12 lg:grid-cols-12">
@@ -21,7 +22,7 @@ export function AppShowcase() {
               <ControllerVideo
                 src="/media/app-inspeccion-aspas.webm"
                 poster="/media/app-inspeccion-aspas-poster.webp"
-                label="Grabación de pantalla de la app de inspección de palas durante un vuelo"
+                label={t.apps.videoLabel}
               />
             </RevealItem>
           </Reveal>
@@ -34,7 +35,7 @@ export function AppShowcase() {
             </RevealItem>
 
             <RevealItem>
-              <ol className="mt-8 grid grid-cols-2 gap-1.5 sm:grid-cols-4" aria-label="Secuencia de la inspección">
+              <ol className="mt-8 grid grid-cols-2 gap-1.5 sm:grid-cols-4" aria-label={t.apps.sequenceAria}>
                 {APP_EXAMPLE.steps.map((s, i) => (
                   <li key={s.code} className="panel px-2.5 py-3">
                     <div className="flex items-center justify-between">
@@ -70,7 +71,7 @@ export function AppShowcase() {
                 {/* Teléfono y tablet: recorte ajustado a los dos drones, sin perder contenido */}
                 <Image
                   src="/images/matrice-4-series-mobile.webp"
-                  alt="Drones DJI"
+                  alt={t.apps.dronesAlt}
                   fill
                   sizes="(min-width: 1024px) 1px, 100vw"
                   unoptimized
@@ -92,7 +93,7 @@ export function AppShowcase() {
                 />
               </div>
               <div className="grid gap-8 border-t border-border-subtle p-7 md:p-10 lg:grid-cols-12">
-                <CompatibilityBody />
+                <CompatibilityBody c={t.apps.compatibility} />
               </div>
             </div>
           </RevealItem>
@@ -102,7 +103,7 @@ export function AppShowcase() {
   );
 }
 
-function CompatibilityBody() {
+function CompatibilityBody({ c: COMPATIBILITY }: { c: Dictionary["apps"]["compatibility"] }) {
   return (
     <>
       <div className="lg:col-span-6">
@@ -111,7 +112,7 @@ function CompatibilityBody() {
       </div>
       <div className="grid gap-6 sm:grid-cols-2 lg:col-span-6">
         <div>
-          <div className="label-caps mb-3">Drones</div>
+          <div className="label-caps mb-3">{COMPATIBILITY.dronesLabel}</div>
           <ul className="space-y-1.5 text-sm">
             {COMPATIBILITY.aircraft.map((a) => (
               <li key={a}>{a}</li>
@@ -119,7 +120,7 @@ function CompatibilityBody() {
           </ul>
         </div>
         <div>
-          <div className="label-caps mb-3">Controles</div>
+          <div className="label-caps mb-3">{COMPATIBILITY.controllersLabel}</div>
           <ul className="space-y-1.5 text-sm">
             {COMPATIBILITY.controllers.map((c) => (
               <li key={c}>{c}</li>

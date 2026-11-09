@@ -2,19 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { PORTAL_PROJECTS, PORTAL_REPORTS } from "@/content/portal-demo";
 import type { AssetHealth, PortalAsset, PortalProject } from "@/contracts/platform";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 
-const HEALTH: Record<AssetHealth, { label: string; color: string; text: string }> = {
-  ok: { label: "Sin observaciones", color: "hsl(var(--accent-muted))", text: "text-foreground-muted" },
-  observed: { label: "Con observaciones", color: "hsl(var(--signal-caution))", text: "text-signal-caution" },
-  critical: { label: "Requiere atención", color: "hsl(var(--signal-critical))", text: "text-signal-critical" },
+const HEALTH: Record<AssetHealth, { color: string; text: string }> = {
+  ok: { color: "hsl(var(--accent-muted))", text: "text-foreground-muted" },
+  observed: { color: "hsl(var(--signal-caution))", text: "text-signal-caution" },
+  critical: { color: "hsl(var(--signal-critical))", text: "text-signal-critical" },
 };
 
 const MAP_W = 600;
@@ -45,12 +45,13 @@ function AssetGlyph({ project, asset, active }: { project: PortalProject["id"]; 
 }
 
 function ProjectMap({ project, selected, onSelect }: { project: PortalProject; selected: string | null; onSelect: (id: string | null) => void }) {
+  const t = useDict().portal;
   const asset = project.assets.find((a) => a.id === selected) ?? null;
   const pts = project.assets.map((a) => ({ ...a, px: a.x * MAP_W, py: a.y * MAP_H }));
 
   return (
     <div className="relative md:h-full">
-      <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="aspect-[600/340] w-full md:aspect-auto md:h-full" role="img" aria-label={`Mapa de ${project.name}`}>
+      <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} className="aspect-[600/340] w-full md:aspect-auto md:h-full" role="img" aria-label={`${t.mapOf} ${project.name}`}>
         <defs>
           <pattern id="portal-grid" width={30} height={30} patternUnits="userSpaceOnUse">
             <path d="M 30 0 L 0 0 0 30" fill="none" stroke="hsl(var(--border-subtle))" strokeWidth={0.5} />
@@ -85,7 +86,7 @@ function ProjectMap({ project, selected, onSelect }: { project: PortalProject; s
               className="cursor-pointer"
               onClick={() => onSelect(p.id === selected ? null : p.id)}
               role="button"
-              aria-label={`${p.code}: ${HEALTH[p.health].label}`}
+              aria-label={`${p.code}: ${t.health[p.health]}`}
             >
               <circle r={20} fill="transparent" />
               {p.health === "critical" && (
@@ -109,18 +110,18 @@ function ProjectMap({ project, selected, onSelect }: { project: PortalProject; s
           >
             <div className="flex items-center justify-between">
               <span className="font-mono text-sm">{asset.code}</span>
-              <button type="button" onClick={() => onSelect(null)} className="text-foreground-subtle hover:text-foreground" aria-label="Cerrar detalle">
+              <button type="button" onClick={() => onSelect(null)} className="text-foreground-subtle hover:text-foreground" aria-label={t.closeDetail}>
                 ×
               </button>
             </div>
-            <div className={cn("mt-1 text-xs", HEALTH[asset.health].text)}>{HEALTH[asset.health].label}</div>
+            <div className={cn("mt-1 text-xs", HEALTH[asset.health].text)}>{t.health[asset.health]}</div>
             <dl className="mt-3 space-y-1.5 text-xs">
               <div className="flex justify-between">
-                <dt className="text-foreground-subtle">Hallazgos abiertos</dt>
+                <dt className="text-foreground-subtle">{t.openFindings}</dt>
                 <dd className="font-mono tabular">{asset.openFindings}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-foreground-subtle">Última inspección</dt>
+                <dt className="text-foreground-subtle">{t.lastInspection}</dt>
                 <dd className="font-mono tabular">{asset.lastInspection}</dd>
               </div>
             </dl>
@@ -132,7 +133,7 @@ function ProjectMap({ project, selected, onSelect }: { project: PortalProject; s
         {(Object.keys(HEALTH) as AssetHealth[]).map((h) => (
           <li key={h} className="flex items-center gap-1.5 text-2xs text-foreground-muted">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: HEALTH[h].color }} />
-            {HEALTH[h].label}
+            {t.health[h]}
           </li>
         ))}
       </ul>
@@ -141,6 +142,9 @@ function ProjectMap({ project, selected, onSelect }: { project: PortalProject; s
 }
 
 export function PortalOverview() {
+  const t = useDict().portal;
+  const PORTAL_PROJECTS = t.projects;
+  const PORTAL_REPORTS = t.reports;
   const [projectId, setProjectId] = useState<PortalProject["id"]>("wind");
   const [assetId, setAssetId] = useState<string | null>(null);
   const project = PORTAL_PROJECTS.find((p) => p.id === projectId) ?? PORTAL_PROJECTS[0]!;
@@ -170,10 +174,10 @@ export function PortalOverview() {
     <div className="flex h-full flex-col">
       <div className="grid grid-cols-2 border-b border-border-subtle xl:grid-cols-4">
         {[
-          { label: "Activos inspeccionados", value: totals.inspected, suffix: ` / ${totals.assets}` },
-          { label: "Hallazgos abiertos", value: totals.open },
-          { label: "Hallazgos críticos", value: totals.critical, tone: "text-signal-critical" },
-          { label: "Reportes publicados", value: totals.reports },
+          { label: t.kpis.inspected, value: totals.inspected, suffix: ` / ${totals.assets}` },
+          { label: t.kpis.open, value: totals.open },
+          { label: t.kpis.critical, value: totals.critical, tone: "text-signal-critical" },
+          { label: t.kpis.reports, value: totals.reports },
         ].map((k, i) => (
           <div key={k.label} className={cn("p-4 md:p-5", i % 2 === 1 && "border-l border-border-subtle", i > 1 && "max-xl:border-t xl:border-l border-border-subtle")}>
             <div className="text-xs text-foreground-subtle">{k.label}</div>
@@ -191,10 +195,10 @@ export function PortalOverview() {
             <div>
               <div className="text-sm font-medium">{project.name}</div>
               <div className="text-xs text-foreground-subtle">
-                {project.site} · {project.assets.length} {project.assetLabel.toLowerCase()} · Último vuelo: {project.lastFlight.toLowerCase()}
+                {project.site} · {project.assets.length} {project.assetLabel.toLowerCase()} · {t.lastFlight}: {project.lastFlight.toLowerCase()}
               </div>
             </div>
-            <span className="hidden text-2xs text-foreground-subtle md:inline">Toque un activo para ver su estado</span>
+            <span className="hidden text-2xs text-foreground-subtle md:inline">{t.tapHint}</span>
           </div>
           <div className="px-2 md:h-[330px]">
             <ProjectMap project={project} selected={assetId} onSelect={setAssetId} />
@@ -202,7 +206,7 @@ export function PortalOverview() {
         </div>
 
         <aside className="flex flex-col">
-          <div className="px-4 pb-2 pt-4 text-xs text-foreground-subtle">Proyectos</div>
+          <div className="px-4 pb-2 pt-4 text-xs text-foreground-subtle">{t.projectsLabel}</div>
           <ul>
             {PORTAL_PROJECTS.map((p) => {
               const active = p.id === project.id;
@@ -237,12 +241,12 @@ export function PortalOverview() {
           </ul>
 
           <div className="mt-auto border-t border-border-subtle p-4">
-            <div className="mb-3 text-xs text-foreground-subtle">Hallazgos del proyecto</div>
+            <div className="mb-3 text-xs text-foreground-subtle">{t.projectFindings}</div>
             {(
               [
-                ["Críticos", sev.critical, "bg-signal-critical"],
-                ["Moderados", sev.moderate, "bg-signal-caution"],
-                ["Menores", sev.minor, "bg-telemetry-active"],
+                [t.sevCritical, sev.critical, "bg-signal-critical"],
+                [t.sevModerate, sev.moderate, "bg-signal-caution"],
+                [t.sevMinor, sev.minor, "bg-telemetry-active"],
               ] as const
             ).map(([label, n, color]) => (
               <div key={label} className="mb-2 grid grid-cols-[72px_1fr_24px] items-center gap-2 text-xs">

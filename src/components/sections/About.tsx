@@ -1,10 +1,11 @@
-import { ABOUT } from "@/content/site";
+import type { Dictionary } from "@/i18n";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { NexusMark } from "@/components/brand/NexusMark";
 import { cn } from "@/lib/cn";
 
-export function About() {
+export function About({ t }: { t: Dictionary }) {
+  const ABOUT = t.about;
   const { comparison } = ABOUT;
 
   return (
@@ -53,12 +54,12 @@ export function About() {
                       <p className="leading-relaxed text-foreground-muted">{p.body}</p>
                       {isVision && (
                         <div className="mt-5 flex items-center gap-3 font-mono text-2xs uppercase tracking-label" aria-hidden>
-                          <span className="text-foreground">México</span>
+                          <span className="text-foreground">{ABOUT.visionFrom}</span>
                           <span className="relative h-px flex-1 max-w-40 bg-border-strong">
                             <span className="absolute inset-y-0 left-0 w-1/2 bg-accent-primary" />
                             <span className="absolute -top-[3px] left-1/2 h-[7px] w-[7px] -translate-x-1/2 rounded-full bg-accent-primary" />
                           </span>
-                          <span className="text-foreground-subtle">Internacional</span>
+                          <span className="text-foreground-subtle">{ABOUT.visionTo}</span>
                         </div>
                       )}
                     </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SERVICES } from "@/content/site";
+import type { Dictionary } from "@/i18n";
 import type { ServiceSpec } from "@/contracts/platform";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
@@ -35,15 +35,16 @@ function ServiceIcon({ id }: { id: ServiceSpec["id"] }) {
   );
 }
 
-export function Services() {
+export function Services({ t }: { t: Dictionary }) {
+  const SERVICES = t.services.items;
   return (
     <section id="servicios" className="scroll-mt-20 border-t border-border-subtle py-24 md:py-32">
       <div className="container">
         <SectionHeader
           index="01"
-          eyebrow="Servicios"
-          title="Lo que desarrollamos para su operación con drones."
-          lede="Desde la app que usa el piloto en terreno hasta el portal donde se revisan los resultados y el sitio web de su empresa."
+          eyebrow={t.services.eyebrow}
+          title={t.services.title}
+          lede={t.services.lede}
         />
 
         <Reveal className="mt-14 grid gap-4 lg:grid-cols-3" stagger={0.08}>

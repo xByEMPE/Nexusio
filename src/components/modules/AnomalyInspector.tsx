@@ -2,24 +2,24 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { INSPECTION_FRAMES } from "@/content/demo-data";
 import type { Finding, Severity } from "@/contracts/platform";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cn } from "@/lib/cn";
 import { fixed } from "@/lib/format";
 import { spring } from "@/lib/motion";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 
 type Sensor = "zoom" | "thermal";
 type Review = "pending" | "confirmed" | "dismissed";
 
-const SEVERITY: Record<Severity, { label: string; text: string; stroke: string }> = {
-  critical: { label: "Crítico", text: "text-signal-critical", stroke: "hsl(var(--signal-critical))" },
-  moderate: { label: "Moderado", text: "text-signal-caution", stroke: "hsl(var(--signal-caution))" },
-  minor: { label: "Menor", text: "text-telemetry-active", stroke: "hsl(var(--telemetry-active))" },
-  info: { label: "Info", text: "text-foreground-muted", stroke: "hsl(var(--foreground-muted))" },
+const SEVERITY: Record<Severity, { text: string; stroke: string }> = {
+  critical: { text: "text-signal-critical", stroke: "hsl(var(--signal-critical))" },
+  moderate: { text: "text-signal-caution", stroke: "hsl(var(--signal-caution))" },
+  minor: { text: "text-telemetry-active", stroke: "hsl(var(--telemetry-active))" },
+  info: { text: "text-foreground-muted", stroke: "hsl(var(--foreground-muted))" },
 };
 
 const W = 800;
@@ -125,6 +125,8 @@ function ThermalOverlay() {
 }
 
 export function AnomalyInspector() {
+  const t = useDict().inspector;
+  const INSPECTION_FRAMES = t.frames;
   const [sensor, setSensor] = useState<Sensor>("zoom");
   const frame = INSPECTION_FRAMES[sensor];
   const [selectedId, setSelectedId] = useState<string>(frame.findings[0]?.id ?? "");
@@ -146,7 +148,7 @@ export function AnomalyInspector() {
   return (
     <div className="grid h-full lg:grid-cols-[1fr_300px]">
       <div className={cn("relative aspect-[8/5] transition-colors duration-spring-gimbal lg:aspect-auto lg:min-h-[320px]", sensor === "thermal" ? "bg-[hsl(220_30%_6%)]" : "bg-background-base")}>
-        <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" role="img" aria-label={`${frame.assetLabel}, imagen ${sensor === "zoom" ? "zoom RGB" : "térmica"}`}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" role="img" aria-label={`${frame.assetLabel}, ${sensor === "zoom" ? t.imageZoom : t.imageThermal}`}>
           <rect width={W} height={H} fill={sensor === "thermal" ? "hsl(220 30% 6%)" : "hsl(var(--background-base))"} />
           <TowerArt thermal={sensor === "thermal"} />
           {sensor === "thermal" && <ThermalOverlay />}
@@ -193,12 +195,12 @@ export function AnomalyInspector() {
         <div className="absolute left-3 top-3">
           <SegmentedControl<Sensor>
             size="sm"
-            label="Sensor"
+            label={t.sensor}
             value={sensor}
             onChange={changeSensor}
             options={[
-              { value: "zoom", label: "Zoom RGB" },
-              { value: "thermal", label: "Térmico" },
+              { value: "zoom", label: t.zoom },
+              { value: "thermal", label: t.thermal },
             ]}
           />
         </div>
@@ -209,10 +211,10 @@ export function AnomalyInspector() {
 
       <aside className="flex flex-col border-t border-border-subtle lg:border-l lg:border-t-0">
         <div className="border-b border-border-subtle p-4">
-          <div className="label-caps">Activo</div>
+          <div className="label-caps">{t.asset}</div>
           <div className="mt-1 text-sm">{frame.assetLabel}</div>
         </div>
-        <ul className="divide-y divide-border-subtle" aria-label="Detecciones">
+        <ul className="divide-y divide-border-subtle" aria-label={t.detections}>
           {frame.findings.map((f) => {
             const active = f.id === selected?.id;
             const state = reviews[f.id] ?? "pending";
@@ -229,12 +231,12 @@ export function AnomalyInspector() {
                 >
                   <span>
                     <span className={cn("font-mono text-2xs uppercase tracking-label", SEVERITY[f.severity].text)}>
-                      {SEVERITY[f.severity].label}
+                      {t.severity[f.severity]}
                     </span>
                     <span className="mt-0.5 block text-sm leading-snug">{f.label}</span>
                   </span>
                   <span className="shrink-0 font-mono text-2xs text-foreground-subtle">
-                    {state === "pending" ? "Pendiente" : state === "confirmed" ? "Confirmado" : "Descartado"}
+                    {t.review[state]}
                   </span>
                 </button>
               </li>
@@ -254,20 +256,20 @@ export function AnomalyInspector() {
             >
               <dl className="grid grid-cols-2 gap-3 font-mono text-2xs">
                 <div>
-                  <dt className="label-caps">Código</dt>
+                  <dt className="label-caps">{t.code}</dt>
                   <dd className="mt-1 text-foreground">{selected.code}</dd>
                 </div>
                 <div>
-                  <dt className="label-caps">Confianza</dt>
+                  <dt className="label-caps">{t.confidence}</dt>
                   <dd className="mt-1 tabular text-foreground">{fixed(selected.confidence * 100, 1)} %</dd>
                 </div>
                 <div className="col-span-2">
-                  <dt className="label-caps">Componente</dt>
+                  <dt className="label-caps">{t.component}</dt>
                   <dd className="mt-1 text-foreground-muted">{selected.component}</dd>
                 </div>
                 {selected.measurement && (
                   <div className="col-span-2">
-                    <dt className="label-caps">Medición</dt>
+                    <dt className="label-caps">{t.measurement}</dt>
                     <dd className="mt-1 tabular text-signal-caution">
                       +{fixed(selected.measurement.value, 1)} {selected.measurement.unit}
                     </dd>
@@ -280,14 +282,14 @@ export function AnomalyInspector() {
                   onClick={() => review(selected, "confirmed")}
                   className="rounded-[2px] border border-accent-primary/70 bg-accent-deep px-3 py-2 text-xs transition-colors duration-spring-actuator ease-spring-actuator hover:bg-accent-primary hover:text-on-accent"
                 >
-                  Confirmar hallazgo
+                  {t.confirm}
                 </button>
                 <button
                   type="button"
                   onClick={() => review(selected, "dismissed")}
                   className="rounded-[2px] border border-border-strong px-3 py-2 text-xs text-foreground-muted transition-colors duration-spring-actuator ease-spring-actuator hover:text-foreground"
                 >
-                  Descartar
+                  {t.dismiss}
                 </button>
               </div>
             </motion.div>

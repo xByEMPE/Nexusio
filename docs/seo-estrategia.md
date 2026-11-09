@@ -30,6 +30,21 @@ Medición con Lighthouse en móvil (compilación de producción, red 4G simulada
 
 ---
 
+## 1.1 Versión en inglés
+
+El sitio es bilingüe. El español está en `/` y el inglés en `/en`:
+
+| Español | Inglés |
+|---|---|
+| `/` | `/en` |
+| `/servicios/apps-para-drones-dji` | `/en/services/dji-drone-app-development` |
+| `/servicios/plataforma-inspeccion-drones` | `/en/services/drone-inspection-software` |
+| `/servicios/desarrollo-web` | `/en/services/web-development` |
+
+Cada página declara su par en el otro idioma (`hreflang`), tanto en el HTML como en el sitemap, para que Google muestre a cada visitante la versión de su idioma. Los textos se editan en `src/i18n/es.ts` y `src/i18n/en.ts`.
+
+Palabras clave en inglés (hipótesis): *DJI drone app development*, *drone inspection software*, *web development for businesses*.
+
 ## 2. Palabras clave objetivo
 
 Son **hipótesis iniciales**, elegidas por intención de búsqueda. El volumen real hay que confirmarlo en Google Keyword Planner (gratis con una cuenta de Google Ads, sin necesidad de pagar anuncios) y, después de unas semanas, en Search Console.
@@ -52,7 +67,7 @@ Recomendación: concentrar el esfuerzo en las dos primeras. Son búsquedas de ni
 2. **Agregar propiedad → Dominio** → `nexusio.com.mx`.
 3. Google te dará un registro **TXT**. En hPanel: **Dominios → nexusio.com.mx → DNS / Nameservers → Agregar registro** tipo TXT, nombre `@`, y pega el valor. Vuelve a Search Console y pulsa **Verificar** (puede tardar unos minutos).
 4. **Sitemaps** → escribe `sitemap.xml` → **Enviar**.
-5. **Inspección de URLs** → pega `https://nexusio.com.mx/` → **Probar URL publicada**. Confirma que Google puede leer la página (la CDN de Hostinger bloquea a quien se hace pasar por Googlebot, pero debe dejar pasar al Googlebot real; esta prueba lo confirma). Luego **Solicitar indexación**. Repite con las 3 páginas de servicio.
+5. **Inspección de URLs** → pega `https://nexusio.com.mx/` → **Probar URL publicada**. Repite después con `https://nexusio.com.mx/en`. Confirma que Google puede leer la página (la CDN de Hostinger bloquea a quien se hace pasar por Googlebot, pero debe dejar pasar al Googlebot real; esta prueba lo confirma). Luego **Solicitar indexación**. Repite con las 3 páginas de servicio.
 
 ### 3.2 Perfil de Empresa en Google (Google Business Profile)
 Aparecer en el mapa y en el panel lateral de Google cuando buscan "desarrollo de software drones" cerca de tu zona.

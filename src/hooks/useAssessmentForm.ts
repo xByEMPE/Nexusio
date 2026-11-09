@@ -11,6 +11,7 @@ import {
 } from "@/contracts/assessment";
 import { submitAssessment } from "@/services/assessment/client";
 import { createLogger } from "@/lib/observability/logger";
+import { useLocale } from "@/i18n/LocaleProvider";
 
 const log = createLogger("assessment.submit");
 
@@ -21,7 +22,7 @@ type SubmitState =
   | { status: "editing" }
   | { status: "submitting" }
   | { status: "success"; reference: string }
-  | { status: "error"; message: string; traceId: string };
+  | { status: "error"; code: string; message: string; traceId: string };
 
 const INITIAL: AssessmentDraft = {
   services: [],
@@ -51,6 +52,7 @@ function flatten(issues: readonly { path: readonly PropertyKey[]; message: strin
  * pueden divergir.
  */
 export function useAssessmentForm() {
+  const locale = useLocale();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<AssessmentDraft>(INITIAL);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -120,7 +122,7 @@ export function useAssessmentForm() {
 
     setSubmit({ status: "submitting" });
     const span = log.span("form.submit", { industry: parsed.data.industry, fleetSize: parsed.data.fleetSize });
-    const res: AssessmentResponse = await submitAssessment(parsed.data);
+    const res: AssessmentResponse = await submitAssessment({ ...parsed.data, locale });
     const fillMs = startedAt.current ? Math.round(performance.now() - startedAt.current) : null;
 
     if (res.ok) {
@@ -133,9 +135,9 @@ export function useAssessmentForm() {
         for (const [k, v] of Object.entries(res.fieldErrors)) if (v[0]) fe[k as keyof AssessmentDraft] = v[0];
         setErrors(fe);
       }
-      setSubmit({ status: "error", message: res.message, traceId: res.traceId });
+      setSubmit({ status: "error", code: res.error, message: res.message, traceId: res.traceId });
     }
-  }, [draft, step, validateStep]);
+  }, [draft, step, validateStep, locale]);
 
   const reset = useCallback(() => {
     setDraft(INITIAL);

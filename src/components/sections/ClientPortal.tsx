@@ -1,23 +1,22 @@
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { ClientPortalPreview } from "@/components/portal/ClientPortalPreview";
+import type { Dictionary } from "@/i18n";
 
-const HIGHLIGHTS = [
-  { title: "Todo en un mapa", body: "Cada activo aparece con un color según su estado. Un clic muestra su última inspección." },
-  { title: "Hallazgos revisados por personas", body: "Las detecciones automáticas se confirman o descartan antes de llegar al reporte." },
-  { title: "Reportes listos para compartir", body: "Su cliente o su gerencia descargan el PDF aprobado sin pedirlo por correo." },
-] as const;
 
-export function ClientPortal() {
+
+export function ClientPortal({ t: dict }: { t: Dictionary }) {
+  const t = dict.portal;
+  const HIGHLIGHTS = t.highlights;
   return (
     <section id="portal" className="relative scroll-mt-20 overflow-hidden border-t border-border-subtle py-24 md:py-32">
       <div aria-hidden className="pointer-events-none absolute right-0 top-40 h-[520px] w-[520px] rounded-full bg-accent-halo opacity-50" />
       <div className="container relative">
         <SectionHeader
           index="03"
-          eyebrow="Portal de clientes"
-          title="Un lugar para ver los resultados de cada inspección."
-          lede="Así podría verse su plataforma. Es una demostración navegable con datos de ejemplo: pruebe cada sección del menú del portal."
+          eyebrow={t.eyebrow}
+          title={t.title}
+          lede={t.lede}
         />
 
         <Reveal className="mt-14">

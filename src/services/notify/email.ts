@@ -68,6 +68,7 @@ export async function sendNewRequestEmail(
     ["Alojamiento", labelHosting(data.hosting)],
     ["Objetivos", data.objectives.map(labelObjective).join(", ")],
     ["Para cuándo", labelTimeline(data.timeline)],
+    ["Idioma del sitio", data.locale === "en" ? "Inglés (responder en inglés)" : "Español"],
   ];
 
   const text = [

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { FlightPhase, TelemetryFrame } from "@/contracts/telemetry";
+import type { TelemetryFrame } from "@/contracts/telemetry";
 import { useTelemetryStream } from "@/hooks/useTelemetryStream";
 import { useInViewport } from "@/hooks/useInViewport";
 import { usePageVisible } from "@/hooks/usePageVisible";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 import { cn } from "@/lib/cn";
 import { fixed, heading, signed } from "@/lib/format";
 import { MissionMap } from "./MissionMap";
@@ -13,15 +14,6 @@ import { Sparkline } from "./Sparkline";
 
 const uiLog = createLogger("ui.interaction");
 
-const PHASE_LABEL: Record<FlightPhase, string> = {
-  preflight: "PREVUELO",
-  takeoff: "DESPEGUE",
-  transit: "TRÁNSITO",
-  survey: "LEVANTAMIENTO",
-  orbit: "ÓRBITA",
-  return: "RETORNO",
-  landing: "ATERRIZAJE",
-};
 
 function Readout({
   label,
@@ -51,9 +43,9 @@ function Readout({
   );
 }
 
-function LinkBars({ quality }: { quality: number }) {
+function LinkBars({ quality, label }: { quality: number; label: string }) {
   return (
-    <span role="img" className="inline-flex items-end gap-[2px]" aria-label={`Enlace ${quality} de 5`}>
+    <span role="img" className="inline-flex items-end gap-[2px]" aria-label={label.replace("{n}", String(quality))}>
       {[1, 2, 3, 4, 5].map((b) => (
         <span
           key={b}
@@ -83,6 +75,8 @@ export function FlightHud() {
   const altSeries = history.map((h) => h.altitudeAgl);
   const speedSeries = history.map((h) => h.groundSpeed);
 
+  const t = useDict().hud;
+
   const togglePause = () => {
     setPaused((p) => !p);
     uiLog.info("hud.toggle_stream", { paused: !paused });
@@ -99,7 +93,7 @@ export function FlightHud() {
             )}
             aria-hidden
           />
-          <span className="text-foreground-muted">{status === "streaming" ? "En vivo" : "En pausa"}</span>
+          <span className="text-foreground-muted">{status === "streaming" ? t.live : t.paused}</span>
           <span className="hidden text-foreground-subtle sm:inline">SN {f?.aircraftSn ?? "—"}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -107,7 +101,7 @@ export function FlightHud() {
             type="button"
             onClick={togglePause}
             aria-pressed={paused}
-            aria-label={paused ? "Reanudar telemetría" : "Pausar telemetría"}
+            aria-label={paused ? t.resume : t.pause}
             className="grid h-8 w-8 place-items-center rounded-[2px] border border-border-subtle text-foreground-muted transition-colors duration-spring-actuator ease-spring-actuator hover:border-foreground/50 hover:text-foreground"
           >
             {paused ? (
@@ -129,7 +123,7 @@ export function FlightHud() {
         </div>
 
         <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-1 font-mono text-2xs uppercase tracking-label">
-          <span className="text-foreground">{f ? PHASE_LABEL[f.phase] : "SIN SEÑAL"}</span>
+          <span className="text-foreground">{f ? t.phases[f.phase] : t.noSignal}</span>
           <span className="text-foreground-subtle tabular">
             WP {f ? `${String(f.mission.waypointIndex).padStart(2, "0")}/${f.mission.waypointTotal}` : "--/--"}
           </span>
@@ -137,12 +131,12 @@ export function FlightHud() {
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-t border-border-subtle px-4 py-4 sm:grid-cols-4">
-        <Readout label="ALT AGL" value={f ? fixed(f.altitudeAgl, 1) : "—"} unit="m" />
-        <Readout label="VEL. SUELO" value={f ? fixed(f.groundSpeed, 1) : "—"} unit="m/s" />
-        <Readout label="VEL. VERT." value={f ? signed(f.verticalSpeed, 1) : "—"} unit="m/s" />
-        <Readout label="RUMBO" value={f ? heading(f.attitude.yaw) : "—"} />
+        <Readout label={t.altitude} value={f ? fixed(f.altitudeAgl, 1) : "—"} unit="m" />
+        <Readout label={t.groundSpeed} value={f ? fixed(f.groundSpeed, 1) : "—"} unit="m/s" />
+        <Readout label={t.verticalSpeed} value={f ? signed(f.verticalSpeed, 1) : "—"} unit="m/s" />
+        <Readout label={t.heading} value={f ? heading(f.attitude.yaw) : "—"} />
         <Readout
-          label="BATERÍA"
+          label={t.battery}
           value={f ? fixed(f.battery.percent, 0) : "—"}
           unit="%"
           tone={f && f.battery.percent < 30 ? "caution" : "default"}
@@ -153,11 +147,11 @@ export function FlightHud() {
           unit={f ? `±${fixed(f.rtk.hAccuracyCm, 1)} cm` : undefined}
           tone={f?.rtk.fix === "fixed" ? "active" : "caution"}
         />
-        <Readout label="IMÁGENES" value={f ? String(f.mission.capturedImages) : "—"} />
+        <Readout label={t.images} value={f ? String(f.mission.capturedImages) : "—"} />
         <div className="flex flex-col gap-1 border-l border-border-subtle pl-3">
-          <span className="label-caps">ENLACE / VIDEO</span>
+          <span className="label-caps">{t.linkVideo}</span>
           <span className="flex items-center gap-2 font-mono text-lg leading-none tabular">
-            <LinkBars quality={f?.link.quality ?? 0} />
+            <LinkBars quality={f?.link.quality ?? 0} label={t.linkAria} />
             {f ? fixed(f.link.videoLatencyMs, 0) : "—"}
             <span className="text-2xs text-foreground-subtle">ms</span>
           </span>
@@ -166,11 +160,11 @@ export function FlightHud() {
 
       <footer className="grid grid-cols-2 gap-4 border-t border-border-subtle px-4 py-3">
         <div>
-          <div className="label-caps mb-1">Altitud · 12 s</div>
+          <div className="label-caps mb-1">{t.altitudeSeries}</div>
           <Sparkline values={altSeries} min={0} max={130} className="h-7 w-full" />
         </div>
         <div>
-          <div className="label-caps mb-1">Velocidad · 12 s</div>
+          <div className="label-caps mb-1">{t.speedSeries}</div>
           <Sparkline values={speedSeries} min={0} max={14} className="h-7 w-full" />
         </div>
       </footer>

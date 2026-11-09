@@ -1,9 +1,10 @@
-import { HERO } from "@/content/site";
+import type { Dictionary } from "@/i18n";
 import { ButtonLink } from "@/components/ui/Button";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { FlightHud } from "@/components/hud/FlightHud";
 
-export function Hero() {
+export function Hero({ t }: { t: Dictionary }) {
+  const HERO = t.hero;
   return (
     <section id="inicio" className="relative overflow-hidden pb-16 pt-24 sm:pb-20 sm:pt-28 md:pb-28 md:pt-36" aria-labelledby="hero-title">
       <div
@@ -43,7 +44,7 @@ export function Hero() {
           <RevealItem>
             <FlightHud />
             <p className="mt-3 font-mono text-2xs text-foreground-subtle">
-              Vista de ejemplo de una app de vuelo · datos simulados de una ruta de mapeo automática
+              {HERO.hudCaption}
             </p>
           </RevealItem>
         </Reveal>

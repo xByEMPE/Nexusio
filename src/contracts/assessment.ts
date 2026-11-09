@@ -83,6 +83,8 @@ export const AssessmentRequestSchema = ProjectStepSchema.extend(FleetStepSchema.
   .extend({
     /** Honeypot anti-bot: debe llegar vacío. */
     website: z.string().max(0).optional(),
+    /** Idioma del sitio desde el que se envió (solo para el aviso por correo). */
+    locale: z.enum(["es", "en"]).optional(),
   });
 
 export type AssessmentRequest = z.infer<typeof AssessmentRequestSchema>;

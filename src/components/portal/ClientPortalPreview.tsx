@@ -7,13 +7,15 @@ import { NexusMark } from "@/components/brand/NexusMark";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 import { PortalOverview } from "./PortalOverview";
 import { PortalReports } from "./PortalReports";
 
 const log = createLogger("ui.navigation");
 
 function Loading() {
-  return <div className="grid h-full min-h-[420px] place-items-center text-xs text-foreground-subtle">Cargando…</div>;
+  const t = useDict().portal;
+  return <div className="grid h-full min-h-[420px] place-items-center text-xs text-foreground-subtle">{t.loading}</div>;
 }
 
 const AnomalyInspector = dynamic(
@@ -25,26 +27,24 @@ const PointCloudViewer = dynamic(
   { ssr: false, loading: Loading },
 );
 
-const VIEWS = [
-  { id: "overview", label: "Resumen", path: "resumen", icon: "M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z" },
-  { id: "findings", label: "Hallazgos", path: "hallazgos/torre-t-0412", icon: "M8 2l6 11H2zM8 6v3M8 11v.5" },
-  { id: "model", label: "Modelo 3D", path: "modelos/acopios-tajo-norte", icon: "M8 2l6 3v6l-6 3-6-3V5zM2 5l6 3 6-3M8 8v6" },
-  { id: "reports", label: "Reportes", path: "reportes", icon: "M4 2h6l3 3v9H4zM10 2v3h3M6 8h5M6 11h5" },
-] as const;
+const VIEW_ICONS = {
+  overview: "M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z",
+  findings: "M8 2l6 11H2zM8 6v3M8 11v.5",
+  model: "M8 2l6 3v6l-6 3-6-3V5zM2 5l6 3 6-3M8 8v6",
+  reports: "M4 2h6l3 3v9H4zM10 2v3h3M6 8h5M6 11h5",
+} as const;
 
-type ViewId = (typeof VIEWS)[number]["id"];
+const VIEW_IDS = ["overview", "findings", "model", "reports"] as const;
 
-const TITLES: Record<ViewId, { title: string; subtitle: string }> = {
-  overview: { title: "Resumen", subtitle: "Estado de todos sus proyectos" },
-  findings: { title: "Hallazgos", subtitle: "Revise cada detección y confírmela o descártela" },
-  model: { title: "Modelo 3D", subtitle: "Acopios Tajo Norte · volumen calculado automáticamente" },
-  reports: { title: "Reportes", subtitle: "Descargue los reportes aprobados" },
-};
+type ViewId = (typeof VIEW_IDS)[number];
+
 
 /** Maqueta navegable del portal de clientes dentro de un marco de navegador. */
 export function ClientPortalPreview() {
   const [view, setView] = useState<ViewId>("overview");
-  const current = VIEWS.find((v) => v.id === view) ?? VIEWS[0];
+  const t = useDict().portal;
+  const VIEWS = VIEW_IDS.map((id) => ({ id, icon: VIEW_ICONS[id], ...t.views[id] }));
+  const current = VIEWS.find((v) => v.id === view) ?? VIEWS[0]!;
 
   const go = (id: ViewId) => {
     setView(id);
@@ -61,18 +61,18 @@ export function ClientPortalPreview() {
           <span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         </div>
         <div className="min-w-0 flex-1 truncate rounded-[2px] bg-background-base px-3 py-1 font-mono text-2xs text-foreground-subtle">
-          portal.suempresa.mx/<span className="text-foreground-muted">{current.path}</span>
+          {t.portalDomain}/<span className="text-foreground-muted">{current.path}</span>
         </div>
       </div>
 
       <div className="grid md:grid-cols-[200px_1fr]">
         {/* Navegación lateral */}
-        <nav aria-label="Secciones del portal" className="border-b border-border-subtle md:border-b-0 md:border-r">
+        <nav aria-label={t.navAria} className="border-b border-border-subtle md:border-b-0 md:border-r">
           <div className="hidden items-center gap-2.5 border-b border-border-subtle px-4 py-4 md:flex">
             <NexusMark className="h-6 w-6" animated={false} spinning={false} />
             <div className="leading-tight">
-              <div className="text-xs font-medium">Energía Andina</div>
-              <div className="text-2xs text-foreground-subtle">Portal de inspecciones</div>
+              <div className="text-xs font-medium">{t.orgName}</div>
+              <div className="text-2xs text-foreground-subtle">{t.orgSubtitle}</div>
             </div>
           </div>
           <ul className="grid grid-cols-4 md:flex md:flex-col md:py-2" role="tablist" aria-orientation="vertical">
@@ -108,17 +108,17 @@ export function ClientPortalPreview() {
             })}
           </ul>
           <div className="hidden px-4 pb-4 pt-8 md:block">
-            <div className="text-2xs text-foreground-subtle">Sesión</div>
-            <div className="mt-1 text-xs">María Rojas</div>
-            <div className="text-2xs text-foreground-subtle">Inspectora</div>
+            <div className="text-2xs text-foreground-subtle">{t.session}</div>
+            <div className="mt-1 text-xs">{t.userName}</div>
+            <div className="text-2xs text-foreground-subtle">{t.userRole}</div>
           </div>
         </nav>
 
         {/* Contenido */}
         <div className="flex flex-col md:min-h-[520px]">
           <div className="border-b border-border-subtle px-4 py-3 md:px-5 md:py-4">
-            <div className="text-base font-medium md:text-lg">{TITLES[view].title}</div>
-            <div className="text-xs text-foreground-subtle">{TITLES[view].subtitle}</div>
+            <div className="text-base font-medium md:text-lg">{current.title}</div>
+            <div className="text-xs text-foreground-subtle">{current.subtitle}</div>
           </div>
           <div id="portal-view" role="tabpanel" className="relative flex-1">
             <AnimatePresence mode="wait" initial={false}>

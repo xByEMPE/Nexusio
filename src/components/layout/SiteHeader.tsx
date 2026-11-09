@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from "motion/react";
-import { NAV } from "@/content/site";
+import { useDict } from "@/i18n/LocaleProvider";
+import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
 import { ButtonLink } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -14,6 +15,7 @@ import { createLogger } from "@/lib/observability/logger";
 const navLog = createLogger("ui.navigation");
 
 export function SiteHeader() {
+  const t = useDict();
   const { scrollY } = useScroll();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -35,13 +37,13 @@ export function SiteHeader() {
       )}
     >
       <div className="container flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-3" aria-label="NEXUS, inicio">
+        <Link href={t.meta.homePath} className="flex items-center gap-3" aria-label={t.nav.homeAria}>
           <NexusMark className="h-7 w-7" animated={false} spinning={false} />
           <Wordmark className="text-lg" />
         </Link>
 
-        <nav aria-label="Principal" className="hidden items-center gap-6 lg:flex xl:gap-8">
-          {NAV.map((item) => (
+        <nav aria-label={t.nav.mainAria} className="hidden items-center gap-6 lg:flex xl:gap-8">
+          {t.nav.items.map((item) => (
             <a
               key={item.href}
               href={item.href}
@@ -54,14 +56,15 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <LanguageSwitcher />
           <ThemeToggle />
           <ButtonLink
-            href="/#evaluacion"
+            href={`${t.meta.homePath}#evaluacion`}
             variant="secondary"
             className="hidden py-2 text-xs lg:inline-flex"
             onClick={() => track("#evaluacion")}
           >
-            Solicitar evaluación
+            {t.nav.cta}
           </ButtonLink>
 
         <button
@@ -69,7 +72,7 @@ export function SiteHeader() {
           className="grid h-9 w-9 place-items-center rounded-[2px] border border-border-subtle lg:hidden"
           aria-expanded={open}
           aria-controls="mobile-nav"
-          aria-label={open ? "Cerrar menú" : "Abrir menú"}
+          aria-label={open ? t.nav.closeMenu : t.nav.openMenu}
           onClick={() => setOpen((o) => !o)}
         >
           <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden>
@@ -94,7 +97,7 @@ export function SiteHeader() {
         {open && (
           <motion.nav
             id="mobile-nav"
-            aria-label="Principal móvil"
+            aria-label={t.nav.mobileAria}
             className="container overflow-hidden lg:hidden"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -102,7 +105,7 @@ export function SiteHeader() {
             transition={spring("gimbal")}
           >
             <ul className="flex flex-col gap-1 pb-6 pt-2">
-              {NAV.map((item) => (
+              {t.nav.items.map((item) => (
                 <li key={item.href}>
                   <a
                     href={item.href}
@@ -114,8 +117,8 @@ export function SiteHeader() {
                 </li>
               ))}
               <li className="pt-4">
-                <ButtonLink href="/#evaluacion" className="w-full" arrow onClick={() => track("#evaluacion")}>
-                  Solicitar evaluación
+                <ButtonLink href={`${t.meta.homePath}#evaluacion`} className="w-full" arrow onClick={() => track("#evaluacion")}>
+                  {t.nav.cta}
                 </ButtonLink>
               </li>
             </ul>

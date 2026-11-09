@@ -2,33 +2,35 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { PORTAL_REPORTS } from "@/content/portal-demo";
 import type { PortalReport } from "@/contracts/platform";
 import { cn } from "@/lib/cn";
 import { spring } from "@/lib/motion";
 import { createLogger } from "@/lib/observability/logger";
+import { useDict } from "@/i18n/LocaleProvider";
 
 const log = createLogger("ui.interaction");
 
-const STATUS: Record<PortalReport["status"], { label: string; cls: string }> = {
-  published: { label: "Publicado", cls: "border-accent-primary/50 text-telemetry-active" },
-  in_review: { label: "En revisión", cls: "border-signal-caution/50 text-signal-caution" },
-  draft: { label: "Borrador", cls: "border-border-strong text-foreground-subtle" },
+const STATUS: Record<PortalReport["status"], { cls: string }> = {
+  published: { cls: "border-accent-primary/50 text-telemetry-active" },
+  in_review: { cls: "border-signal-caution/50 text-signal-caution" },
+  draft: { cls: "border-border-strong text-foreground-subtle" },
 };
 
 export function PortalReports() {
+  const t = useDict().portal;
+  const PORTAL_REPORTS = t.reports;
   const [notice, setNotice] = useState<string | null>(null);
 
   const download = (r: PortalReport) => {
     log.info("portal.report_download", { report: r.id });
-    setNotice(`En el portal real se descargaría "${r.title}" (PDF, ${r.pages} páginas).`);
+    setNotice(t.downloadNotice.replace("{title}", r.title).replace("{pages}", String(r.pages)));
     window.setTimeout(() => setNotice(null), 3200);
   };
 
   return (
     <div className="relative flex h-full flex-col">
       {/* Móvil: lista apilada */}
-      <ul className="divide-y divide-border-subtle sm:hidden" aria-label="Reportes de inspección">
+      <ul className="divide-y divide-border-subtle sm:hidden" aria-label={t.reportsAria}>
         {PORTAL_REPORTS.map((r) => (
           <li key={r.id} className="px-4 py-4">
             <div className="text-sm leading-snug">{r.title}</div>
@@ -36,7 +38,7 @@ export function PortalReports() {
             <div className="mt-3 flex items-center gap-3">
               <span className="font-mono text-xs tabular text-foreground-muted">{r.date}</span>
               <span className={cn("inline-block rounded-[2px] border px-2 py-0.5 text-2xs", STATUS[r.status].cls)}>
-                {STATUS[r.status].label}
+                {t.reportStatus[r.status]}
               </span>
               <button
                 type="button"
@@ -54,14 +56,14 @@ export function PortalReports() {
       {/* Tablet y escritorio: tabla */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[620px] text-sm">
-          <caption className="sr-only">Reportes de inspección</caption>
+          <caption className="sr-only">{t.reportsAria}</caption>
           <thead>
             <tr className="border-b border-border-subtle text-left text-xs text-foreground-subtle">
-              <th scope="col" className="px-5 py-3 font-normal">Reporte</th>
-              <th scope="col" className="px-3 py-3 font-normal">Fecha</th>
-              <th scope="col" className="px-3 py-3 font-normal">Estado</th>
+              <th scope="col" className="px-5 py-3 font-normal">{t.colReport}</th>
+              <th scope="col" className="px-3 py-3 font-normal">{t.colDate}</th>
+              <th scope="col" className="px-3 py-3 font-normal">{t.colStatus}</th>
               <th scope="col" className="px-5 py-3 text-right font-normal">
-                <span className="sr-only">Acciones</span>
+                <span className="sr-only">{t.colActions}</span>
               </th>
             </tr>
           </thead>
@@ -75,7 +77,7 @@ export function PortalReports() {
                 <td className="px-3 py-3.5 font-mono text-xs tabular text-foreground-muted">{r.date}</td>
                 <td className="px-3 py-3.5">
                   <span className={cn("inline-block rounded-[2px] border px-2 py-0.5 text-2xs", STATUS[r.status].cls)}>
-                    {STATUS[r.status].label}
+                    {t.reportStatus[r.status]}
                   </span>
                 </td>
                 <td className="px-5 py-3.5 text-right">
@@ -97,7 +99,7 @@ export function PortalReports() {
         </table>
       </div>
       <p className="mt-auto px-4 py-4 text-xs text-foreground-subtle sm:px-5">
-        Solo los reportes publicados quedan disponibles para descarga. Los usuarios con perfil de consulta ven únicamente estos.
+        {t.reportsFootnote}
       </p>
       <AnimatePresence>
         {notice && (

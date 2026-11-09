@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react";
 import type { TelemetryFrame } from "@/contracts/telemetry";
 import type { FlightSimulator } from "@/services/telemetry/simulator";
 import { spring } from "@/lib/motion";
+import { useDict } from "@/i18n/LocaleProvider";
 
 interface Props {
   readonly simulator: FlightSimulator;
@@ -20,6 +21,7 @@ const PAD = 40;
  */
 export function MissionMap({ simulator, frame, history }: Props) {
   const reduced = useReducedMotion();
+  const t = useDict().hud;
   const path = simulator.pathLocal;
 
   const bounds = useMemo(() => {
@@ -53,7 +55,7 @@ export function MissionMap({ simulator, frame, history }: Props) {
         viewBox={`0 0 ${width} ${height}`}
         className="h-full w-full"
         role="img"
-        aria-label="Vista en planta de la misión de levantamiento"
+        aria-label={t.mapAria}
       >
         <defs>
           <pattern id="map-grid" width={25} height={25} patternUnits="userSpaceOnUse">
@@ -122,7 +124,7 @@ export function MissionMap({ simulator, frame, history }: Props) {
       </svg>
 
       <div className="pointer-events-none absolute right-2 top-2 font-mono text-2xs text-foreground-subtle">
-        Retícula 25 m · N↑
+        {t.grid}
       </div>
     </div>
   );
