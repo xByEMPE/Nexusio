@@ -60,8 +60,8 @@ export function SiteHeader() {
           <ThemeToggle />
           <ButtonLink
             href={`${t.meta.homePath}#evaluacion`}
-            variant="secondary"
-            className="hidden py-2 text-xs lg:inline-flex"
+            arrow
+            className="hidden lg:inline-flex"
             onClick={() => track("#evaluacion")}
           >
             {t.nav.cta}
