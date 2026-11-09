@@ -21,6 +21,7 @@ export function AppShowcase({ t }: { t: Dictionary }) {
             <RevealItem>
               <ControllerVideo
                 src="/media/app-inspeccion-aspas.webm"
+                fallbackSrc="/media/app-inspeccion-aspas.mp4"
                 poster="/media/app-inspeccion-aspas-poster.webp"
                 label={t.apps.videoLabel}
               />

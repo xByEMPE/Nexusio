@@ -22,10 +22,29 @@ export function createRateLimiter({ limit, windowMs }: { limit: number; windowMs
   };
 }
 
+/** Cabeceras de CDN/proxy que traen la IP del visitante, en orden de confianza. */
+const IP_HEADERS = ["cf-connecting-ip", "true-client-ip", "x-client-ip", "x-real-ip", "x-forwarded-for"] as const;
+
+export interface ClientIp {
+  /** IP del visitante, o `null` si ninguna cabecera la trae. */
+  readonly ip: string | null;
+  /** Cabecera de donde salió, para diagnóstico en los logs. */
+  readonly source: string | null;
+}
+
+/**
+ * IP del visitante. Detrás de la CDN de Hostinger puede no llegar ninguna
+ * cabecera; en ese caso devuelve `null` y quien llama debe evitar agrupar a
+ * todos los visitantes bajo una misma clave.
+ */
+export function clientIpInfo(headers: Headers): ClientIp {
+  for (const h of IP_HEADERS) {
+    const v = headers.get(h)?.split(",")[0]?.trim();
+    if (v) return { ip: v, source: h };
+  }
+  return { ip: null, source: null };
+}
+
 export function clientIp(headers: Headers): string {
-  return (
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    headers.get("x-real-ip") ||
-    "unknown"
-  );
+  return clientIpInfo(headers).ip ?? "unknown";
 }

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { useReducedMotion } from "motion/react";
 import { useInViewport } from "@/hooks/useInViewport";
 import { createLogger } from "@/lib/observability/logger";
 import { cn } from "@/lib/cn";
@@ -17,47 +16,50 @@ const log = createLogger("ui.interaction");
 const SCREEN = { left: 25.22, top: 38.11, width: 48.67, height: 29.44 } as const;
 
 interface Props {
+  /** WebM (VP9). */
   readonly src: string;
+  /** MP4 (H.264) para navegadores sin VP9, como Safari antiguo. */
+  readonly fallbackSrc?: string;
   readonly poster: string;
   readonly label: string;
 }
 
 /**
- * Control DJI con un video de la app en su pantalla. El video solo se carga y
- * reproduce mientras está en viewport; con `prefers-reduced-motion` no se
- * reproduce solo y muestra un botón de reproducción.
+ * Control DJI con un video de la app en su pantalla. Muestra el póster y el
+ * video solo se descarga cuando el visitante pulsa reproducir: así no lo bajan
+ * los bots ni las herramientas de medición. Si sale del viewport se pausa.
  */
-export function ControllerVideo({ src, poster, label }: Props) {
+export function ControllerVideo({ src, fallbackSrc, poster, label }: Props) {
   const t = useDict().apps;
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const inView = useInViewport(wrapRef, "200px");
-  const reduced = useReducedMotion();
+  const inView = useInViewport(wrapRef, "0px");
   const [playing, setPlaying] = useState(false);
-  const [userPaused, setUserPaused] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (inView && !reduced && !userPaused) {
-      if (!loaded) setLoaded(true);
-      void v.play().catch(() => setPlaying(false));
-    } else if (!v.paused) {
-      v.pause();
-    }
-  }, [inView, reduced, userPaused, loaded]);
+    if (v && !inView && !v.paused) v.pause();
+  }, [inView]);
+
+  // Las <source> se insertan tras el clic; `load()` hace que el elemento las tome.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!loaded || !v) return;
+    v.load();
+    void v.play().catch(() => setPlaying(false));
+  }, [loaded]);
 
   const toggle = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) {
+    if (!loaded) {
       setLoaded(true);
-      setUserPaused(false);
+      log.info("showcase.video_play", { src });
+    } else if (v.paused) {
       void v.play();
       log.info("showcase.video_play", { src });
     } else {
-      setUserPaused(true);
       v.pause();
       log.info("showcase.video_pause", { src, at: Math.round(v.currentTime) });
     }
@@ -92,14 +94,15 @@ export function ControllerVideo({ src, poster, label }: Props) {
           muted
           loop
           playsInline
-          preload={loaded ? "auto" : "none"}
-          // Asignar `src` solo al entrar en viewport evita descargar 12 MB al cargar la página.
-          src={loaded ? src : undefined}
+          preload="none"
           poster={poster}
           aria-label={label}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
-        />
+        >
+          {loaded && <source src={src} type="video/webm" />}
+          {loaded && fallbackSrc && <source src={fallbackSrc} type="video/mp4" />}
+        </video>
         {/* Reflejo sutil del vidrio */}
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/[0.06] via-transparent to-transparent" />
         <button

@@ -3,13 +3,14 @@ import { z } from "zod";
 import { AssessmentRequestSchema, type AssessmentResponse } from "@/contracts/assessment";
 import { createLogger } from "@/lib/observability/logger";
 import { newTraceId, traceIdFromHeader } from "@/lib/observability/ids";
-import { clientIp, createRateLimiter } from "@/lib/rate-limit";
+import { clientIpInfo, createRateLimiter } from "@/lib/rate-limit";
 import { createServiceClient } from "@/services/supabase/server";
 import { isEmailConfigured, sendNewRequestEmail } from "@/services/notify/email";
 
 export const runtime = "nodejs";
 
 const limiter = createRateLimiter({ limit: 5, windowMs: 10 * 60 * 1000 });
+const globalLimiter = createRateLimiter({ limit: 60, windowMs: 10 * 60 * 1000 });
 
 function localReference(): string {
   const d = new Date();
@@ -27,10 +28,11 @@ export async function POST(req: NextRequest) {
   const log = createLogger("api.request", { traceId });
   const span = log.span("assessment.create", { route: "/api/assessment" });
 
-  const ip = clientIp(req.headers);
-  const rl = limiter(ip);
+  const { ip, source: ipSource } = clientIpInfo(req.headers);
+  // Sin IP conocida no se agrupa a todos en una cuota de 5: se usa una global holgada.
+  const rl = ip ? limiter(ip) : globalLimiter("all");
   if (!rl.allowed) {
-    span.end({ status: 429 }, "warn");
+    span.end({ status: 429, ipSource: ipSource ?? "none" }, "warn");
     return reply(
       { ok: false, error: "rate_limited", message: "Demasiadas solicitudes. Intente nuevamente en unos minutos.", traceId },
       429,
@@ -93,7 +95,7 @@ export async function POST(req: NextRequest) {
       country: data.country,
       consent_at: new Date().toISOString(),
       trace_id: traceId,
-      source_ip_hash: await hashIp(ip),
+      source_ip_hash: await hashIp(ip ?? "unknown"),
     })
     .select("id, reference")
     .single();
