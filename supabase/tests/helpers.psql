@@ -53,6 +53,7 @@ declare
   v_org_a uuid; v_org_b uuid;
   v_site_a uuid; v_site_b uuid; v_asset_a uuid; v_asset_b uuid;
   v_project_a uuid; v_project_b uuid; v_insp_a uuid; v_insp_b uuid;
+  v_cap_a uuid; v_cap_b uuid;
 begin
   perform tests.set_role(v_admin, 'admin');
   perform tests.set_role(v_tech_a, 'technician');
@@ -78,7 +79,16 @@ begin
   insert into public.inspections (project_id, asset_id, kind, blade_length_m) values (v_project_a, v_asset_a, 'wind_blade', 61.2) returning id into v_insp_a;
   insert into public.inspections (project_id, asset_id, kind, blade_length_m) values (v_project_b, v_asset_b, 'wind_blade', 61.2) returning id into v_insp_b;
 
+  -- Una captura RGB con datos de pala (A / LE) por inspección
+  insert into public.captures (project_id, inspection_id, spectrum, sha256, file_name, original_path, width_px, height_px)
+  values (v_project_a, v_insp_a, 'rgb', repeat('a', 64), 'a.jpg', 'o/a.jpg', 5280, 3956) returning id into v_cap_a;
+  insert into public.captures (project_id, inspection_id, spectrum, sha256, file_name, original_path, width_px, height_px)
+  values (v_project_b, v_insp_b, 'rgb', repeat('b', 64), 'b.jpg', 'o/b.jpg', 5280, 3956) returning id into v_cap_b;
+  insert into public.blade_captures (capture_id, project_id, blade, face) values (v_cap_a, v_project_a, 'A', 'LE');
+  insert into public.blade_captures (capture_id, project_id, blade, face) values (v_cap_b, v_project_b, 'A', 'LE');
+
   return jsonb_build_object(
+    'capture_a', v_cap_a, 'capture_b', v_cap_b,
     'org_a', v_org_a, 'org_b', v_org_b, 'project_a', v_project_a, 'project_b', v_project_b,
     'inspection_a', v_insp_a, 'inspection_b', v_insp_b, 'asset_a', v_asset_a, 'asset_b', v_asset_b,
     'site_a', v_site_a, 'site_b', v_site_b,
