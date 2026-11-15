@@ -29,4 +29,60 @@ $$;
 create or replace function tests.add_member(p_org uuid, p_uid uuid, p_role public.org_member_role) returns void language sql as $$
   insert into public.organization_members (organization_id, user_id, role) values (p_org, p_uid, p_role);
 $$;
+
+-- Ejecuta un DML y devuelve las filas afectadas (para comprobar que RLS filtra sin error)
+create or replace function tests.affected(p_sql text) returns bigint language plpgsql as $$
+declare n bigint;
+begin
+  execute p_sql;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- Mundo de prueba: 2 organizaciones con usuarios, sitio, activo, proyecto e inspección cada una.
+-- Se ejecuta como postgres. Tareas posteriores lo amplían (fotos, etc.).
+create or replace function tests.make_world() returns jsonb language plpgsql as $$
+declare
+  v_admin uuid := tests.create_user('admin@w.test');
+  v_tech_a uuid := tests.create_user('tech_a@w.test');
+  v_tech_b uuid := tests.create_user('tech_b@w.test');
+  v_service_a uuid := tests.create_user('service_a@w.test');
+  v_mgr_a uuid := tests.create_user('mgr_a@w.test');
+  v_viewer_a uuid := tests.create_user('viewer_a@w.test');
+  v_mgr_b uuid := tests.create_user('mgr_b@w.test');
+  v_org_a uuid; v_org_b uuid;
+  v_site_a uuid; v_site_b uuid; v_asset_a uuid; v_asset_b uuid;
+  v_project_a uuid; v_project_b uuid; v_insp_a uuid; v_insp_b uuid;
+begin
+  perform tests.set_role(v_admin, 'admin');
+  perform tests.set_role(v_tech_a, 'technician');
+  perform tests.set_role(v_tech_b, 'technician');
+  perform tests.set_role(v_service_a, 'service');
+  insert into public.organizations (name, slug) values ('Org A', 'world-org-a') returning id into v_org_a;
+  insert into public.organizations (name, slug) values ('Org B', 'world-org-b') returning id into v_org_b;
+  perform tests.add_member(v_org_a, v_mgr_a, 'client_manager');
+  perform tests.add_member(v_org_a, v_viewer_a, 'client_viewer');
+  perform tests.add_member(v_org_b, v_mgr_b, 'client_manager');
+
+  insert into public.sites (organization_id, kind, name) values (v_org_a, 'wind_farm', 'Parque A') returning id into v_site_a;
+  insert into public.sites (organization_id, kind, name) values (v_org_b, 'wind_farm', 'Parque B') returning id into v_site_b;
+  insert into public.assets (organization_id, site_id, kind, name) values (v_org_a, v_site_a, 'wind_turbine', 'WTG-01') returning id into v_asset_a;
+  insert into public.assets (organization_id, site_id, kind, name) values (v_org_b, v_site_b, 'wind_turbine', 'WTG-01') returning id into v_asset_b;
+  insert into public.wind_turbine_specs (asset_id, manufacturer, model, blade_length_m) values (v_asset_a, 'Vestas', 'V112', 61.2);
+  insert into public.wind_turbine_specs (asset_id, manufacturer, model, blade_length_m) values (v_asset_b, 'Vestas', 'V112', 61.2);
+  insert into public.projects (organization_id, name, code) values (v_org_a, 'Proyecto A', 'PA') returning id into v_project_a;
+  insert into public.projects (organization_id, name, code) values (v_org_b, 'Proyecto B', 'PB') returning id into v_project_b;
+  insert into public.project_sites (project_id, site_id) values (v_project_a, v_site_a), (v_project_b, v_site_b);
+  insert into public.project_assignments (project_id, user_id) values
+    (v_project_a, v_tech_a), (v_project_a, v_service_a), (v_project_b, v_tech_b);
+  insert into public.inspections (project_id, asset_id, kind, blade_length_m) values (v_project_a, v_asset_a, 'wind_blade', 61.2) returning id into v_insp_a;
+  insert into public.inspections (project_id, asset_id, kind, blade_length_m) values (v_project_b, v_asset_b, 'wind_blade', 61.2) returning id into v_insp_b;
+
+  return jsonb_build_object(
+    'org_a', v_org_a, 'org_b', v_org_b, 'project_a', v_project_a, 'project_b', v_project_b,
+    'inspection_a', v_insp_a, 'inspection_b', v_insp_b, 'asset_a', v_asset_a, 'asset_b', v_asset_b,
+    'site_a', v_site_a, 'site_b', v_site_b,
+    'admin', v_admin, 'tech_a', v_tech_a, 'tech_b', v_tech_b, 'service_a', v_service_a,
+    'mgr_a', v_mgr_a, 'viewer_a', v_viewer_a, 'mgr_b', v_mgr_b);
+end $$;
 grant execute on all functions in schema tests to anon, authenticated;
