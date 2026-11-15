@@ -4,10 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/assessment/fields";
+import { resolveLoginDestination } from "@/app/admin/login/actions";
 import { getBrowserClient } from "@/services/supabase/browser";
 
 /** Inicio de sesión con correo y contraseña de Supabase Auth. */
-export function LoginForm() {
+export function LoginForm({ area }: { area: "admin" | "portal" }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,22 +20,28 @@ export function LoginForm() {
     setError(null);
     const sb = getBrowserClient();
     if (!sb) {
-      setError("El panel no está configurado.");
+      setError("El acceso no está configurado.");
       return;
     }
     setLoading(true);
     const { error: authError } = await sb.auth.signInWithPassword({ email: email.trim(), password });
-    setLoading(false);
     if (authError) {
+      setLoading(false);
       setError("Correo o contraseña incorrectos.");
       return;
     }
-    router.replace("/admin");
+    const dest = await resolveLoginDestination();
+    setLoading(false);
+    if ("error" in dest) {
+      setError("Esta cuenta no tiene acceso.");
+      return;
+    }
+    router.replace(dest.path);
     router.refresh();
   };
 
   return (
-    <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+    <form onSubmit={onSubmit} data-area={area} className="mt-6 flex flex-col gap-4" noValidate>
       <label className="flex flex-col gap-2">
         <span className="label-caps">Correo</span>
         <TextInput type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Protege /admin: renueva la sesión de Supabase (cookies) y envía al login a
+ * Protege /admin y /portal: renueva la sesión de Supabase (cookies) y envía al login a
  * quien no tenga sesión. La autorización real (correo en ADMIN_EMAILS) se
  * vuelve a comprobar en cada página y acción del servidor.
  */
@@ -28,10 +28,12 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isLogin = request.nextUrl.pathname.startsWith("/admin/login");
+  const path = request.nextUrl.pathname;
+  const area = path.startsWith("/portal") ? "portal" : "admin";
+  const isLogin = path === `/${area}/login` || path.startsWith(`/${area}/login/`);
   if (!user && !isLogin) {
     const login = request.nextUrl.clone();
-    login.pathname = "/admin/login";
+    login.pathname = `/${area}/login`;
     login.search = "";
     return NextResponse.redirect(login);
   }
@@ -43,5 +45,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/portal/:path*"],
 };

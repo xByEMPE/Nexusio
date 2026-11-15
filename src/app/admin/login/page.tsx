@@ -2,20 +2,24 @@ import { redirect } from "next/navigation";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
 import { LoginForm } from "@/components/admin/LoginForm";
 import { isAdminEmail } from "@/lib/admin-auth";
-import { createSessionClient } from "@/services/supabase/server";
+import { getViewer, homePathFor } from "@/lib/auth/viewer";
+import { inspectionsEnabled } from "@/lib/inspections/flag";
 
 const ERRORS: Record<string, string> = {
   forbidden: "Esta cuenta no tiene acceso al panel.",
+  invite: "El enlace de invitación no es válido o venció. Pide uno nuevo.",
   config: "El panel no está configurado: faltan las variables de Supabase.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
 
-  // Si ya hay sesión de administrador, directo al panel.
-  const sb = await createSessionClient();
-  const user = sb ? (await sb.auth.getUser()).data.user : null;
-  if (user && isAdminEmail(user.email)) redirect("/admin");
+  // Si ya hay sesión con acceso, directo a su destino.
+  const viewer = await getViewer();
+  if (viewer && error !== "forbidden") {
+    const path = homePathFor({ ...viewer, isAdminEmail: isAdminEmail(viewer.user.email) }, inspectionsEnabled());
+    if (path) redirect(path);
+  }
 
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-12">
@@ -32,7 +36,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
               {ERRORS[error]}
             </p>
           )}
-          <LoginForm />
+          <LoginForm area="admin" />
         </div>
       </div>
     </main>
