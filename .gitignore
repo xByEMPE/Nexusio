@@ -16,3 +16,8 @@ material/*.mp4
 EXIF/
 .worktrees/
 .superpowers/
+
+.env*.local
+supabase/.branches
+scripts/ingest_demo/.venv/
+__pycache__/
