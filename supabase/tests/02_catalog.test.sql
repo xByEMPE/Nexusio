@@ -1,6 +1,6 @@
 begin;
 \ir helpers.psql
-select plan(40);
+select plan(51);
 
 select w ->> 'org_a' as org_a, w ->> 'org_b' as org_b, w ->> 'project_a' as project_a, w ->> 'project_b' as project_b,
   w ->> 'inspection_a' as insp_a, w ->> 'inspection_b' as insp_b, w ->> 'asset_a' as asset_a, w ->> 'site_a' as site_a,
@@ -57,6 +57,19 @@ select throws_ok(format('insert into public.inspections (project_id, asset_id, k
 select throws_ok(format('insert into public.inspections (project_id, asset_id, kind) values (%L, %L, ''wind_blade'')', :'project_a', :'asset_a'), '23505', null, 'inspección única por proyecto, activo y tipo');
 select tests.logout();
 
+-- Activo con inspecciones no cambia de organización
+select throws_ok(format('update public.assets set organization_id = %L, site_id = %L where id = %L', :'org_b', :'site_b', :'asset_a'), 'P0001', null, 'activo con inspecciones no cambia de organización');
+select tests.logout();
+
+-- Escrituras adicionales del técnico y del servicio
+select tests.login_as(:'tech_a');
+select throws_ok(format('insert into public.inspections (project_id, asset_id, kind, status) values (%L, %L, ''solar'', ''approved'')', :'project_a', :'asset_a'), 'P0001', null, 'tech_a no crea una inspección aprobada');
+select throws_ok(format('update public.inspections set project_id = %L where id = %L', :'project_b', :'insp_a'), 'P0001', null, 'tech_a no cambia el project_id de una inspección');
+select is((select count(*) from public.project_assignments), 1::bigint, 'tech_a ve solo su asignación');
+select tests.login_as(:'service_a');
+select is(tests.affected(format('update public.inspections set notes = ''s'' where id = %L', :'insp_a')), 1::bigint, 'service_a edita notas de inspección A');
+select tests.logout();
+
 -- Visor de cliente
 select tests.login_as(:'viewer_a');
 select throws_ok(format('insert into public.sites (organization_id, kind, name) values (%L, ''wind_farm'', ''N'')', :'org_a'), '42501', null, 'viewer no crea sitios');
@@ -65,6 +78,10 @@ select throws_ok(format('insert into public.inspections (project_id, asset_id, k
 select is(tests.affected(format('update public.inspections set notes = ''v'' where id = %L', :'insp_a')), 0::bigint, 'viewer no edita inspecciones');
 select is(tests.affected(format('update public.sites set notes = ''v'' where id = %L', :'site_a')), 0::bigint, 'viewer no edita sitios');
 select ok(not private.can_comment_project(:'project_a'::uuid), 'client_viewer no comenta');
+select throws_ok(format('insert into public.assets (organization_id, site_id, kind, name) values (%L, %L, ''wind_turbine'', ''N'')', :'org_a', :'site_a'), '42501', null, 'viewer no crea activos');
+select throws_ok(format('insert into public.wind_turbine_specs (asset_id) values (%L)', :'asset_a'), '42501', null, 'viewer no crea specs');
+select throws_ok(format('insert into public.project_sites (project_id, site_id) values (%L, %L)', :'project_a', :'site_a'), '42501', null, 'viewer no liga sitios');
+select throws_ok(format('insert into public.project_assignments (project_id, user_id) values (%L, %L)', :'project_a', :'tech_b'), '42501', null, 'viewer no asigna');
 select tests.logout();
 
 -- Funciones de permiso
@@ -76,6 +93,16 @@ select tests.logout();
 update public.profiles set is_active = false where id = :'tech_a';
 select tests.login_as(:'tech_a');
 select is_empty('select 1 from public.projects', 'técnico desactivado pierde el acceso');
+select tests.logout();
+update public.profiles set is_active = true where id = :'tech_a';
+
+-- Degradación: pierde asignaciones y acceso
+select tests.set_role(:'tech_a'::uuid, null);
+select is((select count(*) from public.project_assignments where user_id = :'tech_a'), 0::bigint, 'degradar borra las asignaciones');
+select tests.login_as(:'tech_a');
+select is((select count(*) from public.projects) + (select count(*) from public.sites) + (select count(*) from public.organizations)
+  + (select count(*) from public.inspections), 0::bigint, 'ex técnico no ve nada');
+select tests.logout();
 
 -- Anónimo
 select tests.login_anon();

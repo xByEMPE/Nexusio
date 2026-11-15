@@ -113,7 +113,8 @@ language sql stable security definer set search_path = '' as $$
   select exists (
     select 1 from public.project_assignments a
     join public.profiles pr on pr.id = a.user_id
-    where a.project_id = p and a.user_id = (select auth.uid()) and pr.is_active);
+    where a.project_id = p and a.user_id = (select auth.uid()) and pr.is_active
+      and pr.platform_role in ('technician', 'service'));
 $$;
 
 create or replace function private.org_of_project(p uuid) returns uuid
@@ -127,7 +128,8 @@ language sql stable security definer set search_path = '' as $$
     select 1 from public.project_assignments a
     join public.projects pj on pj.id = a.project_id
     join public.profiles pr on pr.id = a.user_id
-    where a.user_id = (select auth.uid()) and pr.is_active and pj.organization_id = o);
+    where a.user_id = (select auth.uid()) and pr.is_active
+      and pr.platform_role in ('technician', 'service') and pj.organization_id = o);
 $$;
 
 create or replace function private.can_read_project(p uuid) returns boolean
@@ -181,6 +183,10 @@ grant execute on function
 create or replace function private.guard_asset() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
+  if tg_op = 'UPDATE' and new.organization_id is distinct from old.organization_id
+     and exists (select 1 from public.inspections i where i.asset_id = old.id) then
+    raise exception 'un activo con inspecciones no puede cambiar de organización' using errcode = 'P0001';
+  end if;
   if not exists (select 1 from public.sites s where s.id = new.site_id and s.organization_id = new.organization_id) then
     raise exception 'el activo debe pertenecer a la misma organización que su sitio' using errcode = 'P0001';
   end if;
@@ -249,6 +255,19 @@ begin
 end $$;
 create trigger project_assignments_guard before insert or update of user_id on public.project_assignments
   for each row execute function private.guard_assignment();
+
+-- Al perder el rol técnico/servicio se borran sus asignaciones
+create or replace function private.drop_assignments_on_demotion() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.platform_role is null or new.platform_role not in ('technician', 'service') then
+    delete from public.project_assignments where user_id = new.id;
+  end if;
+  return new;
+end $$;
+create trigger profiles_drop_assignments after update of platform_role on public.profiles
+  for each row when (new.platform_role is distinct from old.platform_role)
+  execute function private.drop_assignments_on_demotion();
 
 create or replace function private.guard_inspection() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -322,7 +341,9 @@ create policy project_sites_update on public.project_sites for update to authent
 create policy project_sites_delete on public.project_sites for delete to authenticated using (private.is_admin());
 
 create policy assignments_select on public.project_assignments for select to authenticated
-  using (private.is_admin() or (user_id = (select auth.uid()) and private.is_active_user()));
+  using (private.is_admin() or (user_id = (select auth.uid()) and exists (
+    select 1 from public.profiles pr where pr.id = user_id and pr.is_active
+      and pr.platform_role in ('technician', 'service'))));
 create policy assignments_insert on public.project_assignments for insert to authenticated with check (private.is_admin());
 create policy assignments_update on public.project_assignments for update to authenticated using (private.is_admin()) with check (private.is_admin());
 create policy assignments_delete on public.project_assignments for delete to authenticated using (private.is_admin());
