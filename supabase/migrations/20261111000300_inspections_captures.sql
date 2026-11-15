@@ -202,7 +202,7 @@ create trigger mosaics_parent_project before insert or update on public.mosaics
 create trigger inspections_id_capture_guard before insert or update of id_capture_id on public.inspections
   for each row execute function private.guard_inspection_id_capture();
 
--- RLS
+-- RLS (borrado: can_delete_inspection_data, sin la cuenta service)
 alter table public.captures enable row level security;
 alter table public.blade_captures enable row level security;
 alter table public.thermal_captures enable row level security;
@@ -216,7 +216,7 @@ create policy captures_update on public.captures for update to authenticated
   using (private.can_edit_inspection_data(project_id, inspection_id))
   with check (private.can_edit_inspection_data(project_id, inspection_id));
 create policy captures_delete on public.captures for delete to authenticated
-  using (private.can_edit_inspection_data(project_id, inspection_id));
+  using (private.can_delete_inspection_data(project_id, inspection_id));
 
 create policy blade_captures_select on public.blade_captures for select to authenticated
   using (private.can_read_project(project_id));
@@ -226,7 +226,7 @@ create policy blade_captures_update on public.blade_captures for update to authe
   using (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)))
   with check (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)));
 create policy blade_captures_delete on public.blade_captures for delete to authenticated
-  using (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)));
+  using (private.can_delete_inspection_data(project_id, private.inspection_of_capture(capture_id)));
 
 create policy thermal_captures_select on public.thermal_captures for select to authenticated
   using (private.can_read_project(project_id));
@@ -236,7 +236,7 @@ create policy thermal_captures_update on public.thermal_captures for update to a
   using (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)))
   with check (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)));
 create policy thermal_captures_delete on public.thermal_captures for delete to authenticated
-  using (private.can_edit_inspection_data(project_id, private.inspection_of_capture(capture_id)));
+  using (private.can_delete_inspection_data(project_id, private.inspection_of_capture(capture_id)));
 
 create policy mosaics_select on public.mosaics for select to authenticated
   using (private.can_read_project(project_id));
@@ -246,7 +246,7 @@ create policy mosaics_update on public.mosaics for update to authenticated
   using (private.can_edit_inspection_data(project_id, inspection_id))
   with check (private.can_edit_inspection_data(project_id, inspection_id));
 create policy mosaics_delete on public.mosaics for delete to authenticated
-  using (private.can_edit_inspection_data(project_id, inspection_id));
+  using (private.can_delete_inspection_data(project_id, inspection_id));
 
 grant select, insert, update, delete on public.captures, public.blade_captures,
   public.thermal_captures, public.mosaics to authenticated;

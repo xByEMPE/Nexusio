@@ -25,7 +25,9 @@ export NEXUS_PUBLISHABLE_KEY=<llave pública>        # npx supabase status -o en
 - La carpeta debe tener `Pala|Blade {A,B,C}/{TE,PS,LE,SS}/*.jpg`.
 - La contraseña se pide con `getpass`. Para pruebas no interactivas se toma de la variable `NEXUS_PASSWORD`.
   Nunca se imprimen tokens. Solo se usa la llave pública, nunca una de servicio.
-- Sin `--inspection` usa, en este orden: el índice local, la inspección `pending` del activo, o una nueva.
+- Sin `--inspection` usa, en este orden: el índice local (si la fila existe), la inspección `pending` del activo, o una nueva.
+  La nueva se crea con la sesión del técnico (`status = 'captured'`) **antes** de subir, porque Storage exige que la inspección exista.
+- Antes de cada subida TUS se renueva la sesión si el token vence en menos de 5 minutos.
 - `.ingest_index.json` (dentro de la carpeta de fotos; no se versiona) guarda los `id` por `sha256`, así repetir
   el comando es idempotente: la segunda corrida da `inserted = 0`.
 - Los errores de `ingest_manifest` se imprimen con su `detail` (`[{path, code}]`).

@@ -28,3 +28,75 @@ def test_resolve_exiftool_order(monkeypatch):
     monkeypatch.setenv("NEXUS_EXIFTOOL", "/env/exiftool")
     assert resolve_exiftool(Path("/arg/exiftool")) == Path("/arg/exiftool")
     assert resolve_exiftool(None) == Path("/env/exiftool")
+
+
+def test_choose_inspection_order():
+    from ingest_demo.cli import choose_inspection
+    new = lambda: "nuevo"
+    assert choose_inspection("ABC", "idx", True, "pend", new) == ("abc", False)
+    assert choose_inspection(None, "idx", True, "pend", new) == ("idx", False)
+    assert choose_inspection(None, "idx", False, "pend", new) == ("pend", False)
+    assert choose_inspection(None, None, False, "pend", new) == ("pend", False)
+    # Sin inspección existente: se crea; reutiliza el id del índice si lo había
+    assert choose_inspection(None, "idx", False, None, new) == ("idx", True)
+    assert choose_inspection(None, None, False, None, new) == ("nuevo", True)
+
+
+class _Sess:
+    def __init__(self, token, expires_at, refresh="r"):
+        self.access_token, self.expires_at, self.refresh_token = token, expires_at, refresh
+
+
+class _Auth:
+    def __init__(self, session):
+        self.session, self.refreshed = session, 0
+
+    def get_session(self):
+        return self.session
+
+    def refresh_session(self, refresh_token):
+        self.refreshed += 1
+        self.session = _Sess("nuevo", 10_000)
+        return type("R", (), {"session": self.session})()
+
+
+def test_fresh_token_refreshes_near_expiry():
+    from ingest_demo.cli import fresh_token
+    auth = _Auth(_Sess("viejo", 1000 + 299))
+    assert fresh_token(auth, now=lambda: 1000) == "nuevo" and auth.refreshed == 1
+    auth = _Auth(_Sess("vigente", 1000 + 301))
+    assert fresh_token(auth, now=lambda: 1000) == "vigente" and auth.refreshed == 0
+
+
+class _Q:
+    def __init__(self, log, data):
+        self.log, self.data = log, data
+
+    def __getattr__(self, name):
+        return lambda *a, **k: self
+
+    def insert(self, row):
+        self.log.append(row)
+        return self
+
+    def execute(self):
+        return type("R", (), {"data": self.data})()
+
+
+class _SB:
+    def __init__(self):
+        self.inserted = []
+
+    def table(self, name):
+        assert name == "inspections"
+        return _Q(self.inserted, [])
+
+
+def test_resolve_inspection_creates_row_when_missing(tmp_path):
+    from argparse import Namespace
+    from ingest_demo.cli import load_index, resolve_inspection
+    sb, index = _SB(), {"inspections": {}, "captures": {}}
+    args = Namespace(inspection=None, project="p", asset="a")
+    insp = resolve_inspection(sb, args, index, tmp_path)
+    assert sb.inserted == [{"id": insp, "project_id": "p", "asset_id": "a", "kind": "wind_blade", "status": "captured"}]
+    assert load_index(tmp_path)["inspections"]["a"] == insp

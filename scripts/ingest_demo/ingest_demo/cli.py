@@ -14,6 +14,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -128,16 +129,57 @@ def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: 
     }
 
 
-def resolve_inspection(sb, args, index) -> str:
-    if args.inspection:
-        return args.inspection.lower()
-    if index["inspections"].get(args.asset):
-        return index["inspections"][args.asset]
-    rows = (sb.table("inspections").select("id").eq("project_id", args.project).eq("asset_id", args.asset)
-            .eq("status", "pending").order("created_at").limit(1).execute().data)
-    insp = rows[0]["id"] if rows else str(uuid.uuid4())
-    index["inspections"][args.asset] = insp
+def choose_inspection(explicit: str | None, indexed: str | None, indexed_exists: bool,
+                      pending: str | None, new_id=lambda: str(uuid.uuid4())) -> tuple[str, bool]:
+    """Decide qué inspección usar. Devuelve (id, hay_que_crearla).
+
+    Orden: --inspection, el índice local (si la fila existe), la inspección `pending` del activo,
+    o una nueva. La nueva reutiliza el id del índice si lo había (así coinciden las rutas ya subidas).
+    """
+    if explicit:
+        return explicit.lower(), False
+    if indexed and indexed_exists:
+        return indexed, False
+    if pending:
+        return pending, False
+    return indexed or new_id(), True
+
+
+def resolve_inspection(sb, args, index, folder: Path) -> str:
+    """Resuelve la inspección y, si es nueva, crea la fila antes de subir (§8.1 paso 3):
+    la política de Storage exige que la inspección exista."""
+    indexed = index["inspections"].get(args.asset)
+    indexed_exists = False
+    if indexed and not args.inspection:
+        indexed_exists = bool(sb.table("inspections").select("id").eq("id", indexed).limit(1).execute().data)
+    pending = None
+    if not args.inspection and not indexed_exists:
+        rows = (sb.table("inspections").select("id").eq("project_id", args.project).eq("asset_id", args.asset)
+                .eq("status", "pending").order("created_at").limit(1).execute().data)
+        pending = rows[0]["id"] if rows else None
+    insp, create = choose_inspection(args.inspection, indexed, indexed_exists, pending)
+    if create:
+        sb.table("inspections").insert({"id": insp, "project_id": args.project, "asset_id": args.asset,
+                                        "kind": "wind_blade", "status": "captured"}).execute()
+        print(f"  inspección nueva creada: {insp}")
+    if not args.inspection:
+        index["inspections"][args.asset] = insp
+        save_index(folder, index)
     return insp
+
+
+REFRESH_MARGIN_S = 300
+
+
+def fresh_token(auth, margin_s: int = REFRESH_MARGIN_S, now=time.time) -> str:
+    """Token de acceso vigente; renueva la sesión si vence en menos de `margin_s` segundos.
+    Nunca se imprime."""
+    session = auth.get_session()
+    if session is None:
+        raise SystemExit("Sesión perdida: vuelva a iniciar sesión.")
+    if session.expires_at is not None and session.expires_at - now() < margin_s:
+        session = auth.refresh_session(session.refresh_token).session
+    return session.access_token
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,8 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     sb = create_client(url, key)
-    session = sb.auth.sign_in_with_password({"email": args.email, "password": password}).session
-    token = session.access_token  # nunca se imprime
+    sb.auth.sign_in_with_password({"email": args.email, "password": password})
 
     proj = sb.table("projects").select("organization_id").eq("id", args.project).limit(1).execute().data
     if not proj:
@@ -175,11 +216,15 @@ def main(argv: list[str] | None = None) -> int:
     org = proj[0]["organization_id"]
 
     index = load_index(args.folder)
-    insp_id = resolve_inspection(sb, args, index)
+    insp_id = resolve_inspection(sb, args, index, args.folder)
     prefix = object_prefix(org, args.project, insp_id)
     captures: list[dict] = []
     seq_by_group: dict[tuple, int] = {}
-    kw = dict(supabase_url=url, access_token=token, publishable_key=key)
+
+    def upload(src: Path, name: str, content_type: str) -> None:
+        # Se renueva el token antes de cada subida para corridas largas
+        tus_upload(src, name, content_type, supabase_url=url, access_token=fresh_token(sb.auth),
+                   publishable_key=key)
 
     files = dedupe_by_sha(files)
     try:
@@ -191,9 +236,9 @@ def main(argv: list[str] | None = None) -> int:
             seq = seq_by_group.get((blade, face), 0)
             seq_by_group[(blade, face)] = seq + 1
             cap = build_capture(path, blade, face, seq, meta, sha, cap_id, prefix, deriv)
-            tus_upload(path, cap["paths"]["original"], "image/jpeg", **kw)
-            tus_upload(deriv.preview, cap["paths"]["preview"], "image/webp", **kw)
-            tus_upload(deriv.thumb, cap["paths"]["thumb"], "image/webp", **kw)
+            upload(path, cap["paths"]["original"], "image/jpeg")
+            upload(deriv.preview, cap["paths"]["preview"], "image/webp")
+            upload(deriv.thumb, cap["paths"]["thumb"], "image/webp")
             captures.append(cap)
             save_index(args.folder, index)
             gsd = cap["gsd"]["mm_px"] if cap["gsd"] else None

@@ -168,15 +168,30 @@ language sql stable security definer set search_path = '' as $$
   select private.can_write_project(p) and (not private.inspection_is_locked(i) or private.is_admin());
 $$;
 
+-- Borrado de datos de inspección: admin, o técnico asignado y activo con la inspección sin bloquear.
+-- La cuenta service no borra (§6).
+create or replace function private.can_delete_inspection_data(p uuid, i uuid) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select private.is_admin() or (
+    exists (
+      select 1 from public.project_assignments a
+      join public.profiles pr on pr.id = a.user_id
+      where a.project_id = p and a.user_id = (select auth.uid()) and pr.is_active
+        and pr.platform_role = 'technician')
+    and not private.inspection_is_locked(i));
+$$;
+
 revoke execute on function
   private.is_assigned(uuid), private.org_of_project(uuid), private.can_read_org(uuid),
   private.can_read_project(uuid), private.can_write_project(uuid), private.can_comment_project(uuid),
-  private.inspection_is_locked(uuid), private.can_edit_inspection_data(uuid, uuid)
+  private.inspection_is_locked(uuid), private.can_edit_inspection_data(uuid, uuid),
+  private.can_delete_inspection_data(uuid, uuid)
   from public, anon;
 grant execute on function
   private.is_assigned(uuid), private.org_of_project(uuid), private.can_read_org(uuid),
   private.can_read_project(uuid), private.can_write_project(uuid), private.can_comment_project(uuid),
-  private.inspection_is_locked(uuid), private.can_edit_inspection_data(uuid, uuid)
+  private.inspection_is_locked(uuid), private.can_edit_inspection_data(uuid, uuid),
+  private.can_delete_inspection_data(uuid, uuid)
   to authenticated;
 
 -- Triggers de coherencia (todos P0001)

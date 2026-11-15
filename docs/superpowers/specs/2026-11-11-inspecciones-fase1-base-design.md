@@ -282,7 +282,7 @@ Con `inspections.status = 'approved'`, nadie salvo el admin crea, edita ni borra
 
 1. El técnico inicia sesión en la app con correo y contraseña (Supabase Auth). La app solo contiene la URL y la llave **pública**. **Nunca una llave de servicio.**
 2. La app pide los proyectos asignados; las reglas solo devuelven esos.
-3. La app genera los `id` (UUID v4) de inspección, fotos, tiras y daños, y los guarda en su índice local. Así las rutas se conocen antes de subir y repetir es seguro.
+3. La app genera los `id` (UUID v4) de inspección, fotos, tiras y daños, y los guarda en su índice local. Así las rutas se conocen antes de subir y repetir es seguro. Si la inspección es nueva, **la app crea primero su fila** en `inspections` (`status = 'captured'`; las reglas dejan al técnico asignado insertarla) y luego sube: la política de Storage exige que la inspección exista.
 4. Sube los archivos **directo a Supabase Storage** con subida reanudable (protocolo TUS, fragmentos de 6 MB; en Python, `tuspy`). No pasa por Hostinger.
 5. Llama a la función `ingest_manifest(manifest jsonb)` con el manifiesto.
 6. La inspección pasa a `in_review`.
@@ -440,11 +440,14 @@ Consecuencia en §8.3: un manifiesto puede traer **solo daños** (`captures` vac
 
 ## 12. Cambios durante la implementación
 
-Verificado el 15/11/2026 en local (`db reset` + pgTAP 00–07, vitest, typecheck, build y pytest en verde). Lo que cambió respecto al diseño original:
+Verificado el 15/11/2026 en local (`db reset` + pgTAP 00–08, vitest, typecheck, build y pytest en verde). Lo que cambió respecto al diseño original:
 
 - **§9.1 `seed-media`**: lo cubre `scripts/ingest_demo`. Las fotos vienen de una carpeta que pasa el usuario con `--folder` (`EXIF/` no trae fotos de muestra). exiftool se resuelve con `--exiftool`, luego `NEXUS_EXIFTOOL`, luego el PATH.
 - **§8.3 códigos de error**: la lista final tiene 14 códigos y vive en `INGEST_ERROR_CODES` de `src/contracts/ingest-manifest.ts`: `unsupported_version`, `forbidden_project`, `inspection_locked`, `asset_other_org`, `empty_manifest`, `bad_path`, `missing_object`, `unknown_finding_type`, `unknown_capture`, `unknown_mosaic`, `duplicate_sha256`, `duplicate_id`, `foreign_id`, `finding_target_changed`. La regla de `corrected_at` (no sobrescribir) también aplica a los daños manuales, no solo a los de IA.
 - **§3/§4 asignaciones**: una asignación solo da acceso mientras `platform_role` sea `technician` o `service`; bajar de rol a alguien borra sus asignaciones.
 - **§3/§4 integridad**: los ids padre son inmutables en `captures`, `findings`, `comments` y `mosaics`; la captura emparejada (RGB/térmica) debe ser de la misma inspección.
 - **`supabase/config.toml`**: `[auth.email] enable_signup = true` es necesario para el acceso con contraseña; `[auth] enable_signup = false` bloquea el registro abierto.
+- **§8.1 paso 3 (inspección nueva)**: la política de Storage sigue estricta (la fila de la inspección debe existir). La app (y `ingest_demo`) crea la fila de la inspección nueva con su sesión antes de subir (`status = 'captured'`); `ingest_manifest` la actualiza después.
+- **§6 borrados**: `findings.capture_id` y `findings.mosaic_id` son `on delete restrict`, así borrar una foto o tira con daños falla (23503) en lugar de borrar en cascada daños y comentarios. Fotos, datos de pala, térmicos y tiras se borran con `private.can_delete_inspection_data`: admin, o técnico asignado y activo con la inspección sin aprobar; la cuenta `service` no borra. `comments_delete` exige además usuario activo.
+- **`ingest_demo`**: renueva la sesión antes de cada subida TUS si el token vence en menos de 5 minutos.
 - **Pendiente**: la corrida de `ingest_demo` con fotos reales de dron; hasta ahora se probó con JPEG sintéticos con etiquetas DJI (6 capturas, 18 objetos en Storage con ruta `{org}/{project}/{inspection}/captures/{id}/…`, segunda corrida idempotente).

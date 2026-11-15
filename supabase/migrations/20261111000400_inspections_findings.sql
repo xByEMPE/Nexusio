@@ -17,8 +17,8 @@ create table public.findings (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references public.projects (id) on delete restrict,
   inspection_id uuid not null references public.inspections (id) on delete cascade,
-  capture_id uuid references public.captures (id) on delete cascade,
-  mosaic_id uuid references public.mosaics (id) on delete cascade,
+  capture_id uuid references public.captures (id) on delete restrict,
+  mosaic_id uuid references public.mosaics (id) on delete restrict,
   type_id uuid not null references public.finding_types (id) on delete restrict,
   severity smallint not null check (severity between 1 and 5),
   status public.finding_status not null default 'detected',
@@ -182,7 +182,7 @@ create policy comments_update on public.comments for update to authenticated
   using (author_id = (select auth.uid()) and private.can_read_project(project_id))
   with check (author_id = (select auth.uid()));
 create policy comments_delete on public.comments for delete to authenticated
-  using (author_id = (select auth.uid()) or private.is_admin());
+  using ((author_id = (select auth.uid()) and private.is_active_user()) or private.is_admin());
 
 grant select, insert, update, delete on public.finding_types, public.findings, public.comments to authenticated;
 
