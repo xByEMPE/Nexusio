@@ -57,5 +57,18 @@ export function useOriginalImage(photo: Photo, zoom: number, onMessage: (m: stri
     return null;
   };
 
-  return { originalUrl: originals[id] ?? null, onPreviewSize, onOriginalError, freshOriginalUrl };
+  /** Descarga el original con una URL nueva y el nombre de archivo de la foto. */
+  const [downloading, setDownloading] = useState(false);
+  const download = async (fileName: string) => {
+    setDownloading(true);
+    const url = await freshOriginalUrl();
+    setDownloading(false);
+    if (!url) return;
+    const a = document.createElement("a");
+    a.href = `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName)}`;
+    a.rel = "noopener";
+    a.click();
+  };
+
+  return { originalUrl: originals[id] ?? null, onPreviewSize, onOriginalError, freshOriginalUrl, download, downloading };
 }

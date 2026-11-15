@@ -16,6 +16,7 @@ export function FindingPanel({
   types,
   typeLabels,
   capabilities,
+  canEdit,
   inspectionId,
   comments,
   me,
@@ -25,6 +26,8 @@ export function FindingPanel({
   types: ViewerFindingType[];
   typeLabels: Record<string, string>;
   capabilities: ViewerCapabilities;
+  /** Formulario de edición: permiso y pantalla lg o mayor (en el celular no hay edición). */
+  canEdit: boolean;
   inspectionId: string;
   comments: ViewerComment[];
   me: Me;
@@ -64,7 +67,7 @@ export function FindingPanel({
         ))}
       </dl>
 
-      {!capabilities.editFindings && f.notes && <p className="whitespace-pre-wrap text-xs">{f.notes}</p>}
+      {!canEdit && f.notes && <p className="whitespace-pre-wrap text-xs">{f.notes}</p>}
       {f.corrected_at && (
         <p className="text-2xs text-foreground-muted" data-testid="corrected">
           Corregido por NEXUS el <time suppressHydrationWarning>{fmtDate(f.corrected_at)}</time>
@@ -91,7 +94,7 @@ export function FindingPanel({
         )
       )}
 
-      {capabilities.editFindings && (
+      {canEdit && (
         <FindingEditForm key={`${f.id}@${f.updated_at}`} finding={f} types={types} canDelete={capabilities.deleteFindings} onDeleted={onClose} />
       )}
 

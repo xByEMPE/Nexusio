@@ -14,7 +14,7 @@ import {
 import { getViewer, type Viewer } from "@/lib/auth/viewer";
 import { dbErrorMessage, fail, type ActionResult } from "@/lib/inspections/admin-action";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
-import { pickHistoryFields } from "@/components/inspections/viewer/finding-logic";
+import { pickHistoryFields } from "@/lib/inspections/history";
 import { findingTypeMatches, measurementsForSave, signOne } from "@/services/inspections/viewer-data";
 import { createSessionClient } from "@/services/supabase/server";
 import type { Database, Json } from "@/services/supabase/database.types";

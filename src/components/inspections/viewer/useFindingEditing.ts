@@ -33,7 +33,9 @@ export function useFindingEditing({
   onSaveRegion: (id: string, region: Region) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<(ShapeDraft & { ready: boolean }) | null>(null);
-  const [drag, setDrag] = useState<{ id: string; index: number; region: Region } | null>(null);
+  // `start`: región al empezar el arrastre. Cada movimiento parte de ella (no de la última), para que al
+  // cruzar las esquinas de un recuadro (que se reordenan) el índice siga apuntando a la esquina tomada.
+  const [drag, setDrag] = useState<{ id: string; index: number; start: Region; region: Region } | null>(null);
   const [saved, setSaved] = useState<{ id: string; region: Region; baseKey: string } | null>(null);
 
   const drawType: Region["type"] | null = tool === "newBox" ? "box" : tool === "newPolygon" ? "polygon" : null;
@@ -42,7 +44,7 @@ export function useFindingEditing({
   const pendingSaved = saved && selected && saved.id === selected.id && saved.baseKey === regionKey(selected.region) ? saved : null;
   const override = drag ?? pendingSaved;
   const editRegion = selected ? (override?.id === selected.id ? override.region : selected.region) : null;
-  const handles = canEdit && selected && editRegion && !drawType ? regionPoints(editRegion, image) : null;
+  const handles = canEdit && selected && editRegion && tool === "move" ? regionPoints(editRegion, image) : null;
 
   /** Clic en la foto con una herramienta de daño nuevo; devuelve si lo usó. */
   const tap = (screen: Pt): boolean => {
@@ -85,21 +87,21 @@ export function useFindingEditing({
     if (!handles || !selected || !editRegion) return false;
     const i = nearestHandle(handles.map((h) => imageToScreen(h, view)), screen);
     if (i == null) return false;
-    setDrag({ id: selected.id, index: i, region: editRegion });
+    setDrag({ id: selected.id, index: i, start: editRegion, region: editRegion });
     return true;
   };
 
   const pressMove = (screen: Pt) => {
     if (!drag) return;
     const p = screenToImage(screen, view);
-    setDrag({ ...drag, region: moveVertex(drag.region, drag.index, p, image) });
+    setDrag({ ...drag, region: moveVertex(drag.start, drag.index, p, image) });
   };
 
   const pressEnd = async (screen: Pt | null) => {
     const d = drag;
     setDrag(null);
     if (!d || !screen || !selected) return;
-    const region = moveVertex(d.region, d.index, screenToImage(screen, view), image);
+    const region = moveVertex(d.start, d.index, screenToImage(screen, view), image);
     if (regionKey(region) === regionKey(selected.region)) return;
     setSaved({ id: d.id, region, baseKey: regionKey(selected.region) });
     const ok = await onSaveRegion(d.id, region);

@@ -100,7 +100,7 @@ export function NewFindingForm({
       <p className="label-caps">Nuevo daño · {region.type === "box" ? "recuadro" : `polígono de ${region.points.length} vértices`}</p>
       <TypeSelect types={active} value={typeId} onChange={setTypeId} />
       <SeveritySelect value={severity} onChange={setSeverity} />
-      <textarea className={field} rows={2} maxLength={2000} placeholder="Notas (opcional)" value={notes} onChange={(e) => setNotes(e.target.value)} name="notes" />
+      <textarea className={field} rows={2} maxLength={2000} placeholder="Notas (opcional)" aria-label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} name="notes" />
       {m.error && <p className="text-xs text-red-500">{m.error}</p>}
       <div className="flex justify-end gap-2">
         <button type="button" className={btn} onClick={onCancel} disabled={m.pending}>
@@ -146,7 +146,7 @@ export function FindingEditForm({ finding, types, canDelete, onDeleted }: { find
           <SeveritySelect value={severity} onChange={setSeverity} />
         </div>
       </div>
-      <textarea className={field} rows={2} maxLength={2000} placeholder="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} name="notes" />
+      <textarea className={field} rows={2} maxLength={2000} placeholder="Notas" aria-label="Notas" value={notes} onChange={(e) => setNotes(e.target.value)} name="notes" />
       {m.error && <p className="text-xs text-red-500">{m.error}</p>}
       <div className="flex flex-wrap gap-2">
         <button type="submit" className={cn(btn, "border-foreground font-medium")} disabled={!dirty || m.pending}>

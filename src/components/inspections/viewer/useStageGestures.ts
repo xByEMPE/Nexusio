@@ -52,7 +52,11 @@ export function useStageGestures(stageRef: RefObject<HTMLDivElement | null>, han
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 && e.pointerType === "mouse") return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Eventos sintéticos o un puntero ya liberado: sin captura, el gesto sigue funcionando.
+    }
     const p = local(e);
     pointers.current.set(e.pointerId, p);
     if (pointers.current.size === 1) {

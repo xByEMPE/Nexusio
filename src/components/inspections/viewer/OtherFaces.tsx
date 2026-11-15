@@ -77,7 +77,7 @@ export function SplitStage({
   const container = useElementSize(ref);
   const image = { w: photo.width_px, h: photo.height_px };
   const { view, zoomBy, panBy } = useViewState(image, container);
-  const [, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const original = useOriginalImage(photo, view.zoom, setMessage);
   const gestures = useStageGestures(ref, { zoomBy, panBy, onTap: () => {}, onHover: () => {} });
   const measured = container.w > 0 && container.h > 0;
@@ -95,7 +95,10 @@ export function SplitStage({
               alt={`${photo.file_name}${photo.face ? ` · ${photo.face}` : ""}`}
               filters={DEFAULT_FILTERS}
               onPreviewSize={original.onPreviewSize}
-              onOriginalError={original.onOriginalError}
+              onOriginalError={() => {
+                setMessage("No se pudo cargar el original; se muestra la vista previa.");
+                original.onOriginalError();
+              }}
             />
             <OverlayLayer view={view} crosshair={null} area={null} shapes={<FindingShapes findings={findings} image={image} zoom={view.zoom} selectedId={null} />} />
           </>
@@ -112,6 +115,11 @@ export function SplitStage({
           ✕
         </button>
       </div>
+      {message && (
+        <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-[2px] bg-amber-500/90 px-2 py-1 text-2xs text-black" data-testid="split-message">
+          {message}
+        </span>
+      )}
     </div>
   );
 }

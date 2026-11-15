@@ -13,12 +13,12 @@ import {
   modelLength,
   moveVertex,
   nearestHandle,
-  pickHistoryFields,
   pointInPolygon,
   regionOutline,
   regionPoints,
   toRegion,
 } from "./finding-logic";
+import { pickHistoryFields } from "@/lib/inspections/history";
 
 const size = { w: 1000, h: 500 };
 
@@ -49,6 +49,17 @@ describe("regiones", () => {
     // La esquina mínima pasa más allá de la máxima: el recuadro se reordena.
     const moved = moveVertex(box, 0, { x: 500, y: 300 }, size);
     expect(moved).toEqual({ type: "box", points: [[0.3, 0.4], [0.5, 0.6]] });
+  });
+
+  it("cruzar esquinas del recuadro: cada arrastre parte de la región inicial", () => {
+    const sq = { w: 1000, h: 1000 };
+    const start: Region = { type: "box", points: [[0.01, 0.01], [0.1, 0.1]] }; // lo (10,10) · hi (100,100)
+    const first = moveVertex(start, 0, { x: 150, y: 50 }, sq);
+    expect(first).toEqual({ type: "box", points: [[0.1, 0.05], [0.15, 0.1]] });
+    // Siguiente paso del mismo arrastre: desde `start`, no desde `first` (donde el índice 0 ya es otra esquina).
+    const second = moveVertex(start, 0, { x: 160, y: 50 }, sq);
+    expect(second.points[0][0] * 1000).toBeCloseTo(100);
+    expect(second.points[1][0] * 1000).toBeCloseTo(160);
   });
 
   it("mover un vértice del polígono solo cambia ese vértice", () => {

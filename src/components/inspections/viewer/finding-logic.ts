@@ -1,4 +1,5 @@
 import type { Pt, Region } from "@/lib/blade";
+import { HISTORY_FIELD_LABEL as FIELD_LABEL } from "@/lib/inspections/history";
 import { groupInt, type Size } from "./viewer-logic";
 
 /** Lógica pura de daños del visor (formas, asas, otras caras, modelo 2D, formatos); probada con Vitest. */
@@ -160,32 +161,6 @@ export const canDeleteComment = (c: { author_id: string }, me: Me, canComment: b
   me.isAdmin || (canComment && c.author_id === me.id);
 
 // --- Historial -----------------------------------------------------------------------------------
-
-const FIELD_LABEL: Record<string, string> = {
-  type_id: "Tipo",
-  severity: "Severidad",
-  status: "Estado",
-  region: "Región",
-  notes: "Notas",
-  width_mm: "Ancho",
-  length_mm: "Largo",
-  area_mm2: "Área",
-  radius_m: "Radio",
-  gsd_mm_px_used: "GSD usado",
-  client_reviewed_at: "Revisión del cliente",
-};
-
-/** Campos del daño que muestra el historial (el resto de cada fila de `change_log` no viaja al navegador). */
-export const HISTORY_FIELDS = Object.keys(FIELD_LABEL);
-
-/** Reduce una fila `old`/`new` de `change_log` a los campos del historial; la región solo como «cambió». */
-export function pickHistoryFields(row: unknown): Record<string, unknown> | null {
-  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
-  const src = row as Record<string, unknown>;
-  const out: Record<string, unknown> = {};
-  for (const k of HISTORY_FIELDS) if (k in src) out[k] = k === "region" ? true : src[k];
-  return out;
-}
 
 type JsonRecord = Record<string, unknown> | null;
 
