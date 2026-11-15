@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { imageToScreen, type Pt, type ViewState } from "@/lib/blade";
 import { groupInt, type AreaReadout } from "./viewer-logic";
 
@@ -27,8 +28,11 @@ export function OverlayLayer({
   view,
   crosshair,
   area,
+  shapes,
 }: {
   view: ViewState;
+  /** Formas de daños, dibujadas en px del original (dentro del grupo transformado). */
+  shapes?: ReactNode;
   /** Cursor en px del contenedor y texto (radio o coordenadas). */
   crosshair: { screen: Pt; text: string } | null;
   area: AreaDraft | null;
@@ -53,6 +57,7 @@ export function OverlayLayer({
   return (
     <svg className="pointer-events-none absolute inset-0 z-[5]" width={view.containerW} height={view.containerH} data-testid="overlay">
       <g transform={imageGroupTransform(view)}>
+        {shapes}
         {rubber.length > 1 && (
           <polygon
             points={rubber.map((p) => `${p.x},${p.y}`).join(" ")}

@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PhotoViewer } from "@/components/inspections/viewer/PhotoViewer";
-import { initialPhotoId, toViewerPhotos } from "@/components/inspections/viewer/photo-data";
 import { requireStaff } from "@/lib/auth/viewer";
 import { staffCapabilities } from "@/lib/inspections/capabilities";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
-import { loadInspectionViewer, TIP_AT_TOP } from "@/services/inspections/viewer-data";
+import { loadInspectionViewer } from "@/services/inspections/viewer-data";
+import { buildViewerProps } from "@/services/inspections/viewer-props";
 import { createSessionClient } from "@/services/supabase/server";
 
 export const metadata = { title: "Visor de fotos" };
@@ -18,11 +18,11 @@ export default async function AdminPhotoViewerPage({
   searchParams,
 }: {
   params: Promise<{ id: string; inspectionId: string }>;
-  searchParams: Promise<{ foto?: string | string[] }>;
+  searchParams: Promise<{ foto?: string | string[]; dano?: string | string[] }>;
 }) {
   assertInspectionsEnabled();
   const { id, inspectionId } = await params;
-  const { foto } = await searchParams;
+  const { foto, dano } = await searchParams;
   if (!z.uuid().safeParse(id).success || !z.uuid().safeParse(inspectionId).success) notFound();
   const viewer = await requireStaff();
   const sb = await createSessionClient();
@@ -32,8 +32,7 @@ export default async function AdminPhotoViewerPage({
   if (!data) notFound();
   const { data: asset } = await sb.from("assets").select("name").eq("id", data.inspection.asset_id).maybeSingle();
 
-  const photos = toViewerPhotos(data);
-  const first = initialPhotoId(photos, foto);
+  const viewerData = await buildViewerProps(sb, data, viewer, { foto, dano });
   const backHref = `/admin/inspecciones/proyectos/${id}/inspecciones/${inspectionId}?tab=fotos`;
 
   return (
@@ -44,10 +43,10 @@ export default async function AdminPhotoViewerPage({
         </Link>
         <p className="hidden text-2xs text-foreground-subtle md:block">← → fotos · + − zoom · 0 ajustar · Esc cancela la herramienta</p>
       </div>
-      {first ? (
+      {viewerData ? (
         <div className="h-[calc(100dvh-13rem)] min-h-[420px]">
           <PhotoViewer
-            data={{ photos, initialPhotoId: first, tipAtTop: TIP_AT_TOP }}
+            data={viewerData}
             mode="staff"
             capabilities={staffCapabilities(viewer, data.inspection.status === "approved")}
           />

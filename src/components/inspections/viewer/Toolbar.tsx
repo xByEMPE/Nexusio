@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { DEFAULT_FILTERS, type ImageFilters } from "./ImageStage";
 
-export type Tool = "move" | "crosshair" | "area";
+/** `newBox`/`newPolygon`: dibujar un daño nuevo (solo con `capabilities.editFindings`). */
+export type Tool = "move" | "crosshair" | "area" | "newBox" | "newPolygon";
 
 const FACE_LABEL: Record<string, string> = { TE: "Borde de salida", PS: "Lado de presión", LE: "Borde de ataque", SS: "Lado de succión" };
 
@@ -51,6 +52,7 @@ export function Toolbar({
   onDownload,
   downloading,
   editTools,
+  panelToggle,
 }: {
   fileName: string;
   blade: string | null;
@@ -76,6 +78,8 @@ export function Toolbar({
   downloading: boolean;
   /** Herramientas de edición (solo personal; se ocultan en pantallas < lg). */
   editTools?: ReactNode;
+  /** Botón del panel deslizable (solo en pantallas < lg). */
+  panelToggle?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 border-b border-border-subtle bg-surface-layer px-3 py-2" role="toolbar" aria-label="Herramientas del visor">
@@ -130,6 +134,7 @@ export function Toolbar({
         </div>
 
         <div className="ml-auto flex items-center gap-1">
+          {panelToggle && <div className="lg:hidden">{panelToggle}</div>}
           <button type="button" className={cn(btn, "text-xs")} onClick={onDownload} disabled={downloading}>
             {downloading ? "Preparando…" : "Descargar original"}
           </button>

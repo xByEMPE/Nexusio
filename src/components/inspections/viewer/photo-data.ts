@@ -13,10 +13,13 @@ export type ViewerPhoto = {
   width_px: number;
   height_px: number;
   previewUrl: string | null;
+  thumbUrl: string | null;
 };
 
 /** Fotos del visor en el orden de `orderCaptures` (ya aplicado por `loadInspectionViewer`). */
-export function toViewerPhotos(data: Pick<InspectionViewerData, "captures" | "previewUrls">): ViewerPhoto[] {
+export function toViewerPhotos(
+  data: Pick<InspectionViewerData, "captures" | "previewUrls"> & Partial<Pick<InspectionViewerData, "thumbUrls">>,
+): ViewerPhoto[] {
   return data.captures.map((c) => ({
     id: c.id,
     file_name: c.file_name,
@@ -29,6 +32,7 @@ export function toViewerPhotos(data: Pick<InspectionViewerData, "captures" | "pr
     width_px: c.width_px,
     height_px: c.height_px,
     previewUrl: c.preview_path ? (data.previewUrls.get(c.preview_path) ?? null) : null,
+    thumbUrl: c.thumb_path ? (data.thumbUrls?.get(c.thumb_path) ?? null) : null,
   }));
 }
 

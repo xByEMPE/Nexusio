@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { PortalHeader } from "@/components/inspections/portal/PortalHeader";
 import { PhotoViewer } from "@/components/inspections/viewer/PhotoViewer";
-import { initialPhotoId, toViewerPhotos } from "@/components/inspections/viewer/photo-data";
 import { requireClient } from "@/lib/auth/viewer";
 import { clientCapabilities } from "@/lib/inspections/capabilities";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
-import { loadInspectionViewer, TIP_AT_TOP } from "@/services/inspections/viewer-data";
+import { loadInspectionViewer } from "@/services/inspections/viewer-data";
+import { buildViewerProps } from "@/services/inspections/viewer-props";
 import { createSessionClient } from "@/services/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +18,11 @@ export default async function PortalPhotoViewerPage({
   searchParams,
 }: {
   params: Promise<{ id: string; inspectionId: string }>;
-  searchParams: Promise<{ foto?: string | string[] }>;
+  searchParams: Promise<{ foto?: string | string[]; dano?: string | string[] }>;
 }) {
   assertInspectionsEnabled();
   const { id, inspectionId } = await params;
-  const { foto } = await searchParams;
+  const { foto, dano } = await searchParams;
   if (!z.uuid().safeParse(id).success || !z.uuid().safeParse(inspectionId).success) notFound();
   const viewer = await requireClient();
   const sb = await createSessionClient();
@@ -37,8 +37,7 @@ export default async function PortalPhotoViewerPage({
   ]);
   if (!project) notFound();
 
-  const photos = toViewerPhotos(data);
-  const first = initialPhotoId(photos, foto);
+  const viewerData = await buildViewerProps(sb, data, viewer, { foto, dano });
   const backHref = `/portal/proyectos/${id}/inspecciones/${inspectionId}?tab=fotos`;
 
   return (
@@ -51,10 +50,10 @@ export default async function PortalPhotoViewerPage({
           </Link>
           {data.inspection.status !== "approved" && <span className="text-2xs text-foreground-muted">En revisión por NEXUS</span>}
         </div>
-        {first ? (
+        {viewerData ? (
           <div className="h-[calc(100dvh-9rem)] min-h-[420px]">
             <PhotoViewer
-              data={{ photos, initialPhotoId: first, tipAtTop: TIP_AT_TOP }}
+              data={viewerData}
               mode="client"
               capabilities={clientCapabilities(viewer, project.organization_id)}
             />

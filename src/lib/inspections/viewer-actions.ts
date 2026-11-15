@@ -14,6 +14,7 @@ import {
 import { getViewer, type Viewer } from "@/lib/auth/viewer";
 import { dbErrorMessage, fail, type ActionResult } from "@/lib/inspections/admin-action";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
+import { pickHistoryFields } from "@/components/inspections/viewer/finding-logic";
 import { findingTypeMatches, measurementsForSave, signOne } from "@/services/inspections/viewer-data";
 import { createSessionClient } from "@/services/supabase/server";
 import type { Database, Json } from "@/services/supabase/database.types";
@@ -330,4 +331,48 @@ export async function getThermalUrl(captureId: string): Promise<UrlResult> {
   if (!data?.matrix_path) return { ok: false, message: "Esta foto no tiene matriz térmica." };
   const url = await signOne(g.sb, data.matrix_path);
   return url ? { ok: true, url } : { ok: false, message: "No se pudo obtener la matriz térmica." };
+}
+
+export type HistoryEntry = {
+  id: number;
+  at: string;
+  action: string;
+  actor: string;
+  old: Record<string, unknown> | null;
+  new: Record<string, unknown> | null;
+};
+
+export type HistoryResult = { ok: true; entries: HistoryEntry[] } | { ok: false; message: string };
+
+/** Historial de un daño (`change_log`, con la sesión: RLS solo lo muestra al personal del proyecto). */
+export async function getFindingHistory(findingId: string): Promise<HistoryResult> {
+  const g = await gate(staffOnly);
+  if ("error" in g) return { ok: false, message: FORBIDDEN };
+  if (!IdSchema.safeParse({ id: findingId }).success) return { ok: false, message: "Daño no válido." };
+  const { data, error } = await g.sb
+    .from("change_log")
+    .select("id, at, action, actor_id, old, new")
+    .eq("table_name", "findings")
+    .eq("row_id", findingId)
+    .order("at", { ascending: false })
+    .limit(100);
+  if (error) return { ok: false, message: "No se pudo leer el historial." };
+  const rows = data ?? [];
+  const actorIds = [...new Set(rows.flatMap((r) => (r.actor_id ? [r.actor_id] : [])))];
+  const names = new Map<string, string>();
+  if (actorIds.length) {
+    const { data: profiles } = await g.sb.from("profiles").select("id, full_name, email").in("id", actorIds);
+    for (const p of profiles ?? []) names.set(p.id, p.full_name?.trim() || p.email || "Usuario");
+  }
+  return {
+    ok: true,
+    entries: rows.map((r) => ({
+      id: r.id,
+      at: r.at,
+      action: r.action,
+      actor: r.actor_id ? (names.get(r.actor_id) ?? "Usuario") : "Sistema",
+      old: pickHistoryFields(r.old),
+      new: pickHistoryFields(r.new),
+    })),
+  };
 }
