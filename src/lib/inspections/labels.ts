@@ -39,3 +39,9 @@ export function orgParam(value: string | string[] | undefined): string | undefin
   const v = Array.isArray(value) ? value[0] : value;
   return v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : undefined;
 }
+
+/** Fecha `YYYY-MM-DD` en formato legible es-MX; null si no hay fecha. */
+export function formatDay(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
+}
