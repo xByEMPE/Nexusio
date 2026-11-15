@@ -1,0 +1,50 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from ingest_demo.gsd import compute_gsd
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def load(name):
+    return json.loads((FIX / name).read_text(encoding="utf-8"))
+
+
+def test_gsd_from_lrf_and_calibrated_focal():
+    r = compute_gsd(load("m4e_wide_exif.json"), 5280)
+    assert r.source == "lrf" and r.confidence == "high"
+    assert r.mm_px == pytest.approx(3408 / 3725.151611, rel=1e-6)  # ≈ 0.9149 mm/px
+
+
+def test_gsd_falls_back_to_altitude_without_lrf():
+    m = load("m4e_wide_exif.json") | {"LRFTargetDistance": None, "LRFStatus": "Error"}
+    r = compute_gsd(m, 5280)
+    assert r.source == "altitude" and r.confidence == "medium"
+
+
+def test_gsd_falls_back_to_focus_distance():
+    m = {"Model": "M4E", "FocusDistance": 4.0, "CalibratedFocalLength": 4000.0}
+    r = compute_gsd(m, 5280)
+    assert r.source == "focus" and r.confidence == "low"
+    assert r.mm_px == pytest.approx(1.0)
+
+
+def test_gsd_uses_sensor_table_without_calibrated_focal():
+    m = {"Model": "M4E", "LRFTargetDistance": 3.0, "LRFStatus": "Normal", "FocalLength": 12.29}
+    r = compute_gsd(m, 5280)
+    assert r.mm_px == pytest.approx(3000 * 17.3 / (12.29 * 5280))
+
+
+def test_gsd_none_when_no_distance_and_unknown_model():
+    assert compute_gsd({"Model": "XYZ"}, 4000) is None
+
+
+def test_gsd_none_when_unknown_model_and_no_calibrated_focal():
+    assert compute_gsd({"Model": "XYZ", "LRFTargetDistance": 3.0, "FocalLength": 10}, 4000) is None
+
+
+def test_gsd_out_of_range_is_none():
+    m = {"LRFTargetDistance": 900.0, "LRFStatus": "Normal", "CalibratedFocalLength": 100.0}
+    assert compute_gsd(m, 4000) is None
