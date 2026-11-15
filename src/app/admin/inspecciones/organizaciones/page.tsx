@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
 import { createOrganization } from "../actions/organizations";
 
@@ -10,6 +11,7 @@ const plural = (n: number) => `${n} ${n === 1 ? "proyecto" : "proyectos"}`;
 export const metadata = { title: "Organizaciones" };
 
 export default async function OrganizationsPage() {
+  assertInspectionsEnabled();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
   const sb = await createSessionClient();

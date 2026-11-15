@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { inspectionsEnabled } from "@/lib/inspections/flag";
 import type { Database } from "@/services/supabase/database.types";
 import { createSessionClient } from "@/services/supabase/server";
 
@@ -13,7 +14,10 @@ export type Viewer = {
   memberships: { organizationId: string; role: OrgMemberRole }[];
 };
 
-/** Usuario con sesión, su rol de plataforma (solo si el perfil está activo) y sus membresías. */
+/**
+ * Usuario con sesión, su rol de plataforma (solo si el perfil está activo) y sus membresías.
+ * Con el módulo de inspecciones apagado devuelve solo el usuario (sin rol ni membresías).
+ */
 export async function getViewer(): Promise<Viewer | null> {
   const sb = await createSessionClient();
   if (!sb) return null;
@@ -21,6 +25,8 @@ export async function getViewer(): Promise<Viewer | null> {
     data: { user },
   } = await sb.auth.getUser();
   if (!user) return null;
+  // Con el módulo apagado no se consultan tablas de inspecciones (puede que ni existan).
+  if (!inspectionsEnabled()) return { user, platformRole: null, memberships: [] };
 
   const [profile, members] = await Promise.all([
     sb.from("profiles").select("platform_role, is_active").eq("id", user.id).maybeSingle(),

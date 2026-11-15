@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ActionForm, SelectField } from "@/components/inspections/admin/ActionForm";
 import { ProjectFields } from "@/components/inspections/admin/ProjectFields";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { formatContacts } from "@/lib/inspections/form";
 import { INSPECTION_KIND_LABEL, INSPECTION_STATUS_LABEL, PROJECT_STATUS_LABEL } from "@/lib/inspections/labels";
 import { createSessionClient } from "@/services/supabase/server";
@@ -21,6 +22,7 @@ export const metadata = { title: "Proyecto" };
 const PLATFORM_LABEL = { admin: "Administrador", technician: "Técnico", service: "Servicio" } as const;
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  assertInspectionsEnabled();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const viewer = await requireStaff();

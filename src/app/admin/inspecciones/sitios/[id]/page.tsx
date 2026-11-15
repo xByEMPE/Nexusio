@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { AssetFields, SiteFields } from "@/components/inspections/admin/SiteFields";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { ASSET_KIND_LABEL, SITE_KIND_LABEL } from "@/lib/inspections/labels";
 import { createSessionClient } from "@/services/supabase/server";
 import { upsertAsset, upsertSite } from "../../actions/catalog";
@@ -11,6 +12,7 @@ import { upsertAsset, upsertSite } from "../../actions/catalog";
 export const metadata = { title: "Sitio" };
 
 export default async function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  assertInspectionsEnabled();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const viewer = await requireStaff();

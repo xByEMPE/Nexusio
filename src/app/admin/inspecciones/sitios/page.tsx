@@ -3,6 +3,7 @@ import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { OrgFilter } from "@/components/inspections/admin/OrgFilter";
 import { SiteFields } from "@/components/inspections/admin/SiteFields";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { SITE_KIND_LABEL, orgParam } from "@/lib/inspections/labels";
 import { createSessionClient } from "@/services/supabase/server";
 import { upsertSite } from "../actions/catalog";
@@ -10,6 +11,7 @@ import { upsertSite } from "../actions/catalog";
 export const metadata = { title: "Sitios" };
 
 export default async function SitesPage({ searchParams }: { searchParams: Promise<{ org?: string | string[] }> }) {
+  assertInspectionsEnabled();
   const org = orgParam((await searchParams).org);
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";

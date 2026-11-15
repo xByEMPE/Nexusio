@@ -4,6 +4,7 @@ import { z } from "zod";
 import { TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
 import { renameOrganization } from "../../actions/organizations";
 import { removeMembership } from "../../actions/users";
@@ -13,6 +14,7 @@ export const metadata = { title: "Organización" };
 const ROLE_LABEL = { client_manager: "Gerente", client_viewer: "Lector" } as const;
 
 export default async function OrganizationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  assertInspectionsEnabled();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const viewer = await requireStaff();

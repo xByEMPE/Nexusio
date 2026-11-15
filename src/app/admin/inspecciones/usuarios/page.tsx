@@ -2,6 +2,7 @@ import { TextInput } from "@/components/assessment/fields";
 import { ActionForm, SelectField } from "@/components/inspections/admin/ActionForm";
 import { InviteKindFields } from "@/components/inspections/admin/InviteKindFields";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
 import { inviteUser, setUserActive } from "../actions/users";
 
@@ -11,6 +12,7 @@ const PLATFORM_LABEL = { admin: "Administrador", technician: "Técnico", service
 const MEMBER_LABEL = { client_manager: "Gerente", client_viewer: "Lector" } as const;
 
 export default async function UsersPage() {
+  assertInspectionsEnabled();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
   const sb = await createSessionClient();

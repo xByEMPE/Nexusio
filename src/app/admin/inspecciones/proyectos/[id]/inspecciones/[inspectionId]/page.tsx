@@ -5,6 +5,7 @@ import { TextArea, TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { CaptureGrid, type GridCapture } from "@/components/inspections/CaptureGrid";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { INSPECTION_KIND_LABEL, INSPECTION_STATUS_LABEL } from "@/lib/inspections/labels";
 import { signPaths } from "@/services/inspections/media";
 import { createSessionClient } from "@/services/supabase/server";
@@ -13,6 +14,7 @@ import { setInspectionStatus, updateInspectionDetails } from "../../../../action
 export const metadata = { title: "Inspección" };
 
 export default async function InspectionPage({ params }: { params: Promise<{ id: string; inspectionId: string }> }) {
+  assertInspectionsEnabled();
   const { id, inspectionId } = await params;
   if (!z.uuid().safeParse(id).success || !z.uuid().safeParse(inspectionId).success) notFound();
   const viewer = await requireStaff();

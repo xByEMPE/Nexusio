@@ -4,6 +4,7 @@ import { OrgFilter } from "@/components/inspections/admin/OrgFilter";
 import { ProjectFields } from "@/components/inspections/admin/ProjectFields";
 import { cn } from "@/lib/cn";
 import { requireStaff } from "@/lib/auth/viewer";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { PROJECT_STATUS_LABEL, orgParam } from "@/lib/inspections/labels";
 import { createSessionClient } from "@/services/supabase/server";
 import { upsertProject } from "../actions/projects";
@@ -18,6 +19,7 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<{ org?: string | string[]; status?: string | string[] }>;
 }) {
+  assertInspectionsEnabled();
   const sp = await searchParams;
   const org = orgParam(sp.org);
   const rawStatus = Array.isArray(sp.status) ? sp.status[0] : sp.status;
