@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { InviteUserSchema, OrganizationInputSchema } from "./inspections-admin";
+import {
+  AssetInputSchema,
+  AssignmentSchema,
+  InspectionInputSchema,
+  InviteUserSchema,
+  OrganizationInputSchema,
+  ProjectInputSchema,
+  SiteInputSchema,
+} from "./inspections-admin";
 
 const ORG = "6f1c0c2e-3b0e-4c8e-9f0a-2d3a4b5c6d7e";
 
@@ -47,5 +55,70 @@ describe("InviteUserSchema", () => {
   test("rechaza correo inválido y nombre corto", () => {
     expect(InviteUserSchema.safeParse({ email: "no", full_name: "Ana Pérez", kind: "staff", platform_role: "admin" }).success).toBe(false);
     expect(InviteUserSchema.safeParse({ email: "a@b.co", full_name: "A", kind: "staff", platform_role: "admin" }).success).toBe(false);
+  });
+});
+
+describe("SiteInputSchema", () => {
+  const base = { organization_id: ORG, kind: "wind_farm", name: "Parque Norte" };
+  test("acepta un sitio válido con y sin coordenadas", () => {
+    expect(SiteInputSchema.safeParse(base).success).toBe(true);
+    expect(SiteInputSchema.safeParse({ ...base, lat: 19.4, lon: -99.1 }).success).toBe(true);
+  });
+  test.each([
+    ["latitud fuera de rango", { ...base, lat: 91 }],
+    ["longitud fuera de rango", { ...base, lon: -181 }],
+    ["nombre corto", { ...base, name: "P" }],
+    ["tipo desconocido", { ...base, kind: "otro" }],
+  ])("rechaza %s", (_n, input) => {
+    expect(SiteInputSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("AssetInputSchema", () => {
+  const base = { site_id: ORG, kind: "wind_turbine", name: "WTG-01" };
+  test("acepta un activo con turbina", () => {
+    const r = AssetInputSchema.safeParse({ ...base, turbine: { manufacturer: "Vestas", blade_length_m: 52, rotor_diameter_m: 110, hub_height_m: 90 } });
+    expect(r.success).toBe(true);
+  });
+  test("rechaza blade_length_m = 0", () => {
+    expect(AssetInputSchema.safeParse({ ...base, turbine: { blade_length_m: 0 } }).success).toBe(false);
+  });
+  test("rechaza medidas fuera de rango", () => {
+    expect(AssetInputSchema.safeParse({ ...base, turbine: { blade_length_m: 151 } }).success).toBe(false);
+    expect(AssetInputSchema.safeParse({ ...base, turbine: { rotor_diameter_m: 301 } }).success).toBe(false);
+    expect(AssetInputSchema.safeParse({ ...base, turbine: { hub_height_m: 251 } }).success).toBe(false);
+  });
+  test("rechaza nombre vacío o de más de 60", () => {
+    expect(AssetInputSchema.safeParse({ ...base, name: "" }).success).toBe(false);
+    expect(AssetInputSchema.safeParse({ ...base, name: "x".repeat(61) }).success).toBe(false);
+  });
+});
+
+describe("ProjectInputSchema", () => {
+  const base = { organization_id: ORG, name: "Inspección 2026", status: "planned", contacts: [] };
+  test("acepta fechas en orden y misma fecha", () => {
+    expect(ProjectInputSchema.safeParse({ ...base, start_date: "2026-03-01", end_date: "2026-03-10" }).success).toBe(true);
+    expect(ProjectInputSchema.safeParse({ ...base, start_date: "2026-03-01", end_date: "2026-03-01" }).success).toBe(true);
+  });
+  test("rechaza end_date < start_date", () => {
+    expect(ProjectInputSchema.safeParse({ ...base, start_date: "2026-03-10", end_date: "2026-03-01" }).success).toBe(false);
+  });
+  test("rechaza más de 20 contactos y contactos sin nombre", () => {
+    const c = { role: "Cliente", name: "Ana" };
+    expect(ProjectInputSchema.safeParse({ ...base, contacts: Array.from({ length: 21 }, () => c) }).success).toBe(false);
+    expect(ProjectInputSchema.safeParse({ ...base, contacts: [{ role: "Cliente", name: "" }] }).success).toBe(false);
+    expect(ProjectInputSchema.safeParse({ ...base, contacts: [{ ...c, email: "no" }] }).success).toBe(false);
+  });
+  test("rechaza estado desconocido", () => {
+    expect(ProjectInputSchema.safeParse({ ...base, status: "x" }).success).toBe(false);
+  });
+});
+
+describe("AssignmentSchema e InspectionInputSchema", () => {
+  test("validan uuid y tipo", () => {
+    expect(AssignmentSchema.safeParse({ project_id: ORG, user_id: ORG }).success).toBe(true);
+    expect(AssignmentSchema.safeParse({ project_id: "x", user_id: ORG }).success).toBe(false);
+    expect(InspectionInputSchema.safeParse({ project_id: ORG, asset_id: ORG, kind: "wind_blade" }).success).toBe(true);
+    expect(InspectionInputSchema.safeParse({ project_id: ORG, asset_id: ORG, kind: "otro" }).success).toBe(false);
   });
 });
