@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { resolveLoginDestination } from "@/app/admin/login/actions";
+import { inspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
 
 const PasswordSchema = z
@@ -16,6 +17,7 @@ type SetPasswordResult = { error: string } | { path: string };
 
 /** Guarda la contraseña del usuario invitado y devuelve su destino. */
 export async function setPassword(password: string): Promise<SetPasswordResult> {
+  if (!inspectionsEnabled()) return { error: "Este acceso no está disponible." };
   const parsed = PasswordSchema.safeParse(password);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Contraseña no válida." };
 

@@ -60,6 +60,7 @@ export function homePathFor(
   v: Pick<Viewer, "platformRole" | "memberships"> & { isAdminEmail: boolean },
   enabled: boolean,
 ): string | null {
+  if (v.platformRole === "service") return null;
   if (enabled && (v.platformRole === "admin" || v.platformRole === "technician")) return "/admin/inspecciones";
   if (v.isAdminEmail) return "/admin";
   if (enabled && v.memberships.length > 0) return "/portal";

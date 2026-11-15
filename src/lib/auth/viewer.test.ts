@@ -15,6 +15,11 @@ describe("homePathFor", () => {
   it("service no tiene acceso", () => {
     expect(homePathFor({ platformRole: "service", memberships: [], isAdminEmail: false }, true)).toBeNull();
   });
+  it("service sin acceso aunque tenga membresías", () => {
+    expect(
+      homePathFor({ platformRole: "service", memberships: [{ organizationId: "o", role: "client_viewer" }], isAdminEmail: false }, true),
+    ).toBeNull();
+  });
   it("cliente con membresía entra al portal", () => {
     expect(
       homePathFor({ platformRole: null, memberships: [{ organizationId: "o", role: "client_viewer" }], isAdminEmail: false }, true),

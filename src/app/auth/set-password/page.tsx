@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
+import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
 import { SetPasswordForm } from "./SetPasswordForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetPasswordPage() {
+  assertInspectionsEnabled();
   const sb = await createSessionClient();
   const user = sb ? (await sb.auth.getUser()).data.user : null;
   if (!user) redirect("/admin/login?error=invite");
