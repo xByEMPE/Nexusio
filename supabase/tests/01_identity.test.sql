@@ -24,7 +24,7 @@ select tests.login_as(:'mgr_a');
 select results_eq('select id from public.organizations', format('values (%L::uuid)', :'org_a'), 'cliente A solo ve su organización');
 select is_empty(format('select 1 from public.organization_members where organization_id = %L', :'org_b'), 'A no ve miembros de B');
 select throws_ok('insert into public.organizations (name, slug) values (''X'', ''x'')', '42501', null, 'cliente no crea organizaciones');
-select throws_ok(format('update public.profiles set platform_role = ''admin'' where id = %L', :'mgr_a'), null, null, 'cliente no se asigna rol');
+select throws_ok(format('update public.profiles set platform_role = ''admin'' where id = %L', :'mgr_a'), '42501', null, 'cliente no se asigna rol');
 select throws_ok(format('update public.profiles set email = ''x@x.test'' where id = %L', :'mgr_a'), '42501', null, 'cliente no cambia su correo');
 select throws_ok(format('update public.profiles set is_active = false where id = %L', :'mgr_a'), '42501', null, 'cliente no cambia su estado');
 select lives_ok(format('update public.profiles set full_name = ''Nuevo'' where id = %L', :'mgr_a'), 'cliente cambia su nombre');
