@@ -29,4 +29,6 @@ export NEXUS_PUBLISHABLE_KEY=<llave pública>        # npx supabase status -o en
 - `.ingest_index.json` (dentro de la carpeta de fotos; no se versiona) guarda los `id` por `sha256`, así repetir
   el comando es idempotente: la segunda corrida da `inserted = 0`.
 - Los errores de `ingest_manifest` se imprimen con su `detail` (`[{path, code}]`).
-- `--exiftool` por defecto: `EXIF/exiftool-13.42_64/exiftool.exe` del repo principal (la carpeta `EXIF/` no se versiona).
+- exiftool se resuelve en este orden: `--exiftool`, variable `NEXUS_EXIFTOOL`, `exiftool` en el PATH.
+- Si la corrida falla a la mitad, el índice se guarda igual (en cada foto), así no quedan objetos huérfanos al reintentar.
+- Fotos idénticas (mismo sha256) se suben una sola vez; las demás se omiten con un aviso.

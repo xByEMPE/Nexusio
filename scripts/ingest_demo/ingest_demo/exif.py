@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 from pathlib import Path
 
@@ -19,9 +20,8 @@ def num(value) -> float | None:
     """Convierte '+102.977', '-1.0', números y None a float; None si no es numérico."""
     if value is None or isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
     try:
-        return float(str(value).strip())
+        f = float(value) if isinstance(value, (int, float)) else float(str(value).strip())
     except ValueError:
         return None
+    return f if math.isfinite(f) else None

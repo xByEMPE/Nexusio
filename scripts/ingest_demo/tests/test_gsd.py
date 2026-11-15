@@ -48,3 +48,15 @@ def test_gsd_none_when_unknown_model_and_no_calibrated_focal():
 def test_gsd_out_of_range_is_none():
     m = {"LRFTargetDistance": 900.0, "LRFStatus": "Normal", "CalibratedFocalLength": 100.0}
     assert compute_gsd(m, 4000) is None
+
+
+def test_gsd_pitch_nadir_skips_altitude_branch():
+    m = load("m4e_wide_exif.json") | {"LRFTargetDistance": None, "LRFStatus": "Error", "GimbalPitchDegree": "-90.0"}
+    assert compute_gsd(m, 5280) is None  # sin foco ni LRF
+
+
+def test_gsd_lrf_error_without_altitude_uses_focus_or_none():
+    base = {"Model": "M4E", "CalibratedFocalLength": 4000.0, "LRFTargetDistance": 3.0, "LRFStatus": "Error"}
+    assert compute_gsd(base, 5280) is None
+    r = compute_gsd(base | {"FocusDistance": 2.0}, 5280)
+    assert r.source == "focus" and r.confidence == "low"

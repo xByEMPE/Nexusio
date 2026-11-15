@@ -11,6 +11,7 @@ import getpass
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 import uuid
@@ -26,7 +27,6 @@ from .manifest import build_manifest, object_prefix, validate
 from .media import make_derivatives, sha256_file
 from .upload import tus_upload
 
-DEFAULT_EXIFTOOL = Path("C:/Users/airsc/Documents/NEXUS/EXIF/exiftool-13.42_64/exiftool.exe")
 INDEX_NAME = ".ingest_index.json"
 FACES = ("TE", "PS", "LE", "SS")
 BLADE_DIR = re.compile(r"^(?:Pala|Blade)\s+([ABC])$", re.IGNORECASE)
@@ -59,7 +59,41 @@ def save_index(folder: Path, index: dict) -> None:
     (folder / INDEX_NAME).write_text(json.dumps(index, indent=2), encoding="utf-8")
 
 
+def resolve_exiftool(arg: Path | None) -> Path:
+    """--exiftool, luego NEXUS_EXIFTOOL, luego `exiftool` en el PATH."""
+    if arg:
+        return Path(arg)
+    env = os.environ.get("NEXUS_EXIFTOOL")
+    if env:
+        return Path(env)
+    found = shutil.which("exiftool")
+    if not found:
+        raise SystemExit("No se encontró exiftool: use --exiftool, NEXUS_EXIFTOOL o agréguelo al PATH.")
+    return Path(found)
+
+
+def dedupe_by_sha(items: list[tuple[Path, str, str]], sha_of=sha256_file) -> list[tuple[Path, str, str, str]]:
+    """Conserva el primer archivo de cada sha256; avisa de los repetidos."""
+    seen: dict[str, Path] = {}
+    out = []
+    for path, blade, face in items:
+        sha = sha_of(path)
+        if sha in seen:
+            print(f"  omitida {path.name}: idéntica a {seen[sha].name}")
+            continue
+        seen[sha] = path
+        out.append((path, blade, face, sha))
+    return out
+
+
 def exif_datetime(meta: dict) -> str | None:
+    utc = meta.get("UTCAtExposure")
+    if utc:
+        try:
+            return datetime.strptime(str(utc)[:19].replace("T", " ").replace("-", ":"), "%Y:%m:%d %H:%M:%S").replace(
+                tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            pass
     raw = meta.get("DateTimeOriginal") or meta.get("CreateDate")
     if not raw:
         return None
@@ -75,12 +109,15 @@ def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: 
     base = f"{prefix}captures/{cap_id}/"
     gsd = compute_gsd(meta, deriv.width_px)
     lrf = num(meta.get("LRFTargetDistance"))
+    lat, lon = num(meta.get("GPSLatitude")), num(meta.get("GPSLongitude"))
+    if lat == 0 and lon == 0:  # sin fijación GPS
+        lat = lon = None
     return {
         "id": cap_id, "sha256": sha, "spectrum": "rgb", "file_name": path.name, "sequence_index": seq,
         "paths": {"original": base + "original.jpg", "preview": base + "preview.webp", "thumb": base + "thumb.webp"},
         "width_px": deriv.width_px, "height_px": deriv.height_px,
         "captured_at": exif_datetime(meta),
-        "gps": {"lat": num(meta.get("GPSLatitude")), "lon": num(meta.get("GPSLongitude")),
+        "gps": {"lat": lat, "lon": lon,
                 "alt_abs_m": num(meta.get("GPSAltitude")), "alt_rel_m": num(meta.get("RelativeAltitude"))},
         "gimbal": {"pitch_deg": num(meta.get("GimbalPitchDegree")), "roll_deg": num(meta.get("GimbalRollDegree")),
                    "yaw_deg": num(meta.get("GimbalYawDegree"))},
@@ -110,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--asset", required=True)
     ap.add_argument("--email", required=True)
     ap.add_argument("--inspection", help="id de una inspección existente (opcional)")
-    ap.add_argument("--exiftool", type=Path, default=DEFAULT_EXIFTOOL)
+    ap.add_argument("--exiftool", type=Path, help="si falta: NEXUS_EXIFTOOL o exiftool en el PATH")
     args = ap.parse_args(argv)
     args.project, args.asset = args.project.lower(), args.asset.lower()
 
@@ -121,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     password = os.environ.get("NEXUS_PASSWORD") or getpass.getpass(f"Contraseña de {args.email}: ")
 
+    exiftool = resolve_exiftool(args.exiftool)
     files = scan_folder(args.folder)
     if not files:
         print("No se encontraron fotos en Pala|Blade {A,B,C}/{TE,PS,LE,SS}/*.jpg", file=sys.stderr)
@@ -143,11 +181,12 @@ def main(argv: list[str] | None = None) -> int:
     seq_by_group: dict[tuple, int] = {}
     kw = dict(supabase_url=url, access_token=token, publishable_key=key)
 
-    with tempfile.TemporaryDirectory() as tmp:
-        for path, blade, face in files:
-            sha = sha256_file(path)
+    files = dedupe_by_sha(files)
+    try:
+      with tempfile.TemporaryDirectory() as tmp:
+        for path, blade, face, sha in files:
             cap_id = index["captures"].setdefault(sha, str(uuid.uuid4()))
-            meta = read_exif(path, args.exiftool)
+            meta = read_exif(path, exiftool)
             deriv = make_derivatives(path, Path(tmp) / cap_id)
             seq = seq_by_group.get((blade, face), 0)
             seq_by_group[(blade, face)] = seq + 1
@@ -156,10 +195,12 @@ def main(argv: list[str] | None = None) -> int:
             tus_upload(deriv.preview, cap["paths"]["preview"], "image/webp", **kw)
             tus_upload(deriv.thumb, cap["paths"]["thumb"], "image/webp", **kw)
             captures.append(cap)
+            save_index(args.folder, index)
             gsd = cap["gsd"]["mm_px"] if cap["gsd"] else None
             print(f"  subida {path.name} ({blade}/{face}) gsd_mm_px={gsd and round(gsd, 4)}")
 
-    save_index(args.folder, index)
+    finally:
+        save_index(args.folder, index)
     inspection = {"id": insp_id, "asset_id": args.asset, "kind": "wind_blade"}
     manifest = build_manifest(args.project, inspection, captures)
     try:
