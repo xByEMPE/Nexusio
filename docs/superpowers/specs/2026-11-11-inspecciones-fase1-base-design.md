@@ -435,3 +435,16 @@ Consecuencia en §8.3: un manifiesto puede traer **solo daños** (`captures` vac
 ### 11.3 Resueltos
 
 - Llaves de Supabase expuestas en la carpeta `EXIF/` de VND: atendidas por el dueño (11/11/2026).
+
+---
+
+## 12. Cambios durante la implementación
+
+Verificado el 15/11/2026 en local (`db reset` + pgTAP 00–07, vitest, typecheck, build y pytest en verde). Lo que cambió respecto al diseño original:
+
+- **§9.1 `seed-media`**: lo cubre `scripts/ingest_demo`. Las fotos vienen de una carpeta que pasa el usuario con `--folder` (`EXIF/` no trae fotos de muestra). exiftool se resuelve con `--exiftool`, luego `NEXUS_EXIFTOOL`, luego el PATH.
+- **§8.3 códigos de error**: la lista final tiene 14 códigos y vive en `INGEST_ERROR_CODES` de `src/contracts/ingest-manifest.ts`: `unsupported_version`, `forbidden_project`, `inspection_locked`, `asset_other_org`, `empty_manifest`, `bad_path`, `missing_object`, `unknown_finding_type`, `unknown_capture`, `unknown_mosaic`, `duplicate_sha256`, `duplicate_id`, `foreign_id`, `finding_target_changed`. La regla de `corrected_at` (no sobrescribir) también aplica a los daños manuales, no solo a los de IA.
+- **§3/§4 asignaciones**: una asignación solo da acceso mientras `platform_role` sea `technician` o `service`; bajar de rol a alguien borra sus asignaciones.
+- **§3/§4 integridad**: los ids padre son inmutables en `captures`, `findings`, `comments` y `mosaics`; la captura emparejada (RGB/térmica) debe ser de la misma inspección.
+- **`supabase/config.toml`**: `[auth.email] enable_signup = true` es necesario para el acceso con contraseña; `[auth] enable_signup = false` bloquea el registro abierto.
+- **Pendiente**: la corrida de `ingest_demo` con fotos reales de dron; hasta ahora se probó con JPEG sintéticos con etiquetas DJI (6 capturas, 18 objetos en Storage con ruta `{org}/{project}/{inspection}/captures/{id}/…`, segunda corrida idempotente).
