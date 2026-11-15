@@ -10,6 +10,7 @@ from PIL import Image
 Image.MAX_IMAGE_PIXELS = None  # las tiras son panorámicas grandes
 STRIP_SIDE, STRIP_QUALITY = 8000, 85
 FACE_NAMES = {"LeadingEdge": "LE", "PressureSide": "PS", "SuctionSide": "SS", "TrailingEdge": "TE"}
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".tif")
 STRIP_NAME = re.compile(r"^.+_([ABC])_(LeadingEdge|PressureSide|SuctionSide|TrailingEdge)$")
 
 
@@ -24,6 +25,9 @@ def scan(folder: Path) -> list[StripFile]:
     out = []
     for d in sorted(p for p in Path(folder).glob("*_img_stitched") if p.is_dir()):
         for f in sorted(p for p in d.iterdir() if p.is_file()):
+            if f.suffix.lower() not in IMAGE_EXTS:
+                print(f"  archivo ignorado (no es imagen): {f.name}")
+                continue
             m = STRIP_NAME.match(f.stem)
             if not m:
                 print(f"  tira ignorada (nombre no válido): {f.name}")
