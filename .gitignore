@@ -11,3 +11,8 @@ supabase/.temp
 material/*.mp4
 
 .claude/
+
+# App de escritorio de procesamiento (dataset, builds, pesos y llaves): no va en el repo web
+EXIF/
+.worktrees/
+.superpowers/
