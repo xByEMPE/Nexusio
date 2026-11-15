@@ -20,7 +20,7 @@ export default async function UsersPage() {
         sb.from("profiles").select("id, email, full_name, platform_role, is_active").not("platform_role", "is", null).order("email"),
         sb
           .from("organization_members")
-          .select("user_id, role, organizations(name), profiles(id, email, full_name, is_active)")
+          .select("user_id, organization_id, role, organizations(name), profiles(id, email, full_name, is_active)")
           .order("created_at"),
         sb.from("organizations").select("id, name").order("name"),
       ])
@@ -59,7 +59,7 @@ export default async function UsersPage() {
         {isAdmin && (members?.data ?? []).length > 0 && (
           <ul className="panel mt-3 divide-y divide-border-subtle">
             {(members?.data ?? []).map((m) => (
-              <li key={`${m.user_id}-${m.organizations?.name}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+              <li key={`${m.organization_id}-${m.user_id}`} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
                 <div className="min-w-0">
                   <div className="truncate font-medium">{m.profiles?.full_name || m.profiles?.email}</div>
                   <div className="text-xs text-foreground-subtle">

@@ -53,10 +53,13 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
 
       <section className="mt-8">
         <h2 className="label-caps">Miembros</h2>
-        {(!members || members.length === 0) && (
+        {!isAdmin && (
+          <div className="panel mt-3 p-6 text-sm text-foreground-muted">Solo un administrador puede ver los miembros de la organización.</div>
+        )}
+        {isAdmin && (!members || members.length === 0) && (
           <div className="panel mt-3 p-6 text-sm text-foreground-muted">Esta organización aún no tiene miembros. Invita a un cliente desde Usuarios.</div>
         )}
-        {members && members.length > 0 && (
+        {isAdmin && members && members.length > 0 && (
           <ul className="panel mt-3 divide-y divide-border-subtle">
             {members.map((m) => (
               <li key={m.user_id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">

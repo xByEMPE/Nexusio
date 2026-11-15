@@ -20,7 +20,7 @@ export async function inviteUser(fd: FormData): Promise<ActionResult> {
   const gate = await requireAdminAction();
   if ("error" in gate) return gate.error;
   const parsed = InviteUserSchema.safeParse({
-    email: str(fd, "email"),
+    email: str(fd, "email")?.toLowerCase(),
     full_name: str(fd, "full_name"),
     kind: str(fd, "kind"),
     platform_role: str(fd, "platform_role"),
@@ -45,23 +45,37 @@ export async function inviteUser(fd: FormData): Promise<ActionResult> {
     return fail(exists ? "Ya existe una cuenta con ese correo." : "No se pudo enviar la invitación.");
   }
   const userId = data.user.id;
-  const partial =
-    "La invitación se envió, pero no se pudo asignar el acceso: la cuenta existe sin permisos. Asígnalo desde Usuarios o desactiva la cuenta.";
 
-  if (input.kind === "staff") {
-    const { data: rows, error: e } = await sb
-      .from("profiles")
-      .update({ platform_role: input.platform_role })
-      .eq("id", userId)
-      .select("id");
-    if (e || !rows?.length) return fail(`${partial} ${dbErrorMessage(e, "")}`.trim());
-  } else {
-    const { error: e } = await sb.from("organization_members").insert({
-      organization_id: input.organization_id!,
-      user_id: userId,
-      role: input.member_role!,
-    });
-    if (e) return fail(`${partial} ${dbErrorMessage(e, "")}`.trim());
+  let assigned = false;
+  try {
+    if (input.kind === "staff") {
+      const { data: rows, error: e } = await sb
+        .from("profiles")
+        .update({ platform_role: input.platform_role })
+        .eq("id", userId)
+        .select("id");
+      assigned = !e && Boolean(rows?.length);
+    } else {
+      const { error: e } = await sb.from("organization_members").insert({
+        organization_id: input.organization_id!,
+        user_id: userId,
+        role: input.member_role!,
+      });
+      assigned = !e;
+    }
+  } catch {
+    assigned = false;
+  }
+  if (!assigned) {
+    try {
+      const { error: delErr } = await service.auth.admin.deleteUser(userId);
+      if (delErr) throw delErr;
+    } catch {
+      return fail(
+        "La cuenta se creó pero quedó sin acceso y no se pudo revertir. Solo un administrador de la base de datos puede corregirlo.",
+      );
+    }
+    return fail("No se pudo asignar el acceso; la invitación se canceló. Intenta de nuevo.");
   }
   revalidateUsers();
   return { ok: true };
