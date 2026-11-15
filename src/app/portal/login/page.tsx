@@ -5,6 +5,7 @@ import { isAdminEmail } from "@/lib/admin-auth";
 import { getViewer, homePathFor } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled, inspectionsEnabled } from "@/lib/inspections/flag";
 
+export const dynamic = "force-dynamic";
 export const metadata = { title: "Acceso" };
 
 const ERRORS: Record<string, string> = {

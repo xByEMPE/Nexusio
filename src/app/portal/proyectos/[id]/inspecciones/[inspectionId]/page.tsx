@@ -58,7 +58,7 @@ export default async function PortalInspectionPage({ params }: { params: Promise
         <Link href={`/portal/proyectos/${id}`} className="text-xs text-foreground-muted hover:text-foreground">
           ← {inspection.projects?.name ?? "Proyecto"}
         </Link>
-        <h1 className="mt-3 text-2xl font-medium">{inspection.assets?.name}</h1>
+        <h1 className="mt-3 text-2xl font-medium">{inspection.assets?.name ?? "Activo"}</h1>
         <p className="mt-1 text-sm text-foreground-muted">
           {INSPECTION_KIND_LABEL[inspection.kind]} · <span className="font-medium text-foreground">{INSPECTION_STATUS_LABEL[inspection.status]}</span>
           {inspection.blade_length_m != null && <span className="tabular"> · pala {inspection.blade_length_m} m</span>}
