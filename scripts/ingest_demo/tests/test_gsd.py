@@ -1,3 +1,4 @@
+import math
 import json
 from pathlib import Path
 
@@ -18,10 +19,20 @@ def test_gsd_from_lrf_and_calibrated_focal():
     assert r.mm_px == pytest.approx(3408 / 3725.151611, rel=1e-6)  # ≈ 0.9149 mm/px
 
 
-def test_gsd_falls_back_to_altitude_without_lrf():
-    m = load("m4e_wide_exif.json") | {"LRFTargetDistance": None, "LRFStatus": "Error"}
-    r = compute_gsd(m, 5280)
+def test_gsd_horizontal_shot_without_lrf_does_not_use_altitude():
+    # Caso real (WTG 25): gimbal a 0°, sin láser, ~100 m de altura -> no hay GSD.
+    m = load("m4e_wide_exif.json") | {"LRFTargetDistance": None, "LRFStatus": "Error", "GimbalPitchDegree": "+0.00"}
+    assert compute_gsd(m, 5280) is None
+
+
+def test_gsd_uses_altitude_only_when_looking_down():
+    base = {"Model": "M4E", "CalibratedFocalLength": 4000.0, "RelativeAltitude": "+40.0"}
+    r = compute_gsd(base | {"GimbalPitchDegree": "-90.0"}, 5280)
     assert r.source == "altitude" and r.confidence == "medium"
+    assert r.mm_px == pytest.approx(40_000 / 4000.0)
+    r60 = compute_gsd(base | {"GimbalPitchDegree": "-60.0"}, 5280)
+    assert r60.mm_px == pytest.approx(40_000 / math.sin(math.radians(60)) / 4000.0)
+    assert compute_gsd(base | {"GimbalPitchDegree": "-45.0"}, 5280) is None
 
 
 def test_gsd_falls_back_to_focus_distance():
@@ -50,9 +61,6 @@ def test_gsd_out_of_range_is_none():
     assert compute_gsd(m, 4000) is None
 
 
-def test_gsd_pitch_nadir_skips_altitude_branch():
-    m = load("m4e_wide_exif.json") | {"LRFTargetDistance": None, "LRFStatus": "Error", "GimbalPitchDegree": "-90.0"}
-    assert compute_gsd(m, 5280) is None  # sin foco ni LRF
 
 
 def test_gsd_lrf_error_without_altitude_uses_focus_or_none():

@@ -9,6 +9,7 @@ from .exif import num
 
 SENSOR_WIDTH_MM = {"M4E": 17.3, "M3E": 17.3}
 MIN_MM_PX, MAX_MM_PX = 0.01, 100.0
+NADIR_MIN_PITCH_DEG = -60.0
 
 
 @dataclass(frozen=True)
@@ -23,8 +24,11 @@ def _distance(meta: dict):
     if lrf is not None and lrf > 0 and meta.get("LRFStatus") != "Error":
         return lrf, "lrf", "high"
     alt, pitch = num(meta.get("RelativeAltitude")), num(meta.get("GimbalPitchDegree"))
-    if alt is not None and alt > 0 and pitch is not None and abs(pitch) < 80:
-        return alt / math.cos(math.radians(pitch)), "altitude", "medium"
+    # La altitud solo sirve como distancia cuando la cámara mira hacia el suelo
+    # (gimbal a -60° o más abajo). En inspección de palas la cámara apunta de
+    # frente (≈0°): la altura de vuelo no es la distancia a la pala.
+    if alt is not None and alt > 0 and pitch is not None and pitch <= NADIR_MIN_PITCH_DEG:
+        return alt / math.sin(math.radians(abs(pitch))), "altitude", "medium"
     focus = num(meta.get("FocusDistance"))
     if focus is not None and focus > 0:
         return focus, "focus", "low"

@@ -196,7 +196,7 @@ mosaic_format       image | dzi
 
 - Toda columna lleva su unidad en el nombre (`_m`, `_mm`, `_px`, `_deg`, `_c`, `_pct`). No hay heurísticas de conversión.
 - **GSD (lo calcula la app)**: con `CalibratedFocalLength` de DJI (en píxeles), `gsd_mm_px = distancia_m × 1000 / focal_px`; no depende del tamaño del sensor. Respaldo: `distancia_mm × ancho_sensor_mm / (focal_mm × ancho_px)`, con una **tabla de sensores por modelo de cámara** (corrige el 13.2 vs 17.3 mm de la app actual).
-- Prioridad de la distancia, igual que en VND: láser (`high`), altitud relativa con gimbal (`medium`), distancia de foco (`low`).
+- Prioridad de la distancia: láser (`high`); altitud relativa **solo si la cámara mira hacia el suelo** (gimbal ≤ −60°, distancia = altitud / sen|pitch|) (`medium`); distancia de foco (`low`); si no, sin GSD. En palas la cámara apunta de frente, así que sin láser no hay GSD por foto (corregido el 15/11/2026 con la inspección real WTG 25: la regla de VND daba 25–32 mm/px en vez de ~1 mm/px).
 - Las fórmulas del visor (regla virtual, radio por fila, áreas) están en `material/FRONTEND_MEDICION_Y_VISORES.md` y se aplican en la fase 3, corrigiendo las 9 inconsistencias que lista.
 
 ---
