@@ -3,6 +3,9 @@ import { imageToScreen, radiusAtRow, rulerTicks, screenToImage } from "@/lib/bla
 import {
   addVertex,
   areaReadout,
+  cancelApplies,
+  MAX_ORIGINAL_ATTEMPTS,
+  shouldRequestOriginal,
   crosshairText,
   fitTransform,
   frameFor,
@@ -190,5 +193,28 @@ describe("keyAction", () => {
     expect(keyAction("0")).toBe("fit");
     expect(keyAction("Escape")).toBe("cancel");
     expect(keyAction("a")).toBeNull();
+  });
+});
+
+describe("reintento del original", () => {
+  const base = { want: true, cached: false, inFlight: false, attempts: 0 };
+  it("pide la primera vez y reintenta una sola vez tras un fallo", () => {
+    expect(shouldRequestOriginal(base)).toBe(true);
+    expect(shouldRequestOriginal({ ...base, attempts: 1 })).toBe(true);
+    expect(shouldRequestOriginal({ ...base, attempts: MAX_ORIGINAL_ATTEMPTS })).toBe(false);
+  });
+  it("no pide si no hace falta, ya está en caché o hay una petición en curso", () => {
+    expect(shouldRequestOriginal({ ...base, want: false })).toBe(false);
+    expect(shouldRequestOriginal({ ...base, cached: true })).toBe(false);
+    expect(shouldRequestOriginal({ ...base, inFlight: true })).toBe(false);
+  });
+});
+
+describe("cancelApplies", () => {
+  it("Esc solo con herramienta o borrador activos", () => {
+    expect(cancelApplies("move", false)).toBe(false);
+    expect(cancelApplies("move", true)).toBe(true);
+    expect(cancelApplies("crosshair", false)).toBe(true);
+    expect(cancelApplies("area", false)).toBe(true);
   });
 });

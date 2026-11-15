@@ -1,25 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { screenToImage, type Pt } from "@/lib/blade";
 import type { ViewerCapabilities } from "@/lib/inspections/capabilities";
-import { getOriginalUrl } from "@/lib/inspections/viewer-actions";
 import { ImageStage, DEFAULT_FILTERS, type ImageFilters } from "./ImageStage";
 import { OverlayLayer, type AreaDraft } from "./OverlayLayer";
 import type { ViewerPhoto } from "./photo-data";
 import { Ruler, RULER_W } from "./Ruler";
 import { Toolbar, type Tool } from "./Toolbar";
+import { useOriginalImage } from "./useOriginalImage";
+import { useStageGestures } from "./useStageGestures";
 import { useViewState } from "./useViewState";
 import {
   addVertex,
   areaReadout,
+  cancelApplies,
   crosshairText,
   frameFor,
   keyAction,
   MIN_AREA_POINTS,
-  needsOriginal,
   neighbors,
   scaleStatus,
+  type KeyAction,
   type Size,
 } from "./viewer-logic";
 
@@ -30,9 +32,7 @@ export type PhotoViewerData = {
   tipAtTop: boolean;
 };
 
-const WHEEL_STEP = 1.15;
 const KEY_STEP = 1.25;
-const DRAG_THRESHOLD_PX = 4;
 const DUP_VERTEX_PX = 4;
 
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -109,46 +109,11 @@ export function PhotoViewer({
   }, [nav.prev, nav.next]);
 
   // --- Vista previa → original -----------------------------------------------------------------
-  const [previewW, setPreviewW] = useState<Record<string, number>>({});
-  const [originals, setOriginals] = useState<Record<string, string>>({});
-  const requested = useRef(new Set<string>());
-  const failed = useRef(new Set<string>());
-
-  const requestOriginal = async (id: string): Promise<string | null> => {
-    if (originals[id]) return originals[id]!;
-    try {
-      const r = await getOriginalUrl(id);
-      if (r.ok) {
-        setOriginals((o) => ({ ...o, [id]: r.url }));
-        return r.url;
-      }
-      setMessage(r.message);
-    } catch {
-      setMessage("No se pudo obtener el original.");
-    }
-    return null;
-  };
-
-  const wantOriginal = needsOriginal(view.zoom, previewW[photo.id] ?? null, photo.width_px);
-  useEffect(() => {
-    if (!wantOriginal || requested.current.has(photo.id)) return;
-    requested.current.add(photo.id);
-    void requestOriginal(photo.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- se pide una vez por foto
-  }, [wantOriginal, photo.id]);
-
-  const onOriginalError = () => {
-    // La URL firmada pudo vencer: se permite un reintento por foto.
-    setOriginals(({ [photo.id]: _gone, ...rest }) => rest);
-    if (!failed.current.has(photo.id)) {
-      failed.current.add(photo.id);
-      requested.current.delete(photo.id);
-    }
-  };
+  const original = useOriginalImage(photo, view.zoom, setMessage);
 
   const download = async () => {
     setDownloading(true);
-    const url = await requestOriginal(photo.id);
+    const url = await original.freshOriginalUrl();
     setDownloading(false);
     if (!url) return;
     const a = document.createElement("a");
@@ -169,13 +134,24 @@ export function PhotoViewer({
     setMessage(null);
   };
 
-  const actions = {
-    prev: () => goPrev?.(),
-    next: () => goNext?.(),
-    zoomIn: () => zoomBy(KEY_STEP),
-    zoomOut: () => zoomBy(1 / KEY_STEP),
-    fit: () => fit(),
-    cancel,
+  const closeArea = () => {
+    if (tool !== "area" || !area || area.closed) return;
+    if (area.points.length < MIN_AREA_POINTS) {
+      setMessage(`Marca al menos ${MIN_AREA_POINTS} puntos para cerrar.`);
+      return;
+    }
+    setMessage(null);
+    setArea({ ...area, closed: true, cursor: null, readout: areaReadout(area.points, image, photo.gsd_mm_px) });
+  };
+
+  // Teclado: cada acción devuelve si la usó; solo entonces se consume la tecla.
+  const actions: Record<KeyAction, () => boolean> = {
+    prev: () => (goPrev ? (goPrev(), true) : false),
+    next: () => (goNext ? (goNext(), true) : false),
+    zoomIn: () => (zoomBy(KEY_STEP), true),
+    zoomOut: () => (zoomBy(1 / KEY_STEP), true),
+    fit: () => (fit(), true),
+    cancel: () => (cancelApplies(tool, area != null) ? (cancel(), true) : false),
   };
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
@@ -183,98 +159,31 @@ export function PhotoViewer({
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
       const a = keyAction(e.key);
-      if (!a) return;
-      e.preventDefault();
-      actionsRef.current[a]();
+      if (a && actionsRef.current[a]()) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Rueda no pasiva: el zoom (centrado en el cursor) no desplaza la página.
-  const zoomRef = useRef(zoomBy);
-  zoomRef.current = zoomBy;
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const r = el.getBoundingClientRect();
-      zoomRef.current(e.deltaY < 0 ? WHEEL_STEP : 1 / WHEEL_STEP, { x: e.clientX - r.left, y: e.clientY - r.top });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-
   // --- Puntero: arrastre = desplazar; clic = vértice; dos dedos = zoom -------------------------
-  const pointers = useRef(new Map<number, Pt>());
-  const gesture = useRef<{ start: Pt; last: Pt; moved: boolean; pinch: number | null } | null>(null);
-
-  const local = (e: { clientX: number; clientY: number }): Pt => {
-    const r = stageRef.current!.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
-
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 && e.pointerType === "mouse") return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const p = local(e);
-    pointers.current.set(e.pointerId, p);
-    if (pointers.current.size === 1) gesture.current = { start: p, last: p, moved: false, pinch: null };
-    else if (gesture.current) gesture.current.moved = true; // dos dedos: nunca es un clic
-  };
-
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const p = local(e);
-    setCursor(p);
-    if (tool === "area" && area && !area.closed) setArea({ ...area, cursor: screenToImage(p, view) });
-
-    if (!pointers.current.has(e.pointerId)) return;
-    pointers.current.set(e.pointerId, p);
-    const g = gesture.current;
-    if (!g) return;
-
-    if (pointers.current.size >= 2) {
-      const [a, b] = [...pointers.current.values()] as [Pt, Pt];
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (g.pinch && d > 0) zoomBy(d / g.pinch, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
-      g.pinch = d;
-      return;
-    }
-    if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) > DRAG_THRESHOLD_PX) g.moved = true;
-    if (g.moved) panBy(p.x - g.last.x, p.y - g.last.y);
-    g.last = p;
-  };
-
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const g = gesture.current;
-    pointers.current.delete(e.pointerId);
-    if (pointers.current.size > 0) {
-      if (g) g.pinch = null;
-      return;
-    }
-    gesture.current = null;
-    if (!g || g.moved || tool !== "area" || !status.canMeasure) return;
-    const img = screenToImage(local(e), view);
-    const minDist = DUP_VERTEX_PX / view.zoom;
-    setArea((cur) =>
-      !cur || cur.closed
-        ? { points: [img], closed: false, cursor: img, readout: null }
-        : { ...cur, points: addVertex(cur.points, img, minDist) },
-    );
-  };
-
-  const onDoubleClick = () => {
-    if (tool !== "area" || !area || area.closed) return;
-    if (area.points.length < MIN_AREA_POINTS) {
-      setMessage(`Marca al menos ${MIN_AREA_POINTS} puntos y haz doble clic para cerrar.`);
-      return;
-    }
-    setMessage(null);
-    setArea({ ...area, closed: true, cursor: null, readout: areaReadout(area.points, image, photo.gsd_mm_px) });
-  };
-
-  const onPointerLeave = () => setCursor(null);
+  const gestures = useStageGestures(stageRef, {
+    zoomBy,
+    panBy,
+    onHover: (p) => {
+      setCursor(p);
+      if (p && tool === "area" && area && !area.closed) setArea({ ...area, cursor: screenToImage(p, view) });
+    },
+    onTap: (p) => {
+      if (tool !== "area" || !status.canMeasure) return;
+      const img = screenToImage(p, view);
+      const minDist = DUP_VERTEX_PX / view.zoom;
+      setArea((cur) =>
+        !cur || cur.closed
+          ? { points: [img], closed: false, cursor: img, readout: null }
+          : { ...cur, points: addVertex(cur.points, img, minDist) },
+      );
+    },
+  });
 
   const crosshair =
     tool === "crosshair" && cursor ? { screen: cursor, text: crosshairText(screenToImage(cursor, view), status.frame) } : null;
@@ -314,14 +223,10 @@ export function PhotoViewer({
         ref={stageRef}
         className="relative min-h-0 flex-1 touch-none select-none overflow-hidden bg-neutral-950"
         style={{ cursor: tool === "move" ? "grab" : "crosshair" }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onPointerLeave={onPointerLeave}
-        onDoubleClick={onDoubleClick}
+        {...gestures}
+        onDoubleClick={closeArea}
         data-testid="stage"
-        data-original={originals[photo.id] ? "requested" : "preview"}
+        data-original={original.originalUrl ? "requested" : "preview"}
       >
         {measured && (
           <>
@@ -329,11 +234,11 @@ export function PhotoViewer({
               key={photo.id}
               view={view}
               previewUrl={photo.previewUrl}
-              originalUrl={originals[photo.id] ?? null}
+              originalUrl={original.originalUrl}
               alt={`${photo.file_name}${photo.blade ? ` · pala ${photo.blade}` : ""}${photo.face ? ` · ${photo.face}` : ""}`}
               filters={filters}
-              onPreviewSize={(w) => setPreviewW((m) => (m[photo.id] === w ? m : { ...m, [photo.id]: w }))}
-              onOriginalError={onOriginalError}
+              onPreviewSize={original.onPreviewSize}
+              onOriginalError={original.onOriginalError}
             />
             <OverlayLayer view={view} crosshair={crosshair} area={area} />
             {rulerShown && <Ruler view={view} frame={status.frame!} estimated={status.estimated} />}
@@ -348,8 +253,22 @@ export function PhotoViewer({
           {message && <Notice tone="warn">{message}</Notice>}
         </div>
         {tool === "area" && !area?.closed && (
-          <div className="pointer-events-none absolute bottom-2 left-1/2 z-20 -translate-x-1/2 text-2xs" style={{ marginLeft: rulerShown ? RULER_W / 2 : 0 }}>
-            <Notice>Clic en cada vértice · doble clic para cerrar · Esc para cancelar</Notice>
+          <div
+            className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 text-2xs"
+            style={{ marginLeft: rulerShown ? RULER_W / 2 : 0 }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <Notice>Clic en cada vértice · doble clic o «Cerrar» · Esc cancela</Notice>
+            <button
+              type="button"
+              onClick={closeArea}
+              disabled={(area?.points.length ?? 0) < MIN_AREA_POINTS}
+              className="rounded-[2px] bg-sky-500 px-2 py-1 font-medium text-black disabled:opacity-40"
+              data-testid="area-close"
+            >
+              Cerrar
+            </button>
           </div>
         )}
       </div>

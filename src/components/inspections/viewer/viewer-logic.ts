@@ -181,3 +181,16 @@ export function keyAction(key: string): KeyAction | null {
       return null;
   }
 }
+
+/** Intentos de carga del original por foto: el primero y un reintento (la URL firmada pudo vencer). */
+export const MAX_ORIGINAL_ATTEMPTS = 2;
+
+/** Pedir (otra vez) la URL del original: hace falta, no hay una en caché ni en curso y quedan intentos. */
+export function shouldRequestOriginal(s: { want: boolean; cached: boolean; inFlight: boolean; attempts: number }): boolean {
+  return s.want && !s.cached && !s.inFlight && s.attempts < MAX_ORIGINAL_ATTEMPTS;
+}
+
+/** Esc solo actúa (y solo entonces se consume la tecla) si hay una herramienta o un borrador activo. */
+export function cancelApplies(tool: string, hasDraft: boolean): boolean {
+  return tool !== "move" || hasDraft;
+}
