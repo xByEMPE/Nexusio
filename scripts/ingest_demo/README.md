@@ -34,3 +34,9 @@ export NEXUS_PUBLISHABLE_KEY=<llave pública>        # npx supabase status -o en
 - exiftool se resuelve en este orden: `--exiftool`, variable `NEXUS_EXIFTOOL`, `exiftool` en el PATH.
 - Si la corrida falla a la mitad, el índice se guarda igual (en cada foto), así no quedan objetos huérfanos al reintentar.
 - Fotos idénticas (mismo sha256) se suben una sola vez; las demás se omiten con un aviso.
+- Si hay `manifest_{A,B,C}.json` de VND junto a las fotos, se leen `computed.radius` (mm, se guarda en m como
+  `radius_center_m`), `metadata.sequence_direction`, `bladeInfo.length` (`inspections.blade_length_m`) y, si el EXIF
+  no permite calcular el GSD, `computed.gsd` (`source: manual`, confianza baja).
+- Las tiras `*_img_stitched/<x>_<A|B|C>_<LeadingEdge|PressureSide|SuctionSide|TrailingEdge>.<ext>` se suben como
+  mosaicos `blade_strip` (solo `strip.webp`, calidad 85; no se reduce si el lado mayor es <= 8000 px). Los nombres
+  que no cumplen se ignoran con aviso. Sus ids se guardan en el índice local por nombre de archivo.

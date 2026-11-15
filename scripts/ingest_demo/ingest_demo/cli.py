@@ -25,6 +25,7 @@ from supabase import create_client
 from .exif import num, read_exif
 from .gsd import compute_gsd
 from .manifest import build_manifest, object_prefix, validate
+from . import mosaics, vnd_manifest
 from .media import make_derivatives, sha256_file
 from .upload import tus_upload
 
@@ -106,13 +107,21 @@ def exif_datetime(meta: dict) -> str | None:
 
 
 def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: str, cap_id: str,
-                  prefix: str, deriv) -> dict:
+                  prefix: str, deriv, vnd: vnd_manifest.VndPhoto | None = None) -> dict:
     base = f"{prefix}captures/{cap_id}/"
     gsd = compute_gsd(meta, deriv.width_px)
     lrf = num(meta.get("LRFTargetDistance"))
     lat, lon = num(meta.get("GPSLatitude")), num(meta.get("GPSLongitude"))
     if lat == 0 and lon == 0:  # sin fijación GPS
         lat = lon = None
+    gsd_json = {"mm_px": gsd.mm_px, "source": gsd.source, "confidence": gsd.confidence} if gsd else None
+    if gsd_json is None and vnd and vnd.gsd_mm_px:  # sin EXIF útil: GSD del manifiesto de VND
+        gsd_json = {"mm_px": vnd.gsd_mm_px, "source": "manual", "confidence": "low"}
+    blade_json = {"position": blade, "face": face}
+    if vnd and vnd.radius_m is not None:
+        blade_json["radius_center_m"] = vnd.radius_m
+    if vnd and vnd.sequence_direction:
+        blade_json["sequence_direction"] = vnd.sequence_direction
     return {
         "id": cap_id, "sha256": sha, "spectrum": "rgb", "file_name": path.name, "sequence_index": seq,
         "paths": {"original": base + "original.jpg", "preview": base + "preview.webp", "thumb": base + "thumb.webp"},
@@ -124,8 +133,8 @@ def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: 
                    "yaw_deg": num(meta.get("GimbalYawDegree"))},
         "camera_model": meta.get("Model"),
         "lrf_distance_m": lrf if lrf and lrf > 0 else None,
-        "gsd": ({"mm_px": gsd.mm_px, "source": gsd.source, "confidence": gsd.confidence} if gsd else None),
-        "blade": {"position": blade, "face": face},
+        "gsd": gsd_json,
+        "blade": blade_json,
     }
 
 
@@ -218,7 +227,10 @@ def main(argv: list[str] | None = None) -> int:
     index = load_index(args.folder)
     insp_id = resolve_inspection(sb, args, index, args.folder)
     prefix = object_prefix(org, args.project, insp_id)
+    vnd = vnd_manifest.load(args.folder)
+    blade_length = vnd_manifest.blade_length_m(args.folder)
     captures: list[dict] = []
+    mosaic_list: list[dict] = []
     seq_by_group: dict[tuple, int] = {}
 
     def upload(src: Path, name: str, content_type: str) -> None:
@@ -235,7 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             deriv = make_derivatives(path, Path(tmp) / cap_id)
             seq = seq_by_group.get((blade, face), 0)
             seq_by_group[(blade, face)] = seq + 1
-            cap = build_capture(path, blade, face, seq, meta, sha, cap_id, prefix, deriv)
+            cap = build_capture(path, blade, face, seq, meta, sha, cap_id, prefix, deriv, vnd.get(path.name))
             upload(path, cap["paths"]["original"], "image/jpeg")
             upload(deriv.preview, cap["paths"]["preview"], "image/webp")
             upload(deriv.thumb, cap["paths"]["thumb"], "image/webp")
@@ -244,10 +256,25 @@ def main(argv: list[str] | None = None) -> int:
             gsd = cap["gsd"]["mm_px"] if cap["gsd"] else None
             print(f"  subida {path.name} ({blade}/{face}) gsd_mm_px={gsd and round(gsd, 4)}")
 
+        index.setdefault("mosaics", {})
+        for strip in mosaics.scan(args.folder):
+            mid = index["mosaics"].setdefault(strip.path.name, str(uuid.uuid4()))
+            out = Path(tmp) / f"strip_{mid}.webp"
+            w, h = mosaics.make_strip(strip.path, out)
+            mosaic = mosaics.build_mosaic(strip, mid, prefix, w, h)
+            upload(out, mosaic["path"], "image/webp")
+            mosaic_list.append(mosaic)
+            save_index(args.folder, index)
+            print(f"  subida tira {strip.path.name} ({strip.blade}/{strip.face}) {w}x{h}")
+
     finally:
         save_index(args.folder, index)
     inspection = {"id": insp_id, "asset_id": args.asset, "kind": "wind_blade"}
+    if blade_length:
+        inspection["blade_length_m"] = blade_length
     manifest = build_manifest(args.project, inspection, captures)
+    if mosaic_list:
+        manifest["mosaics"] = mosaic_list
     try:
         validate(manifest)
     except ValidationError as e:
