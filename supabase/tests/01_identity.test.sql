@@ -40,10 +40,10 @@ delete from public.organization_members where user_id = :'mgr_a';
 select tests.login_as(:'mgr_a');
 select is_empty('select 1 from public.organizations', 'baja de la organización quita el acceso');
 select tests.login_as(:'admin');
-select ok((select count(*) from public.organizations) = 2, 'admin ve todas');
+select ok((select count(*) from public.organizations where id in (:'org_a', :'org_b')) = 2, 'admin ve todas');
 select tests.logout();
 select tests.login_as(:'tech');
-select is((select count(*) from public.profiles), 4::bigint, 'personal ve todos los perfiles');
+select is((select count(*) from public.profiles where id in (:'admin', :'tech', :'mgr_a', :'mgr_b')), 4::bigint, 'personal ve todos los perfiles');
 
 select tests.logout();
 select tests.login_anon();
