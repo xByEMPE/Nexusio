@@ -63,6 +63,9 @@ select set_config('nexus.ingest', 'on', true);
 update public.findings set corrected_at = null, corrected_by = null where id = :'f_a';
 update public.findings set severity = 5 where id = :'f_a';
 select ok((select corrected_at is null from public.findings where id = :'f_a'), 'con nexus.ingest = on no se llena corrected_at');
+-- Fase 3 (§4.5): el cliente solo ve daños confirmados de inspecciones aprobadas.
+update public.findings set status = 'confirmed' where inspection_id in (:'insp_a', :'insp_b');
+update public.inspections set status = 'approved' where id in (:'insp_a', :'insp_b');
 select set_config('nexus.ingest', '', true);
 
 -- mgr_a (cliente)
