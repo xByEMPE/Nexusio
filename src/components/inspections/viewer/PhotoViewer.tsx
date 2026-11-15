@@ -15,6 +15,9 @@ import { OverlayLayer } from "./OverlayLayer";
 import type { ViewerPhoto } from "./photo-data";
 import { Ruler } from "./Ruler";
 import { StageHud } from "./StageHud";
+import { ThermalCanvas, ThermalShapes } from "./ThermalCanvas";
+import { SpectrumSwitch, ThermalControls } from "./ThermalControls";
+import { thermalPair } from "./thermal-logic";
 import { Toolbar, type Tool } from "./Toolbar";
 import { useAreaTool } from "./useAreaTool";
 import { useElementSize, useIsDesktop } from "./useElementSize";
@@ -22,6 +25,7 @@ import { useFindingEditing } from "./useFindingEditing";
 import { useOriginalImage } from "./useOriginalImage";
 import { useStablePhotos } from "./useStablePhotos";
 import { useStageGestures } from "./useStageGestures";
+import { useThermal } from "./useThermal";
 import { useViewerKeys } from "./useViewerKeys";
 import { useViewerMutation } from "./useViewerMutation";
 import { useViewerSelection } from "./useViewerSelection";
@@ -57,6 +61,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
     onPhotoChange: () => {
       reset();
       areaTool.clear();
+      thermal.clear();
       editing.clearDraft();
       setMessage(null);
     },
@@ -96,6 +101,11 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
     canEdit: canEditHere,
     onSaveRegion: (id: string, region: Region) => regionMut.run(updateFinding, { id, region: JSON.stringify(region) }),
   });
+
+  // --- Modo térmico: la foto térmica se muestra con su propia matriz y su propio ViewState ------
+  const thermal = useThermal(photo);
+  const pair = thermalPair(photos, photo);
+  const thermalShown = thermal.active && thermal.matrix != null && thermal.range != null;
 
   const goPrev = nav.prev ? () => sel.goTo(nav.prev!.id) : null;
   const goNext = nav.next ? () => sel.goTo(nav.next!.id) : null;
@@ -139,8 +149,10 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
       setCursor(p);
       editing.hover(p);
       areaTool.hover(p);
+      thermal.hover(p && screenToImage(p, view));
     },
     onTap: (p) => {
+      if (thermal.tap(screenToImage(p, view))) return;
       if (editing.tap(p)) return;
       if (tool === "move") {
         const id = hitFinding(photoFindings, screenToImage(p, view), image);
@@ -173,6 +185,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
         rulerAvailable={status.ruler}
         onToggleRuler={() => setRulerOn((v) => !v)}
         onDownload={() => void original.download(photo.file_name)}
+        spectrumSwitch={pair ? <SpectrumSwitch thermalActive={photo.spectrum === "thermal"} rgbId={pair.rgbId} thermalId={pair.thermalId} onGo={sel.goTo} /> : undefined}
         editTools={canEditHere ? <NewFindingTools tool={tool} onTool={chooseTool} /> : undefined}
         panelToggle={
           <button type="button" className="inline-flex h-8 items-center rounded-[2px] border border-border-subtle px-2.5 text-xs" onClick={() => sel.setPanelOpen(true)} data-testid="panel-open">
@@ -180,6 +193,8 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
           </button>
         }
       />
+
+      {thermal.active && <ThermalControls t={thermal} cursorC={thermal.temperatureAt(cursor && screenToImage(cursor, view))} />}
 
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1">
@@ -194,17 +209,24 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
           >
             {measured && (
               <>
+                {thermalShown ? (
+                  <ThermalCanvas key={photo.id} view={view} matrix={thermal.matrix!} palette={thermal.palette} min={thermal.range!.min} max={thermal.range!.max} />
+                ) : (
                 <ImageStage
                   key={photo.id}
                   {...{ view, filters, previewUrl: photo.previewUrl, originalUrl: original.originalUrl, onPreviewSize: original.onPreviewSize, onOriginalError: original.onOriginalError }}
                   alt={`${photo.file_name}${photo.blade ? ` · pala ${photo.blade}` : ""}${photo.face ? ` · ${photo.face}` : ""}`}
                 />
+                )}
                 <OverlayLayer
                   view={view}
                   crosshair={crosshair}
                   area={area}
                   shapes={
-                    <FindingShapes findings={photoFindings} image={image} zoom={view.zoom} selectedId={sel.selectedId} override={editing.override} handles={editing.handles} draft={editing.draft} />
+                    <>
+                      <FindingShapes findings={photoFindings} image={image} zoom={view.zoom} selectedId={sel.selectedId} override={editing.override} handles={editing.handles} draft={editing.draft} />
+                      <ThermalShapes shape={thermal.shape} />
+                    </>
                   }
                 />
                 {rulerShown && <Ruler view={view} frame={status.frame!} estimated={status.estimated} />}

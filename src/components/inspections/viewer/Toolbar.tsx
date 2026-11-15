@@ -53,6 +53,7 @@ export function Toolbar({
   downloading,
   editTools,
   panelToggle,
+  spectrumSwitch,
 }: {
   fileName: string;
   blade: string | null;
@@ -80,6 +81,8 @@ export function Toolbar({
   editTools?: ReactNode;
   /** Botón del panel deslizable (solo en pantallas < lg). */
   panelToggle?: ReactNode;
+  /** Selector RGB / Térmico (solo si la foto tiene pareja). */
+  spectrumSwitch?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 border-b border-border-subtle bg-surface-layer px-3 py-2" role="toolbar" aria-label="Herramientas del visor">
@@ -132,6 +135,8 @@ export function Toolbar({
             ⟳
           </button>
         </div>
+
+        {spectrumSwitch}
 
         <div className="ml-auto flex items-center gap-1">
           {panelToggle && <div className="lg:hidden">{panelToggle}</div>}

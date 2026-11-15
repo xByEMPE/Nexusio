@@ -37,6 +37,16 @@ describe("toViewerPhotos", () => {
   });
 });
 
+describe("toViewerPhotos térmico", () => {
+  it("expone la calibración y la pareja, sin la ruta de la matriz", () => {
+    const c = { ...cap("t", null), spectrum: "thermal" as const, paired_capture_id: "a", thermal: { matrix_path: "m/matrix.png", temp_scale: 0.01, temp_offset: -40, t_min_c: 20, t_max_c: 70 } };
+    const [p] = toViewerPhotos({ captures: [c], previewUrls: new Map() });
+    expect(p!.paired_capture_id).toBe("a");
+    expect(p!.thermal).toEqual({ temp_scale: 0.01, temp_offset: -40, t_min_c: 20, t_max_c: 70 });
+    expect(JSON.stringify(p)).not.toContain("matrix.png");
+  });
+});
+
 describe("initialPhotoId", () => {
   const photos = [{ id: "a" }, { id: "b" }];
   it("usa ?foto= si pertenece a la inspección", () => {

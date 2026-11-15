@@ -14,6 +14,9 @@ export type ViewerPhoto = {
   height_px: number;
   previewUrl: string | null;
   thumbUrl: string | null;
+  paired_capture_id: string | null;
+  /** Calibración de la matriz térmica (sin ruta de almacenamiento). */
+  thermal: { temp_scale: number; temp_offset: number; t_min_c: number | null; t_max_c: number | null } | null;
 };
 
 /** Fotos del visor en el orden de `orderCaptures` (ya aplicado por `loadInspectionViewer`). */
@@ -33,6 +36,8 @@ export function toViewerPhotos(
     height_px: c.height_px,
     previewUrl: c.preview_path ? (data.previewUrls.get(c.preview_path) ?? null) : null,
     thumbUrl: c.thumb_path ? (data.thumbUrls?.get(c.thumb_path) ?? null) : null,
+    paired_capture_id: c.paired_capture_id,
+    thermal: c.thermal ? { temp_scale: c.thermal.temp_scale, temp_offset: c.thermal.temp_offset, t_min_c: c.thermal.t_min_c, t_max_c: c.thermal.t_max_c } : null,
   }));
 }
 
