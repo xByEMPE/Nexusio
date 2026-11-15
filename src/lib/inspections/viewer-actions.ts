@@ -9,11 +9,12 @@ import {
   FindingStatusSchema,
   FindingUpdateSchema,
   IdSchema,
+  RegionInputSchema,
 } from "@/contracts/inspections-viewer";
 import { getViewer, type Viewer } from "@/lib/auth/viewer";
 import { dbErrorMessage, fail, type ActionResult } from "@/lib/inspections/admin-action";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
-import { measurementsForSave, signOne } from "@/services/inspections/viewer-data";
+import { findingTypeMatches, measurementsForSave, signOne } from "@/services/inspections/viewer-data";
 import { createSessionClient } from "@/services/supabase/server";
 import type { Database, Json } from "@/services/supabase/database.types";
 
@@ -79,6 +80,22 @@ function revalidateInspection(projectId: string, inspectionId: string) {
 
 type RegionIn = Region;
 
+const BAD_TYPE = "Tipo de daño no válido para esta inspección.";
+
+/** El tipo debe existir, estar activo y ser del dominio de la inspección (se lee con la sesión). */
+async function typeIsValid(sb: Sb, typeId: string, inspectionId: string): Promise<boolean> {
+  const { data: insp } = await sb.from("inspections").select("kind").eq("id", inspectionId).maybeSingle();
+  if (!insp) return false;
+  const { data: t } = await sb
+    .from("finding_types")
+    .select("domain, is_active")
+    .eq("id", typeId)
+    .eq("domain", insp.kind)
+    .eq("is_active", true)
+    .maybeSingle();
+  return findingTypeMatches(t, insp.kind);
+}
+
 export async function createFinding(fd: FormData): Promise<ActionResult> {
   const g = await gate(staffOnly);
   if ("error" in g) return g.error;
@@ -99,6 +116,7 @@ export async function createFinding(fd: FormData): Promise<ActionResult> {
     .eq("id", d.capture_id)
     .maybeSingle();
   if (!cap || cap.inspection_id !== d.inspection_id) return fail("No se encontró la foto.");
+  if (!(await typeIsValid(g.sb, d.type_id, d.inspection_id))) return fail(BAD_TYPE);
   const { data: blade } = await g.sb
     .from("blade_captures")
     .select("radius_center_m")
@@ -133,14 +151,14 @@ export async function updateFinding(fd: FormData): Promise<ActionResult> {
     type_id: str(fd, "type_id"),
     severity: sev === undefined ? undefined : Number(sev),
     region: jsonField(fd, "region"),
-    notes: fd.has("notes") ? String(fd.get("notes") ?? "") : undefined,
+    notes: fd.has("notes") ? String(fd.get("notes") ?? "").trim() : undefined,
   });
   if (!parsed.success) return fail("Revisa el tipo, la severidad (1–5), la región y las notas.");
   const d = parsed.data;
 
   const { data: current } = await g.sb
     .from("findings")
-    .select("id, project_id, inspection_id, capture_id")
+    .select("id, project_id, inspection_id, capture_id, region")
     .eq("id", d.id)
     .maybeSingle();
   if (!current) return fail("No se encontró el daño.");
@@ -149,8 +167,11 @@ export async function updateFinding(fd: FormData): Promise<ActionResult> {
   if (d.type_id !== undefined) patch.type_id = d.type_id;
   if (d.severity !== undefined) patch.severity = d.severity;
   if (d.notes !== undefined) patch.notes = d.notes === "" ? null : d.notes;
-  if (d.region !== undefined) {
-    if (!current.capture_id) return fail("Este daño no está asociado a una foto.");
+  if (d.type_id !== undefined && !(await typeIsValid(g.sb, d.type_id, current.inspection_id))) return fail(BAD_TYPE);
+  // Siempre se recalculan las medidas con la captura actual, para que un cambio de GSD no las deje obsoletas.
+  const regionSrc = d.region ?? RegionInputSchema.safeParse(current.region).data;
+  if (d.region !== undefined && !current.capture_id) return fail("Este daño no está asociado a una foto.");
+  if (current.capture_id && regionSrc) {
     const { data: cap } = await g.sb
       .from("captures")
       .select("width_px, height_px, gsd_mm_px")
@@ -164,14 +185,16 @@ export async function updateFinding(fd: FormData): Promise<ActionResult> {
       .maybeSingle();
     Object.assign(
       patch,
-      measurementsForSave(d.region as RegionIn, { ...cap, radius_center_m: blade?.radius_center_m ?? null }),
+      measurementsForSave(regionSrc as RegionIn, { ...cap, radius_center_m: blade?.radius_center_m ?? null }),
     );
-    patch.region = d.region as unknown as NonNullable<Json>;
   }
+  if (d.region !== undefined) patch.region = d.region as unknown as NonNullable<Json>;
 
   const { data, error } = await g.sb.from("findings").update(patch).eq("id", d.id).select("id");
   if (error) return fail(mapError(error, "No se pudo guardar el daño."));
-  if (!data?.length) return fail("No se encontró el daño.");
+  if (!data?.length) {
+    return fail("No se encontró el daño o no tienes permiso para editarlo (la inspección puede estar aprobada).");
+  }
   revalidateInspection(current.project_id, current.inspection_id);
   return { ok: true };
 }

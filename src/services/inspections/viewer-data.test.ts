@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Region } from "@/lib/blade";
-import { measurementsForSave, orderCaptures, type ViewerCapture } from "./viewer-data";
+import { findingTypeMatches, measurementsForSave, orderCaptures, type ViewerCapture } from "./viewer-data";
 
 const cap = (o: Partial<ViewerCapture>): ViewerCapture => ({
   id: "x",
@@ -68,5 +68,16 @@ describe("measurementsForSave", () => {
   test("sin GSD todo es null", () => {
     const r = measurementsForSave(box, cap({ gsd_mm_px: null }), { width_mm: 5 });
     expect(r).toEqual({ width_mm: null, length_mm: null, area_mm2: null, radius_m: null, gsd_mm_px_used: null });
+  });
+});
+
+describe("findingTypeMatches", () => {
+  test("acepta activo del mismo dominio", () => {
+    expect(findingTypeMatches({ domain: "wind_blade", is_active: true }, "wind_blade")).toBe(true);
+  });
+  test("rechaza inexistente, inactivo o de otro dominio", () => {
+    expect(findingTypeMatches(null, "wind_blade")).toBe(false);
+    expect(findingTypeMatches({ domain: "wind_blade", is_active: false }, "wind_blade")).toBe(false);
+    expect(findingTypeMatches({ domain: "solar", is_active: true }, "wind_blade")).toBe(false);
   });
 });

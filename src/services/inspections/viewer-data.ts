@@ -56,6 +56,14 @@ export function orderCaptures(captures: ViewerCapture[]): ViewerCapture[] {
   });
 }
 
+/** Un tipo de daño sirve si existe, está activo y es del dominio (tipo de inspección) dado. */
+export function findingTypeMatches(
+  type: { domain: string; is_active: boolean } | null | undefined,
+  inspectionKind: string,
+): boolean {
+  return !!type && type.is_active && type.domain === inspectionKind;
+}
+
 export type SavedMeasurements = FindingMeasurements & { gsd_mm_px_used: number | null };
 
 /**
