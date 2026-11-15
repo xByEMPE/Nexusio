@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { rowAtRadius } from "./radius";
+import { imageToScreen } from "./transform";
 import { rulerStep, rulerTicks } from "./ruler";
 
 const f = { rc_m: 10, gsd_mm_px: 1, height_px: 3000, tipAtTop: true };
-const v = { zoom: 1, panX: 0, panY: 0, rotationDeg: 0, containerW: 800, containerH: 600, imageW: 5280, imageH: 3956 };
+const v = { zoom: 1, panX: 0, panY: 0, rotationDeg: 0, containerW: 800, containerH: 600, imageW: 5280, imageH: 3000 };
 
 describe("rulerStep", () => {
   it("elige 1·2·5·10 × 10ⁿ", () => {
@@ -11,6 +13,12 @@ describe("rulerStep", () => {
     expect(rulerStep(1, 5)).toBeCloseTo(0.5); // t = 0.4
     expect(rulerStep(1, 10)).toBeCloseTo(1); // t = 0.8
     expect(rulerStep(0.5, 1)).toBeCloseTo(0.2); // t = 0.16
+  });
+  it("devuelve NaN con zoom o GSD no positivos", () => {
+    expect(rulerStep(0, 1)).toBeNaN();
+    expect(rulerStep(-1, 1)).toBeNaN();
+    expect(rulerStep(1, 0)).toBeNaN();
+    expect(rulerStep(1, -2)).toBeNaN();
   });
 });
 
@@ -41,5 +49,14 @@ describe("rulerTicks", () => {
     const ticks = rulerTicks({ ...v, zoom: 2, panY: 40 }, f);
     const t = ticks.find((x) => x.label === "10000");
     expect(t?.y).toBeCloseTo(340);
+  });
+  it("usa las mismas fórmulas que el resto: y == imageToScreen(rowAtRadius(r)) con zoom y pan", () => {
+    const w = { ...v, zoom: 1.7, panY: 42, panX: -20 };
+    const ticks = rulerTicks(w, f);
+    expect(ticks.length).toBeGreaterThan(0);
+    for (const t of ticks) {
+      const y = imageToScreen({ x: w.imageW / 2, y: rowAtRadius(t.r_m, f) }, w).y;
+      expect(t.y).toBeCloseTo(y);
+    }
   });
 });

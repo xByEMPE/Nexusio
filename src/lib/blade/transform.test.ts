@@ -21,6 +21,12 @@ describe("transform", () => {
     expect(q.x).toBeCloseTo(2640 + 50);
     expect(q.y).toBeCloseTo(1978 + 25);
   });
+  it("rotación 90°: +x de la imagen va a +y de la pantalla (horario CSS)", () => {
+    const w = { ...v, zoom: 1, panX: 0, panY: 0, rotationDeg: 90, imageW: 1000, imageH: 1000, containerW: 1000, containerH: 1000 };
+    const s = imageToScreen({ x: 600, y: 500 }, w);
+    expect(s.x).toBeCloseTo(500);
+    expect(s.y).toBeCloseTo(600);
+  });
   it("fitZoom", () => {
     expect(fitZoom(800, 600, 5280, 3956)).toBeCloseTo(Math.min(800 / 5280, 600 / 3956) * 0.9);
     expect(fitZoom(8000, 6000, 100, 100)).toBeCloseTo(0.9);
