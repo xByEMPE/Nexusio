@@ -3,19 +3,29 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { TextArea, TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
-import { CaptureGrid, type GridCapture } from "@/components/inspections/CaptureGrid";
+import { InspectionTabContent } from "@/components/inspections/viewer/InspectionTabContent";
+import { InspectionTabs, resolveTab } from "@/components/inspections/viewer/InspectionTabs";
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { INSPECTION_KIND_LABEL, INSPECTION_STATUS_LABEL } from "@/lib/inspections/labels";
-import { signPaths } from "@/services/inspections/media";
+import { loadInspectionViewer } from "@/services/inspections/viewer-data";
 import { createSessionClient } from "@/services/supabase/server";
 import { setInspectionStatus, updateInspectionDetails } from "../../../../actions/projects";
 
 export const metadata = { title: "Inspección" };
 
-export default async function InspectionPage({ params }: { params: Promise<{ id: string; inspectionId: string }> }) {
+export const dynamic = "force-dynamic";
+
+export default async function InspectionPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string; inspectionId: string }>;
+  searchParams: Promise<{ tab?: string | string[] }>;
+}) {
   assertInspectionsEnabled();
   const { id, inspectionId } = await params;
+  const { tab: tabParam } = await searchParams;
   if (!z.uuid().safeParse(id).success || !z.uuid().safeParse(inspectionId).success) notFound();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
@@ -30,32 +40,16 @@ export default async function InspectionPage({ params }: { params: Promise<{ id:
     .maybeSingle();
   if (!inspection) notFound();
 
-  const { data: captures, error } = await sb
-    .from("captures")
-    .select("id, file_name, thumb_path, sequence_index, blade_captures(blade, face)")
-    .eq("inspection_id", inspectionId)
-    .order("sequence_index");
-
-  const signed = await signPaths(sb, (captures ?? []).flatMap((c) => (c.thumb_path ? [c.thumb_path] : [])));
-  const grid: GridCapture[] = (captures ?? []).flatMap((c) =>
-    c.blade_captures
-      ? [
-          {
-            id: c.id,
-            blade: c.blade_captures.blade,
-            face: c.blade_captures.face,
-            fileName: c.file_name,
-            thumbUrl: c.thumb_path ? signed.get(c.thumb_path) : undefined,
-          },
-        ]
-      : [],
-  );
+  const data = await loadInspectionViewer(sb, id, inspectionId);
+  if (!data) notFound();
+  const tab = resolveTab(tabParam, data.mosaics.length > 0);
+  const basePath = `/admin/inspecciones/proyectos/${id}/inspecciones/${inspectionId}`;
 
   const approved = inspection.status === "approved";
   const canEdit = isAdmin || !approved;
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-7xl">
       <Link href={`/admin/inspecciones/proyectos/${id}`} className="text-xs text-foreground-muted hover:text-foreground">
         ← {inspection.projects?.name ?? "Proyecto"}
       </Link>
@@ -65,7 +59,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ id:
           <p className="mt-1 text-sm text-foreground-muted">
             {INSPECTION_KIND_LABEL[inspection.kind]} · <span className="font-medium text-foreground">{INSPECTION_STATUS_LABEL[inspection.status]}</span>
             {inspection.blade_length_m != null && <span className="tabular"> · pala {inspection.blade_length_m} m</span>}
-            <span className="tabular"> · {captures?.length ?? 0} fotos</span>
+            <span className="tabular"> · {data.captures.length} fotos</span>
           </p>
         </div>
         {isAdmin && (
@@ -134,10 +128,12 @@ export default async function InspectionPage({ params }: { params: Promise<{ id:
         )}
       </section>
 
-      <section className="mt-8">
-        <h2 className="label-caps mb-3">Fotos</h2>
-        {error ? <p className="text-sm text-signal-critical">No fue posible cargar las fotos.</p> : <CaptureGrid captures={grid} />}
-      </section>
+      <div className="mt-8">
+        <InspectionTabs basePath={basePath} active={tab} />
+        <div className="mt-5">
+          <InspectionTabContent tab={tab} data={data} viewerBase={`${basePath}/visor`} canEdit={canEdit} approved />
+        </div>
+      </div>
     </div>
   );
 }

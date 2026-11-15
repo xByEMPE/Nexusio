@@ -117,7 +117,8 @@ export async function loadInspectionViewer(
   if (!inspection) return null;
 
   const [caps, findings, types, mosaics, comments] = await Promise.all([
-    sb.from("captures").select("*").eq("inspection_id", inspectionId),
+    // Se incrusta blade_captures/thermal_captures: un `.in()` con cientos de ids rebasa el límite de URL.
+    sb.from("captures").select("*, blade_captures(*), thermal_captures(*)").eq("inspection_id", inspectionId),
     sb.from("findings").select("*").eq("inspection_id", inspectionId).order("created_at", { ascending: true }),
     sb.from("finding_types").select("*").eq("domain", inspection.kind).order("label_es", { ascending: true }),
     sb.from("mosaics").select("*").eq("inspection_id", inspectionId),
@@ -125,20 +126,10 @@ export async function loadInspectionViewer(
   ]);
 
   const rows = caps.data ?? [];
-  const ids = rows.map((c) => c.id);
-  const [blades, thermals] = ids.length
-    ? await Promise.all([
-        sb.from("blade_captures").select("*").in("capture_id", ids),
-        sb.from("thermal_captures").select("*").in("capture_id", ids),
-      ])
-    : [{ data: [] }, { data: [] }];
-  const bladeBy = new Map((blades.data ?? []).map((b) => [b.capture_id, b]));
-  const thermalBy = new Map((thermals.data ?? []).map((t) => [t.capture_id, t]));
-
   const captures = orderCaptures(
     rows.map((c): ViewerCapture => {
-      const b = bladeBy.get(c.id);
-      const t = thermalBy.get(c.id);
+      const b = c.blade_captures;
+      const t = c.thermal_captures;
       return {
         id: c.id,
         file_name: c.file_name,

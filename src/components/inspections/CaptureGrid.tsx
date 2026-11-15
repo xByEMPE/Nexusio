@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 
 export type GridCapture = {
@@ -13,7 +14,7 @@ const FACES = ["TE", "PS", "LE", "SS"] as const;
 const FACE_LABEL = { TE: "Borde de salida (TE)", PS: "Lado de presión (PS)", LE: "Borde de ataque (LE)", SS: "Lado de succión (SS)" } as const;
 
 /** Miniaturas firmadas agrupadas por pala (A/B/C) y cara (TE/PS/LE/SS). */
-export function CaptureGrid({ captures }: { captures: GridCapture[] }) {
+export function CaptureGrid({ captures, viewerBase }: { captures: GridCapture[]; viewerBase?: string }) {
   if (captures.length === 0) {
     return (
       <div className="panel p-10 text-center text-sm text-foreground-muted">
@@ -43,15 +44,28 @@ export function CaptureGrid({ captures }: { captures: GridCapture[] }) {
                     <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                       {items.map((c) => (
                         <li key={c.id} className="overflow-hidden rounded-[2px] border border-border-subtle bg-background-base">
-                          {c.thumbUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
-                            <img src={c.thumbUrl} alt={c.fileName} loading="lazy" className="aspect-[4/3] w-full object-cover" />
-                          ) : (
-                            <div className={cn("flex aspect-[4/3] items-center justify-center px-2 text-center text-2xs text-foreground-subtle")}>
-                              Sin miniatura
-                            </div>
-                          )}
-                          <div className="truncate px-2 py-1 font-mono text-2xs text-foreground-muted">{c.fileName}</div>
+                          {(() => {
+                            const body = (
+                              <>
+                                {c.thumbUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
+                                  <img src={c.thumbUrl} alt={c.fileName} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                                ) : (
+                                  <div className={cn("flex aspect-[4/3] items-center justify-center px-2 text-center text-2xs text-foreground-subtle")}>
+                                    Sin miniatura
+                                  </div>
+                                )}
+                                <div className="truncate px-2 py-1 font-mono text-2xs text-foreground-muted">{c.fileName}</div>
+                              </>
+                            );
+                            return viewerBase ? (
+                              <Link href={`${viewerBase}?foto=${c.id}`} className="block hover:opacity-90">
+                                {body}
+                              </Link>
+                            ) : (
+                              body
+                            );
+                          })()}
                         </li>
                       ))}
                     </ul>
