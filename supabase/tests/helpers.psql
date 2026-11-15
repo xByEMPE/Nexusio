@@ -23,3 +23,10 @@ begin
 end $$;
 grant usage on schema tests to anon, authenticated;
 grant execute on all functions in schema tests to anon, authenticated;
+create or replace function tests.set_role(p_uid uuid, p_role public.platform_role) returns void language sql as $$
+  update public.profiles set platform_role = p_role where id = p_uid;
+$$;
+create or replace function tests.add_member(p_org uuid, p_uid uuid, p_role public.org_member_role) returns void language sql as $$
+  insert into public.organization_members (organization_id, user_id, role) values (p_org, p_uid, p_role);
+$$;
+grant execute on all functions in schema tests to anon, authenticated;
