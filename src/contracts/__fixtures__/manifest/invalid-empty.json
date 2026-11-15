@@ -1,0 +1,16 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-11-12T08:15:00Z",
+  "app": {
+    "name": "nexus-hf-detector",
+    "version": "1.0.0"
+  },
+  "project_id": "6f1d2c3b-4a5e-4f60-8a71-9b8c7d6e5f40",
+  "inspection": {
+    "id": "0b6c1f2e-3d4a-4b5c-9d6e-7f8091a2b3c4",
+    "asset_id": "1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5",
+    "kind": "wind_blade"
+  },
+  "captures": [],
+  "findings": []
+}

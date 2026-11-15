@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nexus.local/contracts/ingest-manifest.v1.schema.json",
+  "title": "Manifiesto de subida NEXUS v1",
+  "description": "Contrato entre la app de PC (o el proceso de IA) y public.ingest_manifest. Debe coincidir con src/contracts/ingest-manifest.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifest_version", "generated_at", "app", "project_id", "inspection", "captures", "findings"],
+  "properties": {
+    "manifest_version": { "const": 1 },
+    "generated_at": { "$ref": "#/$defs/datetime" },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmpty" },
+        "version": { "$ref": "#/$defs/nonEmpty" }
+      }
+    },
+    "project_id": { "$ref": "#/$defs/uuid" },
+    "inspection": { "$ref": "#/$defs/inspection" },
+    "captures": { "type": "array", "items": { "$ref": "#/$defs/capture" } },
+    "mosaics": { "type": "array", "items": { "$ref": "#/$defs/mosaic" } },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+  },
+  "anyOf": [
+    { "properties": { "captures": { "type": "array", "minItems": 1 } } },
+    { "properties": { "findings": { "type": "array", "minItems": 1 } } }
+  ],
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "nullableUuid": { "anyOf": [{ "$ref": "#/$defs/uuid" }, { "type": "null" }] },
+    "datetime": { "type": "string", "format": "date-time" },
+    "nullableDatetime": { "anyOf": [{ "$ref": "#/$defs/datetime" }, { "type": "null" }] },
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "nullableText": { "type": ["string", "null"] },
+    "nullableNumber": { "type": ["number", "null"] },
+    "nullablePositive": { "anyOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "null" }] },
+    "nullableInteger": { "type": ["integer", "null"] },
+    "path": { "type": "string", "minLength": 1 },
+    "nullablePath": { "anyOf": [{ "$ref": "#/$defs/path" }, { "type": "null" }] },
+    "spectrum": { "enum": ["rgb", "thermal"] },
+    "bladePosition": { "enum": ["A", "B", "C"] },
+    "bladeFace": { "enum": ["TE", "PS", "LE", "SS"] },
+    "unit": { "type": "number", "minimum": 0, "maximum": 1 },
+    "point": {
+      "type": "array",
+      "prefixItems": [{ "$ref": "#/$defs/unit" }, { "$ref": "#/$defs/unit" }],
+      "items": false,
+      "minItems": 2
+    },
+    "inspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "asset_id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "asset_id": { "$ref": "#/$defs/uuid" },
+        "kind": { "enum": ["wind_blade", "solar", "transmission"] },
+        "inspected_at": { "$ref": "#/$defs/nullableDatetime" },
+        "pilot_name": { "$ref": "#/$defs/nullableText" },
+        "assistant_name": { "$ref": "#/$defs/nullableText" },
+        "drone_model": { "$ref": "#/$defs/nullableText" },
+        "blade_length_m": { "$ref": "#/$defs/nullablePositive" },
+        "id_capture_id": { "$ref": "#/$defs/nullableUuid" },
+        "notes": { "$ref": "#/$defs/nullableText" }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sha256", "spectrum", "file_name", "paths", "width_px", "height_px"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "spectrum": { "$ref": "#/$defs/spectrum" },
+        "file_name": { "$ref": "#/$defs/nonEmpty" },
+        "sequence_index": { "$ref": "#/$defs/nullableInteger" },
+        "paths": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["original"],
+          "properties": {
+            "original": { "$ref": "#/$defs/path" },
+            "preview": { "$ref": "#/$defs/nullablePath" },
+            "thumb": { "$ref": "#/$defs/nullablePath" }
+          }
+        },
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 },
+        "captured_at": { "$ref": "#/$defs/nullableDatetime" },
+        "gps": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "lat": { "anyOf": [{ "type": "number", "minimum": -90, "maximum": 90 }, { "type": "null" }] },
+                "lon": { "anyOf": [{ "type": "number", "minimum": -180, "maximum": 180 }, { "type": "null" }] },
+                "alt_abs_m": { "$ref": "#/$defs/nullableNumber" },
+                "alt_rel_m": { "$ref": "#/$defs/nullableNumber" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "gimbal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "pitch_deg": { "$ref": "#/$defs/nullableNumber" },
+                "roll_deg": { "$ref": "#/$defs/nullableNumber" },
+                "yaw_deg": { "$ref": "#/$defs/nullableNumber" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "drone_model": { "$ref": "#/$defs/nullableText" },
+        "camera_model": { "$ref": "#/$defs/nullableText" },
+        "lrf_distance_m": { "$ref": "#/$defs/nullableNumber" },
+        "gsd": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mm_px", "source", "confidence"],
+              "properties": {
+                "mm_px": { "type": "number", "exclusiveMinimum": 0 },
+                "source": { "enum": ["lrf", "altitude", "focus", "manual", "mosaic_calibration"] },
+                "confidence": { "enum": ["high", "medium", "low"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "paired_capture_id": { "$ref": "#/$defs/nullableUuid" },
+        "blade": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["position", "face"],
+              "properties": {
+                "position": { "$ref": "#/$defs/bladePosition" },
+                "face": { "$ref": "#/$defs/bladeFace" },
+                "radius_center_m": { "$ref": "#/$defs/nullableNumber" },
+                "sequence_direction": { "enum": ["root_to_tip", "tip_to_root", "unknown"] },
+                "chord_length_mm": { "$ref": "#/$defs/nullableNumber" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "thermal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "matrix_path": { "$ref": "#/$defs/nullablePath" },
+                "temp_scale": { "type": "number" },
+                "temp_offset": { "type": "number" },
+                "t_min_c": { "$ref": "#/$defs/nullableNumber" },
+                "t_max_c": { "$ref": "#/$defs/nullableNumber" },
+                "emissivity": { "$ref": "#/$defs/nullableNumber" },
+                "distance_m": { "$ref": "#/$defs/nullableNumber" },
+                "humidity_pct": { "$ref": "#/$defs/nullableNumber" },
+                "ambient_temp_c": { "$ref": "#/$defs/nullableNumber" },
+                "reflected_temp_c": { "$ref": "#/$defs/nullableNumber" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "metadata": { "type": "object" }
+      }
+    },
+    "mosaic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "spectrum", "path", "width_px", "height_px"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "kind": { "const": "blade_strip" },
+        "spectrum": { "$ref": "#/$defs/spectrum" },
+        "blade": { "anyOf": [{ "$ref": "#/$defs/bladePosition" }, { "type": "null" }] },
+        "face": { "anyOf": [{ "$ref": "#/$defs/bladeFace" }, { "type": "null" }] },
+        "format": { "enum": ["image", "dzi"] },
+        "path": { "$ref": "#/$defs/path" },
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 },
+        "calibration": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tip_row_px": { "$ref": "#/$defs/nullableInteger" },
+                "root_row_px": { "$ref": "#/$defs/nullableInteger" },
+                "blade_length_m": { "$ref": "#/$defs/nullablePositive" },
+                "mm_per_px": { "$ref": "#/$defs/nullablePositive" },
+                "root_at_top": { "type": ["boolean", "null"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type_code", "severity", "region", "source"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "capture_id": { "$ref": "#/$defs/uuid" },
+        "mosaic_id": { "$ref": "#/$defs/uuid" },
+        "type_code": { "$ref": "#/$defs/nonEmpty" },
+        "severity": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "region": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "points"],
+              "properties": {
+                "type": { "const": "box" },
+                "points": { "type": "array", "items": { "$ref": "#/$defs/point" }, "minItems": 2, "maxItems": 2 }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "points"],
+              "properties": {
+                "type": { "const": "polygon" },
+                "points": { "type": "array", "items": { "$ref": "#/$defs/point" }, "minItems": 3 }
+              }
+            }
+          ]
+        },
+        "measurements": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "width_mm": { "$ref": "#/$defs/nullableNumber" },
+                "length_mm": { "$ref": "#/$defs/nullableNumber" },
+                "area_mm2": { "$ref": "#/$defs/nullableNumber" },
+                "radius_m": { "$ref": "#/$defs/nullableNumber" },
+                "max_temp_c": { "$ref": "#/$defs/nullableNumber" },
+                "delta_t_c": { "$ref": "#/$defs/nullableNumber" },
+                "gsd_mm_px_used": { "$ref": "#/$defs/nullableNumber" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "source": { "enum": ["ai", "manual"] },
+        "ai": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["confidence", "model", "version"],
+              "properties": {
+                "confidence": { "$ref": "#/$defs/unit" },
+                "model": { "$ref": "#/$defs/nonEmpty" },
+                "version": { "$ref": "#/$defs/nonEmpty" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "notes": { "$ref": "#/$defs/nullableText" }
+      },
+      "oneOf": [{ "required": ["capture_id"] }, { "required": ["mosaic_id"] }],
+      "if": { "properties": { "source": { "const": "ai" } } },
+      "then": {
+        "required": ["ai"],
+        "properties": { "ai": { "type": "object" } }
+      }
+    }
+  }
+}

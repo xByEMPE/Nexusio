@@ -1,0 +1,106 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-11-11T10:00:00Z",
+  "app": { "name": "nexus-desktop", "version": "0.1.0" },
+  "project_id": "6f1d2c3b-4a5e-4f60-8a71-9b8c7d6e5f40",
+  "inspection": {
+    "id": "0b6c1f2e-3d4a-4b5c-9d6e-7f8091a2b3c4",
+    "asset_id": "1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5",
+    "kind": "wind_blade",
+    "inspected_at": "2026-11-10T15:30:00Z",
+    "pilot_name": "Juan Pérez",
+    "assistant_name": "Ana López",
+    "drone_model": "M30T",
+    "blade_length_m": 61.2,
+    "id_capture_id": null
+  },
+  "captures": [
+    {
+      "id": "2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6",
+      "sha256": "4f8b42c22dd3729b519ba6f68d2da7cc5b2d606d05daed5ad5128cc03e6c6358",
+      "spectrum": "rgb",
+      "file_name": "DJI_20261110153000_0012_V.JPG",
+      "sequence_index": 12,
+      "paths": {
+        "original": "a/b/c/captures/2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6/original.jpg",
+        "preview": "a/b/c/captures/2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6/preview.webp",
+        "thumb": "a/b/c/captures/2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6/thumb.webp"
+      },
+      "width_px": 5280,
+      "height_px": 3956,
+      "captured_at": "2026-11-10T15:31:12+01:00",
+      "gps": { "lat": 40.4168, "lon": -3.7038, "alt_abs_m": 712.4, "alt_rel_m": 85.2 },
+      "gimbal": { "pitch_deg": -12.5, "roll_deg": 0, "yaw_deg": 178.3 },
+      "drone_model": "M30T",
+      "camera_model": "M30T Wide",
+      "lrf_distance_m": 8.4,
+      "gsd": { "mm_px": 0.62, "source": "lrf", "confidence": "high" },
+      "paired_capture_id": null,
+      "blade": {
+        "position": "A",
+        "face": "LE",
+        "radius_center_m": 34.1,
+        "sequence_direction": "root_to_tip",
+        "chord_length_mm": 2100
+      },
+      "thermal": null,
+      "metadata": { "exif": { "Make": "DJI" } }
+    },
+    {
+      "id": "3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7",
+      "sha256": "9b74c9897bac770ffc029102a200c5de0c9ad3f8e7c0e1d2b3a4f5e6d7c8b9a0",
+      "spectrum": "thermal",
+      "file_name": "DJI_20261110153000_0012_T.JPG",
+      "paths": {
+        "original": "a/b/c/captures/3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7/original.jpg"
+      },
+      "width_px": 640,
+      "height_px": 512,
+      "paired_capture_id": "2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6",
+      "thermal": {
+        "matrix_path": "a/b/c/captures/3e4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7/thermal.png",
+        "temp_scale": 0.01,
+        "temp_offset": -100,
+        "t_min_c": 4.2,
+        "t_max_c": 31.7,
+        "emissivity": 0.95,
+        "distance_m": 8.4,
+        "humidity_pct": 60,
+        "ambient_temp_c": 12,
+        "reflected_temp_c": 12
+      }
+    }
+  ],
+  "mosaics": [
+    {
+      "id": "4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8",
+      "kind": "blade_strip",
+      "spectrum": "rgb",
+      "blade": "A",
+      "face": "LE",
+      "format": "dzi",
+      "path": "a/b/c/mosaics/4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8/strip.dzi",
+      "width_px": 4000,
+      "height_px": 120000,
+      "calibration": {
+        "tip_row_px": 100,
+        "root_row_px": 119800,
+        "blade_length_m": 61.2,
+        "mm_per_px": 0.512,
+        "root_at_top": false
+      }
+    }
+  ],
+  "findings": [
+    {
+      "id": "5a6b7c8d-9eaf-4b01-82c3-d4e5f6a7b8c9",
+      "capture_id": "2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6",
+      "type_code": "erosion_le",
+      "severity": 3,
+      "region": { "type": "box", "points": [[0.41, 0.22], [0.47, 0.3]] },
+      "measurements": { "width_mm": 85, "length_mm": 140, "area_mm2": 11900, "radius_m": 34.6 },
+      "source": "ai",
+      "ai": { "confidence": 0.87, "model": "blade-damage", "version": "1.0.0" }
+    }
+  ]
+}

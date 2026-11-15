@@ -1,0 +1,65 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-11-12T08:15:00Z",
+  "app": {
+    "name": "nexus-hf-detector",
+    "version": "1.0.0"
+  },
+  "project_id": "6f1d2c3b-4a5e-4f60-8a71-9b8c7d6e5f40",
+  "inspection": {
+    "id": "0b6c1f2e-3d4a-4b5c-9d6e-7f8091a2b3c4",
+    "asset_id": "1c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5",
+    "kind": "wind_blade"
+  },
+  "captures": [],
+  "findings": [
+    {
+      "id": "6b7c8d9e-af01-4c12-93d4-e5f6a7b8c9d0",
+      "capture_id": "2d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6",
+      "type_code": "crack",
+      "severity": 4,
+      "region": {
+        "type": "polygon",
+        "points": [
+          [
+            0.1,
+            0.1
+          ],
+          [
+            0.2,
+            0.1
+          ],
+          [
+            0.15,
+            0.25
+          ]
+        ]
+      },
+      "source": "ai"
+    },
+    {
+      "id": "7c8d9eaf-0112-4d23-a4e5-f6a7b8c9d0e1",
+      "mosaic_id": "4f5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8",
+      "type_code": "missing_paint",
+      "severity": 1,
+      "region": {
+        "type": "box",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "measurements": {
+        "area_mm2": 400
+      },
+      "source": "manual",
+      "notes": "Revisar en campo"
+    }
+  ]
+}
