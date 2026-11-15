@@ -93,7 +93,7 @@ create table public.mosaics (
   calibrated_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (inspection_id, kind, spectrum, blade, face)
+  unique nulls not distinct (inspection_id, kind, spectrum, blade, face)
 );
 create index mosaics_project_idx on public.mosaics (project_id);
 
@@ -142,17 +142,57 @@ begin
   return new;
 end $$;
 
+-- Pareja RGB/térmica: misma inspección y no la propia captura
+create or replace function private.guard_capture_pair() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.paired_capture_id is null then
+    return new;
+  end if;
+  if new.paired_capture_id = new.id or not exists (
+    select 1 from public.captures c
+    where c.id = new.paired_capture_id and c.inspection_id = new.inspection_id) then
+    raise exception 'la captura emparejada debe ser otra de la misma inspección' using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+-- Genérico: TG_ARGV = columnas que no cambian después del insert
+create or replace function private.forbid_parent_change() returns trigger
+language plpgsql set search_path = '' as $$
+declare
+  c text;
+begin
+  foreach c in array tg_argv loop
+    if to_jsonb(new) -> c is distinct from to_jsonb(old) -> c then
+      raise exception 'immutable_parent' using errcode = 'P0001';
+    end if;
+  end loop;
+  return new;
+end $$;
+
+-- Funciones de trigger: sin permiso de ejecución directa
 revoke execute on function
-  private.inspection_of_capture(uuid), private.enforce_parent_project(), private.guard_inspection_id_capture()
-  from public, anon;
-grant execute on function
-  private.inspection_of_capture(uuid), private.enforce_parent_project(), private.guard_inspection_id_capture()
-  to authenticated;
+  private.enforce_parent_project(), private.guard_inspection_id_capture(),
+  private.guard_capture_pair(), private.forbid_parent_change()
+  from public, anon, authenticated;
+revoke execute on function private.inspection_of_capture(uuid) from public, anon;
+grant execute on function private.inspection_of_capture(uuid) to authenticated;
 
 create trigger captures_parent_project before insert or update on public.captures
   for each row execute function private.enforce_parent_project('inspections', 'inspection_id');
 create trigger captures_paired_project before insert or update on public.captures
   for each row execute function private.enforce_parent_project('captures', 'paired_capture_id');
+create trigger captures_pair_guard before insert or update on public.captures
+  for each row execute function private.guard_capture_pair();
+create trigger captures_immutable_parent before update on public.captures
+  for each row execute function private.forbid_parent_change('inspection_id', 'project_id');
+create trigger blade_captures_immutable_parent before update on public.blade_captures
+  for each row execute function private.forbid_parent_change('capture_id', 'project_id');
+create trigger thermal_captures_immutable_parent before update on public.thermal_captures
+  for each row execute function private.forbid_parent_change('capture_id', 'project_id');
+create trigger mosaics_immutable_parent before update on public.mosaics
+  for each row execute function private.forbid_parent_change('inspection_id', 'project_id');
 create trigger blade_captures_parent_project before insert or update on public.blade_captures
   for each row execute function private.enforce_parent_project('captures', 'capture_id');
 create trigger thermal_captures_parent_project before insert or update on public.thermal_captures
