@@ -42,7 +42,7 @@ export default async function InspectionPage({
 
   const data = await loadInspectionViewer(sb, id, inspectionId);
   if (!data) notFound();
-  const tab = resolveTab(tabParam, data.mosaics.length > 0);
+  const tab = resolveTab(tabParam, data.mosaics.some((m) => m.kind === "blade_strip"));
   const basePath = `/admin/inspecciones/proyectos/${id}/inspecciones/${inspectionId}`;
 
   const approved = inspection.status === "approved";
@@ -131,7 +131,7 @@ export default async function InspectionPage({
       <div className="mt-8">
         <InspectionTabs basePath={basePath} active={tab} />
         <div className="mt-5">
-          <InspectionTabContent tab={tab} data={data} viewerBase={`${basePath}/visor`} canEdit={canEdit} approved />
+          <InspectionTabContent tab={tab} data={data} viewerBase={`${basePath}/visor`} approved />
         </div>
       </div>
     </div>

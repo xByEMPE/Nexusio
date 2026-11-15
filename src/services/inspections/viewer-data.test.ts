@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Region } from "@/lib/blade";
-import { findingTypeMatches, measurementsForSave, orderCaptures, type ViewerCapture } from "./viewer-data";
+import { findingTypeMatches, measurementsForSave, oneOrNull, orderCaptures, type ViewerCapture } from "./viewer-data";
 
 const cap = (o: Partial<ViewerCapture>): ViewerCapture => ({
   id: "x",
@@ -79,5 +79,15 @@ describe("findingTypeMatches", () => {
     expect(findingTypeMatches(null, "wind_blade")).toBe(false);
     expect(findingTypeMatches({ domain: "wind_blade", is_active: false }, "wind_blade")).toBe(false);
     expect(findingTypeMatches({ domain: "solar", is_active: true }, "wind_blade")).toBe(false);
+  });
+});
+
+describe("oneOrNull", () => {
+  test("normaliza objeto, lista y vacío", () => {
+    expect(oneOrNull({ a: 1 })).toEqual({ a: 1 });
+    expect(oneOrNull([{ a: 1 }, { a: 2 }])).toEqual({ a: 1 });
+    expect(oneOrNull([])).toBeNull();
+    expect(oneOrNull(null)).toBeNull();
+    expect(oneOrNull(undefined)).toBeNull();
   });
 });

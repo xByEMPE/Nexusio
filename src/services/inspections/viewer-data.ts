@@ -64,6 +64,11 @@ export function findingTypeMatches(
   return !!type && type.is_active && type.domain === inspectionKind;
 }
 
+/** PostgREST devuelve un objeto (1 a 1) o una lista según la relación; se normaliza a objeto o null. */
+export function oneOrNull<T>(x: T | T[] | null | undefined): T | null {
+  return Array.isArray(x) ? (x[0] ?? null) : (x ?? null);
+}
+
 export type SavedMeasurements = FindingMeasurements & { gsd_mm_px_used: number | null };
 
 /**
@@ -128,8 +133,8 @@ export async function loadInspectionViewer(
   const rows = caps.data ?? [];
   const captures = orderCaptures(
     rows.map((c): ViewerCapture => {
-      const b = c.blade_captures;
-      const t = c.thermal_captures;
+      const b = oneOrNull(c.blade_captures);
+      const t = oneOrNull(c.thermal_captures);
       return {
         id: c.id,
         file_name: c.file_name,

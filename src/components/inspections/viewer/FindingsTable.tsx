@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { SEVERITY_COLOR } from "@/lib/inspections/severity";
 
-export const SEVERITY_COLOR: Record<number, string> = { 1: "#10B981", 2: "#84CC16", 3: "#F59E0B", 4: "#F97316", 5: "#EF4444" };
 const STATUS_LABEL = { detected: "Detectado", confirmed: "Confirmado", dismissed: "Descartado" } as const;
 const FACES = ["LE", "PS", "TE", "SS"] as const;
 
@@ -19,7 +19,7 @@ export type TableFinding = {
   width_mm: number | null;
 };
 
-type Placed = { id: string; blade: "A" | "B" | "C" | null; face: "TE" | "PS" | "LE" | "SS" | null; file_name?: string };
+export type Placed = { id: string; blade: "A" | "B" | "C" | null; face: "TE" | "PS" | "LE" | "SS" | null; file_name?: string };
 
 const selectCls = "rounded-[2px] border border-border-subtle bg-background-base px-2 py-1 text-sm";
 const fmt = (n: number | null, unit: string) => (n == null ? "—" : `${Number(n.toFixed(1)).toLocaleString("es-MX")} ${unit}`);
@@ -37,7 +37,6 @@ export function FindingsTable({
   mosaics?: Placed[];
   typeLabels: Record<string, string>;
   viewerBase: string;
-  canEdit?: boolean;
 }) {
   const [blade, setBlade] = useState("");
   const [face, setFace] = useState("");

@@ -37,10 +37,9 @@ export default async function PortalInspectionPage({
     .maybeSingle();
   if (!inspection) notFound();
 
-  // Las URL firmadas duran 1 h: una copiada a otra sesión sigue sirviendo hasta que caduca (esperado).
   const data = await loadInspectionViewer(sb, id, inspectionId);
   if (!data) notFound();
-  const tab = resolveTab(tabParam, data.mosaics.length > 0);
+  const tab = resolveTab(tabParam, data.mosaics.some((m) => m.kind === "blade_strip"));
   const basePath = `/portal/proyectos/${id}/inspecciones/${inspectionId}`;
   const approved = inspection.status === "approved";
 
@@ -65,7 +64,7 @@ export default async function PortalInspectionPage({
         <div className="mt-8">
           <InspectionTabs basePath={basePath} active={tab} />
           <div className="mt-5">
-            <InspectionTabContent tab={tab} data={data} viewerBase={`${basePath}/visor`} canEdit={false} approved={approved} />
+            <InspectionTabContent tab={tab} data={data} viewerBase={`${basePath}/visor`} approved={approved} />
           </div>
         </div>
       </main>
