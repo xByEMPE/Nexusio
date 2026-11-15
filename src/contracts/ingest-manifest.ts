@@ -193,11 +193,16 @@ export const INGEST_ERROR_CODES = [
   "forbidden_project",
   "inspection_locked",
   "asset_other_org",
+  "empty_manifest",
   "bad_path",
   "missing_object",
   "unknown_finding_type",
   "unknown_capture",
+  "unknown_mosaic",
   "duplicate_sha256",
+  "duplicate_id",
+  "foreign_id",
+  "finding_target_changed",
 ] as const;
 export type IngestErrorCode = (typeof INGEST_ERROR_CODES)[number];
 export type IngestError = { path: string; code: IngestErrorCode };

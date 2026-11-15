@@ -1,6 +1,6 @@
 begin;
 \ir helpers.psql
-select plan(49);
+select plan(60);
 
 select w ->> 'org_a' as org_a, w ->> 'org_b' as org_b, w ->> 'project_a' as project_a, w ->> 'project_b' as project_b,
   w ->> 'inspection_a' as insp_a, w ->> 'inspection_b' as insp_b, w ->> 'asset_a' as asset_a, w ->> 'asset_b' as asset_b,
@@ -207,13 +207,38 @@ select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a',
   '[{"path":"/findings/0/capture_id","code":"unknown_capture"}]'::jsonb, 'foto desconocida');
 select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb,
   jsonb_build_array((tests.finding(:'f3', :'c1') - 'capture_id') || jsonb_build_object('mosaic_id', gen_random_uuid())))),
-  '[{"path":"/findings/0/mosaic_id","code":"unknown_capture"}]'::jsonb, 'tira desconocida');
+  '[{"path":"/findings/0/mosaic_id","code":"unknown_mosaic"}]'::jsonb, 'tira desconocida: unknown_mosaic');
 select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_b', '[]'::jsonb,
   jsonb_build_array(tests.finding(:'f3', :'c1')))),
   '[{"path":"/inspection/asset_id","code":"asset_other_org"}]'::jsonb, 'activo de otra organización');
 select is(tests.ingest_error(jsonb_set(:'m1'::jsonb, '{manifest_version}', '2')),
   '[{"path":"/manifest_version","code":"unsupported_version"}]'::jsonb, 'versión no soportada');
 select is((select count(*) from public.findings where id = :'f3'), 0::bigint, 'ningún error dejó daños');
+
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a',
+  jsonb_build_array(tests.cap(:'c5', repeat('5', 64), :'base_a'), tests.cap(:'c5', repeat('8', 64), :'base_a')), '[]'::jsonb)),
+  '[{"path":"/captures/0/id","code":"duplicate_id"},{"path":"/captures/1/id","code":"duplicate_id"}]'::jsonb,
+  'id de foto repetido en el manifiesto: duplicate_id');
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb,
+  jsonb_build_array(tests.finding(:'f3', :'c1'), tests.finding(:'f3', :'c2')))),
+  '[{"path":"/findings/0/id","code":"duplicate_id"},{"path":"/findings/1/id","code":"duplicate_id"}]'::jsonb,
+  'id de daño repetido en el manifiesto: duplicate_id');
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb, '[]'::jsonb)),
+  '[{"path":"","code":"empty_manifest"}]'::jsonb, 'manifiesto vacío: empty_manifest');
+
+-- Un daño guardado no cambia de foto, de tira ni de origen
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb,
+  jsonb_build_array(tests.finding(:'f1', :'c2')))),
+  '[{"path":"/findings/0/capture_id","code":"finding_target_changed"}]'::jsonb, 'daño movido a otra foto: finding_target_changed');
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb,
+  jsonb_build_array(tests.finding(:'f2', :'cap_a', 'crack', 3, 'manual')))),
+  '[{"path":"/findings/0/source","code":"finding_target_changed"}]'::jsonb, 'daño con otro origen: finding_target_changed');
+select is(tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a', '[]'::jsonb,
+  jsonb_build_array(tests.finding(:'fm', :'c1', 'crack', 4, 'manual')))),
+  '[{"path":"/findings/0/capture_id","code":"finding_target_changed"},{"path":"/findings/0/mosaic_id","code":"finding_target_changed"}]'::jsonb,
+  'daño de tira movido a una foto: finding_target_changed');
+select ok((select mosaic_id = :'mos'::uuid and capture_id is null and severity = 2 from public.findings where id = :'fm'),
+  'el daño de la tira no cambió');
 
 -- 9. Permisos
 select tests.login_as(:'tech_b');
@@ -234,6 +259,31 @@ select clock_timestamp() as t0 \gset
 select public.ingest_manifest(:'m600'::jsonb) as r600 \gset
 select ok(clock_timestamp() - :'t0'::timestamptz < interval '10 seconds', '600 fotos en menos de 10 s');
 select is((:'r600'::jsonb #>> '{inserted,captures}')::int, 600, '600 fotos insertadas');
+
+-- Ids de otra inspección del mismo proyecto (tech_a está asignado a las dos)
+select tests.logout();
+select id as cap2, file_name as cap2_name from public.captures where inspection_id = :'insp_2' order by id limit 1 \gset
+insert into public.mosaics (project_id, inspection_id, kind, spectrum, blade, face, path, width_px, height_px)
+  values (:'project_a', :'insp_2', 'blade_strip', 'rgb', 'A', 'LE', 'm/2.webp', 1000, 100) returning id as mos2 \gset
+insert into public.findings (project_id, inspection_id, capture_id, type_id, severity, region)
+  values (:'project_a', :'insp_2', :'cap2', (select id from public.finding_types where code = 'crack'), 2,
+    '{"type":"box","points":[[0.1,0.1],[0.2,0.2]]}') returning id as find2 \gset
+select tests.put_object(:'base_a' || '/captures/' || :'cap2' || '/original.jpg');
+select tests.put_object(:'base_a' || '/mosaics/' || :'mos2' || '/strip.webp');
+select tests.login_as(:'tech_a');
+select tests.ingest_error(tests.manifest(:'project_a', :'insp_a', :'asset_a',
+  jsonb_build_array(tests.cap(:'cap2', repeat('9', 64), :'base_a')),
+  jsonb_build_array(tests.finding(:'find2', :'c1', 'erosion_le', 5)),
+  jsonb_build_array(jsonb_build_object('id', :'mos2', 'kind', 'blade_strip', 'spectrum', 'rgb', 'blade', 'B', 'face', 'LE',
+    'path', :'base_a' || '/mosaics/' || :'mos2' || '/strip.webp', 'width_px', 10, 'height_px', 10)))) as eforeign \gset
+select is(:'eforeign'::jsonb, '[{"path":"/captures/0/id","code":"foreign_id"},{"path":"/mosaics/0/id","code":"foreign_id"},{"path":"/findings/0/id","code":"foreign_id"}]'::jsonb,
+  'ids de otra inspección: foreign_id en foto, tira y daño');
+select ok((select inspection_id = :'insp_2'::uuid and file_name = :'cap2_name' and sha256 <> repeat('9', 64)
+  from public.captures where id = :'cap2'), 'la foto de la otra inspección no cambió');
+select ok((select inspection_id = :'insp_2'::uuid and blade = 'A' and path = 'm/2.webp' from public.mosaics where id = :'mos2'),
+  'la tira de la otra inspección no cambió');
+select ok((select inspection_id = :'insp_2'::uuid and capture_id = :'cap2'::uuid and severity = 2
+  from public.findings where id = :'find2'), 'el daño de la otra inspección no cambió');
 
 -- 11. Inspección aprobada
 select tests.logout();

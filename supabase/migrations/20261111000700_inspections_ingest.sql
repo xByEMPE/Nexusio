@@ -1,6 +1,10 @@
 -- Contrato de subida: public.ingest_manifest (§8 del diseño).
 -- security invoker: corre con los permisos del usuario, así que RLS y las políticas de Storage aplican igual.
 -- Primero valida todo (consultas por conjuntos, errores acumulados), después inserta. Todo o nada.
+-- Errores: 22023 manifest_invalid, detail = jsonb [{path, code}] con code en:
+--   unsupported_version, forbidden_project, inspection_locked, asset_other_org, empty_manifest,
+--   bad_path, missing_object, unknown_finding_type, unknown_capture, unknown_mosaic,
+--   duplicate_sha256, duplicate_id, foreign_id, finding_target_changed.
 
 create or replace function public.ingest_manifest(p_manifest jsonb) returns jsonb
 language plpgsql volatile security invoker set search_path = '' as $$
@@ -60,6 +64,54 @@ begin
     select 1 from public.assets a where a.id = (v_insp ->> 'asset_id')::uuid and a.organization_id = v_org) then
     v_errors := v_errors || jsonb_build_array(jsonb_build_object('path', '/inspection/asset_id', 'code', 'asset_other_org'));
   end if;
+
+  if jsonb_array_length(v_caps) = 0 and jsonb_array_length(v_finds) = 0 then
+    v_errors := v_errors || jsonb_build_array(jsonb_build_object('path', '', 'code', 'empty_manifest'));
+  end if;
+
+  -- Ids: repetidos dentro del manifiesto, o ya usados en otra inspección (visible para el llamador)
+  with ids as (
+    select 1 as grp, c.ord, 'captures' as arr, (c.e ->> 'id')::uuid as id
+    from jsonb_array_elements(v_caps) with ordinality c(e, ord)
+    union all
+    select 2, m.ord, 'mosaics', (m.e ->> 'id')::uuid from jsonb_array_elements(v_mosaics) with ordinality m(e, ord)
+    union all
+    select 3, f.ord, 'findings', (f.e ->> 'id')::uuid from jsonb_array_elements(v_finds) with ordinality f(e, ord)
+  ), coded as (
+    select i.grp, i.ord, '/' || i.arr || '/' || (i.ord - 1) || '/id' as jpath, 'duplicate_id' as code
+    from ids i where exists (select 1 from ids j where j.arr = i.arr and j.id = i.id and j.ord <> i.ord)
+    union all
+    select i.grp, i.ord, '/' || i.arr || '/' || (i.ord - 1) || '/id', 'foreign_id'
+    from ids i
+    where (i.arr = 'captures' and exists (
+            select 1 from public.captures x where x.id = i.id and x.inspection_id <> v_insp_id))
+       or (i.arr = 'mosaics' and exists (
+            select 1 from public.mosaics x where x.id = i.id and x.inspection_id <> v_insp_id))
+       or (i.arr = 'findings' and exists (
+            select 1 from public.findings x where x.id = i.id and x.inspection_id <> v_insp_id))
+  )
+  select v_errors || coalesce(jsonb_agg(jsonb_build_object('path', jpath, 'code', code) order by grp, ord, code),
+    '[]'::jsonb)
+  into v_errors from coded;
+
+  -- Un daño ya guardado no cambia de foto, de tira ni de origen
+  with mf as (
+    select f.ord, (f.e ->> 'id')::uuid as id, (f.e ->> 'capture_id')::uuid as capture_id,
+      (f.e ->> 'mosaic_id')::uuid as mosaic_id, f.e ->> 'source' as source
+    from jsonb_array_elements(v_finds) with ordinality f(e, ord)
+  ), changed as (
+    select mf.ord, '/findings/' || (mf.ord - 1) || '/' || d.field as jpath
+    from mf
+    join public.findings x on x.id = mf.id and x.inspection_id = v_insp_id
+    cross join lateral (values
+      ('capture_id', x.capture_id is distinct from mf.capture_id),
+      ('mosaic_id', x.mosaic_id is distinct from mf.mosaic_id),
+      ('source', x.source::text is distinct from mf.source)) d(field, differs)
+    where d.differs
+  )
+  select v_errors || coalesce(jsonb_agg(jsonb_build_object('path', jpath, 'code', 'finding_target_changed')
+    order by ord, jpath), '[]'::jsonb)
+  into v_errors from changed;
 
   -- Rutas: prefijo propio del registro, sin segmentos .. ni //, y el objeto existe (visible para el llamador)
   v_base := lower(v_org::text || '/' || v_project::text || '/' || v_insp_id::text || '/');
@@ -136,7 +188,8 @@ begin
     from jsonb_array_elements(v_finds) with ordinality f(e, ord)
     where jsonb_typeof(f.e -> 'mosaic_id') = 'string'
   )
-  select v_errors || coalesce(jsonb_agg(jsonb_build_object('path', r.jpath, 'code', 'unknown_capture')
+  select v_errors || coalesce(jsonb_agg(jsonb_build_object('path', r.jpath,
+    'code', case r.kind when 'm' then 'unknown_mosaic' else 'unknown_capture' end)
     order by r.grp, r.ord, r.jpath), '[]'::jsonb)
   into v_errors from refs r
   where (r.kind = 'c' and not exists (select 1 from known_c k where k.id = r.id))
