@@ -116,9 +116,13 @@ create trigger members_guard_staff before insert or update of user_id on public.
 create or replace function private.guard_profile_privileged() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-  if (new.platform_role is distinct from old.platform_role or new.is_active is distinct from old.is_active)
+  if (new.id is distinct from old.id
+      or new.email is distinct from old.email
+      or new.created_at is distinct from old.created_at
+      or new.platform_role is distinct from old.platform_role
+      or new.is_active is distinct from old.is_active)
      and (select auth.uid()) is not null and not private.is_admin() then
-    raise exception 'solo un admin puede cambiar el rol o el estado' using errcode = '42501';
+    raise exception 'solo un admin puede cambiar id, correo, fecha de alta, rol o estado' using errcode = '42501';
   end if;
   return new;
 end $$;

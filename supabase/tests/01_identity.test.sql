@@ -1,6 +1,6 @@
 begin;
 \ir helpers.psql
-select plan(12);
+select plan(19);
 
 select tests.create_user('admin@t.test') as admin \gset
 select tests.create_user('tech@t.test') as tech \gset
@@ -25,6 +25,10 @@ select results_eq('select id from public.organizations', format('values (%L::uui
 select is_empty(format('select 1 from public.organization_members where organization_id = %L', :'org_b'), 'A no ve miembros de B');
 select throws_ok('insert into public.organizations (name, slug) values (''X'', ''x'')', '42501', null, 'cliente no crea organizaciones');
 select throws_ok(format('update public.profiles set platform_role = ''admin'' where id = %L', :'mgr_a'), null, null, 'cliente no se asigna rol');
+select throws_ok(format('update public.profiles set email = ''x@x.test'' where id = %L', :'mgr_a'), '42501', null, 'cliente no cambia su correo');
+select throws_ok(format('update public.profiles set is_active = false where id = %L', :'mgr_a'), '42501', null, 'cliente no cambia su estado');
+select lives_ok(format('update public.profiles set full_name = ''Nuevo'' where id = %L', :'mgr_a'), 'cliente cambia su nombre');
+select throws_ok(format('insert into public.organization_members (organization_id, user_id, role) values (%L, %L, ''client_viewer'')', :'org_b', :'mgr_a'), '42501', null, 'cliente no se agrega a organizaciones');
 select tests.logout();
 
 update public.profiles set is_active = false where id = :'mgr_a';
@@ -40,6 +44,12 @@ select ok((select count(*) from public.organizations) = 2, 'admin ve todas');
 select tests.logout();
 select tests.login_as(:'tech');
 select is((select count(*) from public.profiles), 4::bigint, 'personal ve todos los perfiles');
+
+select tests.logout();
+select tests.login_anon();
+select is_empty('select 1 from public.profiles', 'anon no lee perfiles');
+select is_empty('select 1 from public.organizations', 'anon no lee organizaciones');
+select is_empty('select 1 from public.organization_members', 'anon no lee miembros');
 
 select * from finish();
 rollback;
