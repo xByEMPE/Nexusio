@@ -3,7 +3,7 @@
 import type { PaletteName } from "@/lib/blade";
 import { cn } from "@/lib/cn";
 import { formatC, formatStats } from "./thermal-logic";
-import type { useThermal } from "./useThermal";
+import type { ThermalTool, useThermal } from "./useThermal";
 
 const PALETTES: { id: PaletteName; label: string }[] = [
   { id: "hierro", label: "Hierro" },
@@ -55,9 +55,11 @@ export function SpectrumSwitch({
 export function ThermalControls({
   t,
   cursorC,
+  onThermalTool,
 }: {
   t: ReturnType<typeof useThermal>;
   cursorC: number | null;
+  onThermalTool: (tool: ThermalTool) => void;
 }) {
   if (t.error) {
     return (
@@ -144,7 +146,7 @@ export function ThermalControls({
           type="button"
           aria-pressed={t.tool === "box"}
           className={cn(seg, t.tool === "box" && on)}
-          onClick={() => t.chooseTool(t.tool === "box" ? "off" : "box")}
+          onClick={() => onThermalTool(t.tool === "box" ? "off" : "box")}
           title="Dos clics: esquinas del recuadro"
         >
           Recuadro °C
@@ -153,7 +155,7 @@ export function ThermalControls({
           type="button"
           aria-pressed={t.tool === "line"}
           className={cn(seg, t.tool === "line" && on)}
-          onClick={() => t.chooseTool(t.tool === "line" ? "off" : "line")}
+          onClick={() => onThermalTool(t.tool === "line" ? "off" : "line")}
           title="Dos clics: extremos de la línea"
         >
           Línea °C

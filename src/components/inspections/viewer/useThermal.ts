@@ -12,7 +12,7 @@ import {
 } from "@/lib/blade";
 import { getThermalUrl } from "@/lib/inspections/viewer-actions";
 import type { ViewerPhoto } from "./photo-data";
-import { defaultRange, tempAt, toMatrixPt } from "./thermal-logic";
+import { defaultRange, tempAt, thermalTapApplies, toMatrixPt } from "./thermal-logic";
 
 export type ThermalTool = "off" | "box" | "line";
 export type ThermalShape = { kind: "box" | "line"; a: Pt; b: Pt };
@@ -116,9 +116,11 @@ export function useThermal(photo: ViewerPhoto) {
   };
 
   /** Dos clics: primera esquina o extremo, y segunda que mide. Devuelve true si consumió el clic. */
-  const tap = (img: Pt): boolean => {
-    if (!active || tool === "off" || !matrix) return false;
+  const tap = (img: Pt, mainTool: string): boolean => {
+    if (!active || !matrix || !thermalTapApplies(tool, mainTool)) return false;
     if (!first) {
+      // Un primer clic fuera de la matriz no inicia nada.
+      if (tempAt(matrix, toMatrixPt(img, { w: photo.width_px, h: photo.height_px }, matrix)) == null) return true;
       setResult(null);
       setFirst(img);
       setHoverPt(img);
@@ -131,7 +133,7 @@ export function useThermal(photo: ViewerPhoto) {
       tool === "box"
         ? statsInBox(matrix, { x0: a.x, y0: a.y, x1: b.x, y1: b.y })
         : statsOnLine(matrix, a, b);
-    setResult({ shape: { kind: tool, a: first, b: img }, stats });
+    setResult({ shape: { kind: tool === "box" ? "box" : "line", a: first, b: img }, stats });
     setFirst(null);
     return true;
   };
@@ -174,6 +176,8 @@ export function useThermal(photo: ViewerPhoto) {
     },
     temperatureAt,
     shape,
+    /** Hay una herramienta térmica elegida o una medición en curso o terminada. */
+    busy: tool !== "off" || shape != null,
     stats: result?.stats ?? null,
   };
 }

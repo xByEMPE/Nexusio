@@ -125,6 +125,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const area = areaTool.area;
   const chooseTool = (t: Tool) => {
     setTool(t);
+    if (t !== "move") thermal.chooseTool("off");
     if (t !== "area") areaTool.clear();
     editing.clearDraft();
     setMessage(null);
@@ -138,7 +139,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
     zoomIn: () => (zoomBy(KEY_STEP), true),
     zoomOut: () => (zoomBy(1 / KEY_STEP), true),
     fit: () => (fit(), true),
-    cancel: () => (cancelApplies(tool, area != null || editing.draft != null) ? (chooseTool("move"), true) : false),
+    cancel: () => (cancelApplies(tool, area != null || editing.draft != null || thermal.busy) ? (thermal.clear(), chooseTool("move"), true) : false),
   });
 
   // --- Puntero: arrastre = desplazar (o mover un asa); clic = vértice o elegir daño; dos dedos = zoom
@@ -152,7 +153,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
       thermal.hover(p && screenToImage(p, view));
     },
     onTap: (p) => {
-      if (thermal.tap(screenToImage(p, view))) return;
+      if (thermal.tap(screenToImage(p, view), tool)) return;
       if (editing.tap(p)) return;
       if (tool === "move") {
         const id = hitFinding(photoFindings, screenToImage(p, view), image);
@@ -194,7 +195,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
         }
       />
 
-      {thermal.active && <ThermalControls t={thermal} cursorC={thermal.temperatureAt(cursor && screenToImage(cursor, view))} />}
+      {thermal.active && <ThermalControls t={thermal} onThermalTool={(t) => { thermal.chooseTool(t); if (t !== "off") chooseTool("move"); }} cursorC={thermal.temperatureAt(cursor && screenToImage(cursor, view))} />}
 
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1">

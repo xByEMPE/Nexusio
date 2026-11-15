@@ -33,6 +33,11 @@ export function thermalPair(
   return t ? { rgbId: current.id, thermalId: t.id } : null;
 }
 
+/** La herramienta térmica solo recibe clics si está activa y la herramienta principal es «Mover». */
+export function thermalTapApplies(thermalTool: string, mainTool: string): boolean {
+  return thermalTool !== "off" && mainTool === "move";
+}
+
 /** Temperatura del píxel de la matriz bajo un punto (px de la matriz); null fuera de ella. */
 export function tempAt(m: ThermalMatrix, p: Pt): number | null {
   const x = Math.floor(p.x);

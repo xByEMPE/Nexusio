@@ -6,6 +6,7 @@ import {
   formatStats,
   tempAt,
   thermalPair,
+  thermalTapApplies,
   toMatrixPt,
 } from "./thermal-logic";
 
@@ -43,6 +44,16 @@ describe("thermalPair", () => {
         paired_capture_id: null,
       }),
     ).toEqual({ rgbId: null, thermalId: "t" });
+  });
+});
+
+describe("thermalTapApplies", () => {
+  it("solo con herramienta térmica activa y «Mover»", () => {
+    expect(thermalTapApplies("box", "move")).toBe(true);
+    expect(thermalTapApplies("line", "move")).toBe(true);
+    expect(thermalTapApplies("off", "move")).toBe(false);
+    expect(thermalTapApplies("box", "area")).toBe(false);
+    expect(thermalTapApplies("box", "newBox")).toBe(false);
   });
 });
 
