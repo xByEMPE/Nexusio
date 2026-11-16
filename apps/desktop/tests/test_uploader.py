@@ -38,9 +38,10 @@ def fake_exif(monkeypatch):
     monkeypatch.setattr(uploader, "read_exif", read)
 
 
-def make_wtg(tmp_path, extra=None):
+def make_wtg(tmp_path, extra=None, photos=None):
     root = tmp_path / "WTG 25"
-    for rel, color in {**PHOTOS, **(extra or {})}.items():
+    root.mkdir(parents=True, exist_ok=True)
+    for rel, color in {**(PHOTOS if photos is None else photos), **(extra or {})}.items():
         p = root / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(color, bytes):
@@ -89,8 +90,8 @@ class FakeIngest:
         return out
 
 
-def setup(tmp_path, extra=None, strips=None, photo_info=None):
-    root = make_wtg(tmp_path, extra)
+def setup(tmp_path, extra=None, strips=None, photo_info=None, photos=None):
+    root = make_wtg(tmp_path, extra, photos)
     if strips is None:
         strips = [StripInput("A", "LE", make_strip(tmp_path), None)]
     client = FakeClient({"inspections": [{"id": INSP, "project_id": PROJECT, "asset_id": ASSET,
@@ -100,10 +101,10 @@ def setup(tmp_path, extra=None, strips=None, photo_info=None):
     return root, make_plan(root, strips, photo_info), client, tus
 
 
-def run(plan, client, tus, *, session=None, cancel=None, msgs=None, index=None):
+def run(plan, client, tus, *, session=None, cancel=None, msgs=None, index=None, exiftool=Path("exiftool")):
     msgs = [] if msgs is None else msgs
     return upload_inspection(plan, session or FakeAppSession(client), index or LocalIndex(plan.folder.path),
-                             Path("exiftool"), lambda m, f: msgs.append((m, f)), cancel or threading.Event(),
+                             exiftool, lambda m, f: msgs.append((m, f)), cancel or threading.Event(),
                              tus=tus, supabase_url="http://127.0.0.1:54321", publishable_key="pk")
 
 
@@ -173,6 +174,7 @@ def test_skips_corrupt_photo_and_continues(tmp_path):
     names = [c["file_name"] for m in manifests(client) for c in m["captures"]]
     assert "bad.jpg" not in names and len(names) == 5
     assert report.errors == [] and report.inserted["captures"] == 5
+    assert report.skipped["local_files"] == ["bad.jpg"]
 
 
 def test_cancel_stops_after_current_file(tmp_path):
@@ -209,8 +211,8 @@ def test_manifest_invalid_returns_path_and_code(tmp_path):
     client.rpc_handler = handler
     msgs = []
     report = run(plan, client, tus, msgs=msgs)
-    assert report.errors == [{"path": "/captures/0/paths/original", "code": "missing_object"},
-                             {"path": "/inspection/id", "code": "inspection_locked"}]
+    assert report.errors == [{"path": "/captures/0/paths/original", "code": "missing_object", "blade": "A"},
+                             {"path": "/inspection/id", "code": "inspection_locked", "blade": "A"}]
     assert report.inserted == {"captures": 1, "mosaics": 0}  # la pala B sí entró
     assert any("A" in m and "rechaz" in m for m, _ in msgs)
 
@@ -229,7 +231,8 @@ def test_unknown_ingest_error_becomes_unknown_code(tmp_path, exc):
 
     client.rpc_handler = handler
     report = run(plan, client, tus)
-    assert report.errors == [{"path": "", "code": "unknown"}] * 2
+    assert report.errors == [{"path": "", "code": "unknown", "blade": "A"},
+                             {"path": "", "code": "unknown", "blade": "B"}]
 
 
 def test_manifest_invalid_details_already_parsed(tmp_path):
@@ -240,15 +243,17 @@ def test_manifest_invalid_details_already_parsed(tmp_path):
         raise APIError({"code": "22023", "message": "manifest_invalid", "details": err})
 
     client.rpc_handler = handler
-    assert run(plan, client, tus).errors == err * 2
+    assert run(plan, client, tus).errors == [err[0] | {"blade": "A"}, err[0] | {"blade": "B"}]
 
 
 def test_refreshes_token_before_each_upload(tmp_path):
     root, plan, client, tus = setup(tmp_path)
     session = FakeAppSession(client)
     run(plan, client, tus, session=session)
-    assert session.calls == len(tus.calls) == N_OBJECTS
-    assert [c["token"] for c in tus.calls] == [f"tok{i}" for i in range(1, N_OBJECTS + 1)]
+    assert len(tus.calls) == N_OBJECTS
+    assert session.calls == N_OBJECTS + 2 + 1  # cada subida, cada manifiesto y la posición
+    tokens = [int(c["token"][3:]) for c in tus.calls]
+    assert tokens == sorted(set(tokens))  # un token pedido justo antes de cada subida
 
 
 def test_session_lost_propagates_after_saving_index(tmp_path):
@@ -303,3 +308,114 @@ def test_strip_of_blade_without_photos_is_not_uploaded(tmp_path):
     assert len(tus.calls) == N_OBJECTS and len(client.rpc_calls) == 2
     assert any("C" in m and "sin fotos" in m for m, _ in msgs)
     assert report.errors == []
+
+
+# --- ronda de correcciones 1 ---------------------------------------------------------------------
+
+def test_missing_exiftool_propagates_and_saves_index(tmp_path, monkeypatch):
+    from nexus_desktop.domain import exif
+
+    monkeypatch.setattr(uploader, "read_exif", exif.read_exif)  # el real: lanza el ejecutable
+    root, plan, client, tus = setup(tmp_path)
+    msgs = []
+    with pytest.raises(FileNotFoundError):
+        run(plan, client, tus, msgs=msgs, exiftool=tmp_path / "no-existe" / "exiftool.exe")
+    assert tus.calls == [] and client.rpc_calls == []
+    data = json.loads((root / INDEX_NAME).read_text(encoding="utf-8"))
+    assert data["inspections"] == {ASSET: INSP} and len(data["captures"]) == 1  # id creado y guardado
+    assert not any("omitida" in m for m, _ in msgs)
+
+
+@pytest.mark.parametrize("exc", [
+    __import__("subprocess").CalledProcessError(1, "exiftool"),
+    json.JSONDecodeError("x", "", 0),
+])
+def test_exiftool_failure_on_one_file_skips_only_that_file(tmp_path, monkeypatch, exc):
+    def read(path, exiftool):
+        if path.name == "a2.jpg":
+            raise exc
+        return {}
+
+    monkeypatch.setattr(uploader, "read_exif", read)
+    root, plan, client, tus = setup(tmp_path)
+    report = run(plan, client, tus)
+    assert report.skipped["local_files"] == ["a2.jpg"]
+    assert len(tus.calls) == N_OBJECTS - 3 and report.errors == []
+
+
+def test_programming_error_is_not_hidden_as_corrupt_photo(tmp_path, monkeypatch):
+    def read(path, exiftool):
+        raise TypeError("fallo de programación")
+
+    monkeypatch.setattr(uploader, "read_exif", read)
+    root, plan, client, tus = setup(tmp_path)
+    with pytest.raises(TypeError):
+        run(plan, client, tus)
+
+
+def test_all_photos_corrupt_reports_no_valid_photos(tmp_path):
+    photos = {rel: f"basura {rel}".encode() for rel in PHOTOS}
+    root, plan, client, tus = setup(tmp_path, photos=photos)
+    msgs = []
+    report = run(plan, client, tus, msgs=msgs)
+    assert report.errors == [{"path": "", "code": "no_valid_photos"}]
+    assert sorted(report.skipped["local_files"]) == sorted(Path(r).name for r in PHOTOS)  # la _ID una sola vez
+    assert tus.calls == [] and client.rpc_calls == [] and client.updated == []
+    assert not any("láser" in m for m, _ in msgs)
+    assert msgs[-1][0] == "Subida terminada con errores."
+
+
+def test_id_only_turbine_sends_id_manifest_and_position(tmp_path):
+    root, plan, client, tus = setup(tmp_path, photos={"WTG25_ID/id.jpg": (0, 255, 255)}, strips=[])
+    report = run(plan, client, tus)
+    assert len(tus.calls) == 3
+    (m,) = manifests(client)
+    assert len(m["captures"]) == 1 and "blade" not in m["captures"][0] and m["mosaics"] == []
+    assert m["inspection"]["id_capture_id"] == m["captures"][0]["id"]
+    assert report.inserted == {"captures": 1, "mosaics": 0} and report.errors == []
+    assert client.updated == [("inspections", {"asset_lat": 40.5, "asset_lon": -3.5,
+                                               "asset_position_source": "gps"})]
+
+
+def test_nothing_to_upload(tmp_path):
+    root, plan, client, tus = setup(tmp_path, photos={}, strips=[])
+    msgs = []
+    report = run(plan, client, tus, msgs=msgs)
+    assert report.errors == [{"path": "", "code": "nothing_to_upload"}]
+    assert tus.calls == [] and client.rpc_calls == [] and client.updated == []
+    assert any("No hay fotos" in m for m, _ in msgs) and not any("láser" in m for m, _ in msgs)
+
+
+def test_session_lost_before_ingest_propagates(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    blade_a_objects = 4 * 3 + 1  # _ID + 3 fotos de A, y la tira de A
+    with pytest.raises(SessionLost):
+        run(plan, client, tus, session=FakeAppSession(client, lose_after=blade_a_objects))
+    assert len(tus.calls) == blade_a_objects and client.rpc_calls == []
+    again = LocalIndex(root)
+    assert all(again.is_uploaded(c["object"]) for c in tus.calls)
+
+
+def test_accented_folder_path(tmp_path):
+    base = tmp_path / "Año 2026"
+    root, plan, client, tus = setup(base)
+    report = run(plan, client, tus)
+    assert len(tus.calls) == N_OBJECTS and len(client.rpc_calls) == 2 and report.errors == []
+    assert root == base / "WTG 25" and (root / INDEX_NAME).exists()
+    again = LocalIndex(root)
+    assert again.load_warning is None and all(again.is_uploaded(c["object"]) for c in tus.calls)
+
+
+def test_index_is_on_disk_when_first_upload_happens(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    seen = []
+
+    def hook(t):
+        if len(t.calls) == 1:
+            data = json.loads((root / INDEX_NAME).read_text(encoding="utf-8"))
+            cap_id = t.calls[0]["object"].split("/captures/")[1].split("/")[0]
+            seen.append((cap_id in data["captures"].values(), data["inspections"].get(ASSET)))
+
+    tus.hook = hook
+    run(plan, client, tus)
+    assert seen == [(True, INSP)]
