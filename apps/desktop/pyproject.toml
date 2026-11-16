@@ -30,3 +30,8 @@ nexus_desktop = ["schema/*.json"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Las pruebas lentas solo corren con `-m slow`.
+addopts = "-m 'not slow'"
+markers = [
+  "slow: usa la carpeta WTG de ejemplo y el modelo ONNX reales (se omite si faltan)",
+]
