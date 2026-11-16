@@ -171,7 +171,7 @@ Si la foto es térmica o tiene una pareja térmica: selector **RGB / Térmico**.
 
 - **Regla**: fuera de la capa transformada, tamaño fijo en pantalla, en mm desde la raíz (`round(r·1000)`). Requiere `gsd_mm_px` y `radius_center_m`.
 - **Crosshair**: radio bajo el cursor (`R: 12 345 mm`).
-- **Medir área**: polígono de 4 o más puntos; área (cordón de zapatos), ancho y alto en mm.
+- **Medir área**: rectángulo de 3 clics (ver §10.1); longitudinal, transversal y área en mm.
 - Las mediciones son temporales: no se guardan salvo que se conviertan en daño.
 - **Sin escala** (`gsd_mm_px` nulo): regla y medición ocultas, con el aviso «Esta foto no tiene escala». **Escala de confianza baja**: la regla muestra la etiqueta «escala estimada».
 - Si falta `radius_center_m` pero hay GSD: se miden dimensiones y área, pero la regla y el crosshair no muestran radio.
@@ -373,3 +373,11 @@ Dependencias nuevas: `fast-png` (decodificar y generar PNG de 16 bits), `tsx` (e
 - **Asas del visor**: un clic sobre un asa sin arrastrar (≤ 4 px) no guarda nada; el vértice se desplaza lo mismo que el puntero (no salta al cursor); con una herramienta térmica activa no hay asas.
 - **Color del mapa (admin)**: solo cuentan los daños confirmados, igual que en el portal («severidad máxima visible»).
 - **Foto `_ID` en el visor**: no aparece en la lista de fotos del visor (solo en el mapa).
+
+### 10.1 Ajustes de interfaz pedidos tras la revisión (2026-11-16)
+
+- **Recuadro al pasar sobre una turbina (mapa)**: salía en blanco porque el popup de MapLibre es una caja blanca que hereda el color del texto (blanco en el tema oscuro). Ahora muestra nombre y estado con fondo oscuro y texto claro fijos (`.nexus-map-tip` en `globals.css`), legible en ambos temas.
+- **Pala completa**: un clic (sin arrastre, ≤ 4 px) en una tira la abre sola en un visor aparte (`StripViewer.tsx`): zoom con rueda, botones o + − 0; desplazamiento con arrastre; «Ajustar»; Esc o «Cerrar»; ◀ ▶ o ← → pasan a la cara anterior o siguiente de la misma pala. Sigue siendo solo visual. La vista lado a lado no cambia.
+- **Ancho de página**: las páginas de inspecciones del panel (diseño de `/admin/inspecciones`) y del portal (proyecto, inspección, visor) usan casi todo el ancho (`px-4 md:px-6`, sin `container`); los formularios de edición del proyecto y del sitio conservan `max-w-4xl`. El mapa mide `max(28rem, 65dvh)` de alto y el visor llena el alto disponible. El sitio público y Solicitudes no cambian.
+- **Medir área** (sustituye §4 «polígono de 4 o más puntos»): 3 clics. Los puntos 1 y 2 fijan un lado; la distancia perpendicular del 3.º a la recta 1–2 fija el otro; el rectángulo puede quedar girado y se completa solo con el 3.er clic (ya no hay «Cerrar» para medir). Las mediciones se acumulan en pantalla con su etiqueta, cada una con ✕, y «Borrar mediciones (n)» las quita todas. Son temporales: no se guardan y se borran al cambiar de foto. Geometría pura en `measure.ts`: `rectangleFrom3Points` y `rectangleMeasurements` (longitudinal = lado más cercano a la vertical de la foto, a lo largo de la pala; transversal = el otro). Crear daños (recuadro o polígono) no cambia.
+- **Nombres de las medidas**: en la interfaz, «Ancho» pasa a «Transversal» y «Alto»/«Largo» a «Longitudinal» (visor, panel del daño, tabla de daños e historial). Las columnas `width_mm` y `length_mm` no cambian.

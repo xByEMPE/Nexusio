@@ -122,17 +122,18 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const original = useOriginalImage(photo, view.zoom, setMessage);
 
   // --- Herramientas ----------------------------------------------------------------------------
-  const areaTool = useAreaTool({ active: tool === "area", view, image, gsd: photo.gsd_mm_px });
-  const area = areaTool.area;
+  const areaTool = useAreaTool({ active: tool === "area", view, gsd: photo.gsd_mm_px });
   const chooseTool = (t: Tool) => {
     setTool(t);
     if (t !== "move") thermal.chooseTool("off");
-    if (t !== "area") areaTool.clear();
+    if (t !== "area") areaTool.cancelDraft();
     editing.clearDraft();
     setMessage(null);
   };
 
-  const closeShape = () => setMessage(tool === "newPolygon" ? editing.closePolygon() : areaTool.close());
+  const closeShape = () => {
+    if (tool === "newPolygon") setMessage(editing.closePolygon());
+  };
 
   useViewerKeys({
     prev: () => (goPrev ? (goPrev(), true) : false),
@@ -140,7 +141,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
     zoomIn: () => (zoomBy(KEY_STEP), true),
     zoomOut: () => (zoomBy(1 / KEY_STEP), true),
     fit: () => (fit(), true),
-    cancel: () => (cancelApplies(tool, area != null || editing.draft != null || thermal.busy) ? (thermal.clear(), chooseTool("move"), true) : false),
+    cancel: () => (cancelApplies(tool, areaTool.draft != null || editing.draft != null || thermal.busy) ? (thermal.clear(), chooseTool("move"), true) : false),
   });
 
   // --- Puntero: arrastre = desplazar (o mover un asa); clic = vértice o elegir daño; dos dedos = zoom
@@ -170,7 +171,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const crosshair = tool === "crosshair" && cursor ? { screen: cursor, text: crosshairText(screenToImage(cursor, view), status.frame) } : null;
   const measured = container.w > 0 && container.h > 0;
   const rulerShown = rulerOn && status.ruler && status.frame != null;
-  const drawing = tool === "area" ? !area?.closed : (tool === "newBox" || tool === "newPolygon") && !editing.draftRegion;
+  const drawing = tool === "area" || ((tool === "newBox" || tool === "newPolygon") && !editing.draftRegion);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2px] border border-border-subtle" data-mode={mode}>
@@ -223,7 +224,9 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
                 <OverlayLayer
                   view={view}
                   crosshair={crosshair}
-                  area={area}
+                  measureDraft={tool === "area" ? areaTool.draft : null}
+                  measurements={areaTool.measurements}
+                  onRemoveMeasurement={areaTool.remove}
                   shapes={
                     <>
                       <FindingShapes findings={photoFindings} image={image} zoom={view.zoom} selectedId={sel.selectedId} override={editing.override} handles={editing.handles} draft={editing.draft} />
@@ -240,8 +243,10 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
               notice={message ?? regionMut.error}
               tool={tool}
               drawing={drawing}
-              points={(tool === "area" ? area?.points.length : editing.draft?.points.length) ?? 0}
+              points={editing.draft?.points.length ?? 0}
               onCloseShape={closeShape}
+              measurementCount={areaTool.measurements.length}
+              onClearMeasurements={areaTool.clear}
               newFinding={
                 editing.draftRegion
                   ? { inspectionId: data.inspectionId, captureId: photo.id, region: editing.draftRegion, types: data.findingTypes, onDone: () => chooseTool("move"), onCancel: editing.clearDraft }

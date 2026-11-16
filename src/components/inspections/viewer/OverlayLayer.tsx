@@ -1,17 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { imageToScreen, type Pt, type ViewState } from "@/lib/blade";
-import { groupInt, type AreaReadout } from "./viewer-logic";
-
-export type AreaDraft = {
-  /** Vértices en px del original. */
-  points: Pt[];
-  closed: boolean;
-  /** Posición del cursor (px del original) para la línea elástica mientras se dibuja. */
-  cursor: Pt | null;
-  readout: AreaReadout | null;
-};
+import type { ReactNode, SyntheticEvent } from "react";
+import { imageToScreen, rectangleFrom3Points, type Pt, type ViewState } from "@/lib/blade";
+import type { MeasureDraft } from "./useAreaTool";
+import { groupInt, type AreaMeasurement } from "./viewer-logic";
 
 /** Transformación SVG equivalente a la CSS de la imagen: dentro del grupo se dibuja en px del original. */
 export function imageGroupTransform(v: ViewState): string {
@@ -24,10 +16,36 @@ const LABEL_BG = "rgba(0,0,0,0.72)";
  * Capa SVG sobre la foto. Las formas van en coordenadas de imagen (grupo transformado, trazo que no
  * escala); los textos van en coordenadas de pantalla para que no giren ni cambien de tamaño.
  */
+const MEASURE_STROKE = "#38BDF8";
+const LABEL_W = 196;
+const LABEL_LINE = 15;
+
+// El botón ✕ no debe iniciar gestos del escenario (ni añadir puntos).
+const stop = (e: SyntheticEvent) => e.stopPropagation();
+
+const ptsAttr = (pts: Pt[]) => pts.map((p) => `${p.x},${p.y}`).join(" ");
+
+/** Etiqueta de una medición, en px de pantalla, encima de la esquina más alta del rectángulo. */
+function labelOf(m: AreaMeasurement, view: ViewState): { at: Pt; lines: string[] } {
+  const s = m.corners.map((p) => imageToScreen(p, view));
+  const at = { x: s.reduce((a, p) => a + p.x, 0) / s.length, y: Math.min(...s.map((p) => p.y)) - 8 };
+  const r = m.readout;
+  const lines = r
+    ? [`Longitudinal ${groupInt(r.longitudinal_mm)} mm`, `Transversal ${groupInt(r.transversal_mm)} mm`, `Área ${groupInt(r.area_mm2)} mm²`]
+    : ["Sin escala"];
+  return { at, lines };
+}
+
+/**
+ * Capa SVG sobre la foto. Las formas van en coordenadas de imagen (grupo transformado, trazo que no
+ * escala); los textos van en coordenadas de pantalla para que no giren ni cambien de tamaño.
+ */
 export function OverlayLayer({
   view,
   crosshair,
-  area,
+  measureDraft = null,
+  measurements = [],
+  onRemoveMeasurement,
   shapes,
 }: {
   view: ViewState;
@@ -35,55 +53,66 @@ export function OverlayLayer({
   shapes?: ReactNode;
   /** Cursor en px del contenedor y texto (radio o coordenadas). */
   crosshair: { screen: Pt; text: string } | null;
-  area: AreaDraft | null;
+  /** Medición de área en curso (1 o 2 puntos y el cursor). */
+  measureDraft?: MeasureDraft | null;
+  /** Mediciones de área terminadas (temporales). */
+  measurements?: AreaMeasurement[];
+  onRemoveMeasurement?: (id: number) => void;
 }) {
-  const pts = area?.points ?? [];
-  const rubber = area && !area.closed && area.cursor ? [...pts, area.cursor] : pts;
   const vertexR = 4 / view.zoom;
-
-  let label: { at: Pt; lines: string[] } | null = null;
-  if (area?.closed && area.readout && pts.length > 0) {
-    const s = pts.map((p) => imageToScreen(p, view));
-    const at = { x: s.reduce((a, p) => a + p.x, 0) / s.length, y: Math.min(...s.map((p) => p.y)) - 8 };
-    label = {
-      at,
-      lines: [
-        `Área ${groupInt(area.readout.area_mm2)} mm²`,
-        `Ancho ${groupInt(area.readout.width_mm)} mm · Alto ${groupInt(area.readout.height_mm)} mm`,
-      ],
-    };
-  }
+  const dPts = measureDraft?.points ?? [];
+  const cur = measureDraft?.cursor ?? null;
+  let preview: Pt[] | null = null;
+  if (dPts.length === 1 && cur) preview = [dPts[0]!, cur];
+  else if (dPts.length === 2 && cur) preview = rectangleFrom3Points(dPts[0]!, dPts[1]!, cur);
+  const removable = onRemoveMeasurement != null;
+  const labels = measurements.map((m) => ({ id: m.id, ...labelOf(m, view) }));
 
   return (
+    <>
     <svg className="pointer-events-none absolute inset-0 z-[5]" width={view.containerW} height={view.containerH} data-testid="overlay">
       <g transform={imageGroupTransform(view)}>
         {shapes}
-        {rubber.length > 1 && (
+        {measurements.map((m) => (
           <polygon
-            points={rubber.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill={area?.closed ? "rgba(56,189,248,0.18)" : "rgba(56,189,248,0.08)"}
-            stroke="#38BDF8"
+            key={m.id}
+            points={ptsAttr(m.corners)}
+            fill="rgba(56,189,248,0.18)"
+            stroke={MEASURE_STROKE}
             strokeWidth={1.5}
-            strokeDasharray={area?.closed ? undefined : "6 4"}
             vectorEffect="non-scaling-stroke"
             data-testid="area-polygon"
           />
+        ))}
+        {preview && (
+          <polygon
+            points={ptsAttr(preview)}
+            fill="rgba(56,189,248,0.08)"
+            stroke={MEASURE_STROKE}
+            strokeWidth={1.5}
+            strokeDasharray="6 4"
+            vectorEffect="non-scaling-stroke"
+            data-testid="area-preview"
+          />
         )}
-        {pts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={vertexR} fill="#38BDF8" stroke="#0C4A6E" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {dPts.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={vertexR} fill={MEASURE_STROKE} stroke="#0C4A6E" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         ))}
       </g>
 
-      {label && (
-        <g transform={`translate(${label.at.x} ${label.at.y})`} data-testid="area-readout">
-          <rect x={-130} y={-36} width={260} height={34} rx={2} fill={LABEL_BG} />
-          {label.lines.map((l, i) => (
-            <text key={i} x={0} y={-22 + i * 15} textAnchor="middle" fill="#E0F2FE" fontSize={12} fontFamily="ui-monospace, monospace">
-              {l}
-            </text>
-          ))}
-        </g>
-      )}
+      {labels.map((l) => {
+        const h = l.lines.length * LABEL_LINE + 6;
+        return (
+          <g key={l.id} transform={`translate(${l.at.x} ${l.at.y})`} data-testid="area-readout">
+            <rect x={-LABEL_W / 2} y={-h} width={LABEL_W} height={h} rx={2} fill={LABEL_BG} />
+            {l.lines.map((t, i) => (
+              <text key={i} x={-LABEL_W / 2 + 8} y={-h + 15 + i * LABEL_LINE} fill="#E0F2FE" fontSize={12} fontFamily="ui-monospace, monospace">
+                {t}
+              </text>
+            ))}
+          </g>
+        );
+      })}
 
       {crosshair && (
         <g data-testid="crosshair">
@@ -96,5 +125,25 @@ export function OverlayLayer({
         </g>
       )}
     </svg>
+    {removable && labels.map((l) => {
+      const h = l.lines.length * LABEL_LINE + 6;
+      return (
+        <button
+          key={l.id}
+          type="button"
+          aria-label="Borrar esta medición"
+          title="Borrar esta medición"
+          onPointerDown={stop}
+          onDoubleClick={stop}
+          onClick={() => onRemoveMeasurement(l.id)}
+          className="absolute z-[6] flex h-5 w-5 items-center justify-center rounded-[2px] text-xs text-sky-100 hover:bg-white/20"
+          style={{ left: l.at.x + LABEL_W / 2 - 22, top: l.at.y - h + 2 }}
+          data-testid="area-remove"
+        >
+          ✕
+        </button>
+      );
+    })}
+    </>
   );
 }

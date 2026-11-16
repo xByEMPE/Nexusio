@@ -36,8 +36,8 @@ export function FindingPanel({
   const review = useViewerMutation();
   const f = finding;
   const measures: [string, string][] = [
-    ["Ancho", fmtMm(f.width_mm)],
-    ["Largo", fmtMm(f.length_mm)],
+    ["Transversal", fmtMm(f.width_mm)],
+    ["Longitudinal", fmtMm(f.length_mm)],
     ["Área", fmtArea(f.area_mm2)],
     ["Radio", fmtRadius(f.radius_m)],
     ["GSD usado", fmtGsd(f.gsd_mm_px_used)],

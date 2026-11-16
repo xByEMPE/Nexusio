@@ -119,8 +119,8 @@ export function FindingsTable({
                 <th className="px-3 py-2">Pala</th>
                 <th className="px-3 py-2">Cara</th>
                 <th className="px-3 py-2">Radio</th>
-                <th className="px-3 py-2">Largo</th>
-                <th className="px-3 py-2">Ancho</th>
+                <th className="px-3 py-2">Longitudinal</th>
+                <th className="px-3 py-2">Transversal</th>
                 <th className="px-3 py-2">Estado</th>
                 <th className="px-3 py-2">Foto</th>
               </tr>

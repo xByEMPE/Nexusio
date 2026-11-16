@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findingMeasurements, polygonAreaPx } from "./measure";
+import { findingMeasurements, polygonAreaPx, rectangleFrom3Points, rectangleMeasurements } from "./measure";
 import { radiusAtRow } from "./radius";
 import { rulerTicks } from "./ruler";
 
@@ -85,5 +85,47 @@ describe("inconsistencias VND", () => {
   it("#8 un radio mayor a 200 se trata como metros, sin conversión", () => {
     const r = findingMeasurements({ type: "box", points: [[0, 0.5], [0.1, 0.5]] }, { ...cap, rc_m: 500 });
     expect(r.radius_m).toBe(500);
+  });
+});
+
+describe("rectangleFrom3Points", () => {
+  it("rectángulo alineado: p3 define el lado opuesto aunque no esté en la perpendicular de p2", () => {
+    const r = rectangleFrom3Points({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 4, y: 5 });
+    expect(r).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 5 }, { x: 0, y: 5 }]);
+  });
+  it("rectángulo girado 30°", () => {
+    const c = Math.cos(Math.PI / 6);
+    const s = Math.sin(Math.PI / 6);
+    const p1 = { x: 100, y: 100 };
+    const p2 = { x: 100 + 40 * c, y: 100 + 40 * s };
+    // 20 px sobre la normal (−s, c) y 7 px a lo largo del lado: lo paralelo se descarta.
+    const p3 = { x: p1.x + 7 * c - 20 * s, y: p1.y + 7 * s + 20 * c };
+    const [a, b, k, d] = rectangleFrom3Points(p1, p2, p3);
+    expect(a).toEqual(p1);
+    expect(b).toEqual(p2);
+    expect(k.x).toBeCloseTo(p2.x - 20 * s);
+    expect(k.y).toBeCloseTo(p2.y + 20 * c);
+    expect(d.x).toBeCloseTo(p1.x - 20 * s);
+    expect(d.y).toBeCloseTo(p1.y + 20 * c);
+    const m = rectangleMeasurements([a, b, k, d], 2);
+    // Lado p1–p2 a 30° de la horizontal → transversal; el de 20 px, a 30° de la vertical → longitudinal.
+    expect(m.transversal_mm).toBeCloseTo(80);
+    expect(m.longitudinal_mm).toBeCloseTo(40);
+    expect(m.area_mm2).toBeCloseTo(40 * 20 * 4);
+  });
+  it("p1 = p2 da un rectángulo nulo", () => {
+    const m = rectangleMeasurements(rectangleFrom3Points({ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 5, y: 5 }), 1);
+    expect(m.area_mm2).toBe(0);
+  });
+});
+
+describe("rectangleMeasurements", () => {
+  it("longitudinal es el lado vertical aunque p1–p2 sea el vertical", () => {
+    const m = rectangleMeasurements([{ x: 0, y: 0 }, { x: 0, y: 30 }, { x: 10, y: 30 }, { x: 10, y: 0 }], 0.5);
+    expect(m).toEqual({ longitudinal_mm: 15, transversal_mm: 5, area_mm2: 75 });
+  });
+  it("lado horizontal largo: transversal mayor que longitudinal", () => {
+    const m = rectangleMeasurements([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 10 }, { x: 0, y: 10 }], 1);
+    expect(m).toEqual({ longitudinal_mm: 10, transversal_mm: 100, area_mm2: 1000 });
   });
 });

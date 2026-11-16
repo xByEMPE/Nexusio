@@ -158,7 +158,7 @@ export function Toolbar({
             active={tool === "area"}
             onClick={() => onTool("area")}
             disabled={!canMeasure}
-            title={canMeasure ? "Clic para cada vértice, doble clic para cerrar" : "Esta foto no tiene escala"}
+            title={canMeasure ? "3 clics: 2 puntos para un lado y un 3.º para el lado opuesto" : "Esta foto no tiene escala"}
           >
             Medir área
           </ToolButton>

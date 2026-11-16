@@ -1,11 +1,13 @@
 import {
   clampZoom,
-  findingMeasurements,
   fitZoom,
   MAX_ZOOM,
   MIN_ZOOM,
   radiusAtRow,
+  rectangleFrom3Points,
+  rectangleMeasurements,
   type BladeFrame,
+  type RectangleMeasurements,
   type Pt,
   type ViewState,
 } from "@/lib/blade";
@@ -136,19 +138,25 @@ export function crosshairText(img: Pt, frame: BladeFrame | null): string {
   return `R: ${groupInt(radiusAtRow(img.y, frame) * 1000)} mm`;
 }
 
-export const MIN_AREA_POINTS = 4;
+export type Corners = [Pt, Pt, Pt, Pt];
 
-export type AreaReadout = { area_mm2: number; width_mm: number; height_mm: number };
+/** Medición temporal de «Medir área» (px del original); no se guarda. */
+export type AreaMeasurement = { id: number; corners: Corners; readout: RectangleMeasurements | null };
 
-/** Área (cordón de zapatos), ancho (eje x) y alto (eje y) en mm de un polígono en px del original. */
-export function areaReadout(points: Pt[], image: Size, gsd_mm_px: number | null): AreaReadout | null {
-  if (points.length < 3 || gsd_mm_px == null || !(gsd_mm_px > 0)) return null;
-  const m = findingMeasurements(
-    { type: "polygon", points: points.map((p) => [p.x / image.w, p.y / image.h] as [number, number]) },
-    { width_px: image.w, height_px: image.h, gsd_mm_px, rc_m: null, tipAtTop: true },
-  );
-  if (m.area_mm2 == null || m.width_mm == null || m.length_mm == null) return null;
-  return { area_mm2: m.area_mm2, width_mm: m.width_mm, height_mm: m.length_mm };
+/**
+ * Un clic de «Medir área»: los 2 primeros puntos fijan un lado y el 3.º, el lado opuesto. Con el 3.º
+ * devuelve las esquinas del rectángulo y vacía los puntos; un clic casi encima del anterior se ignora.
+ */
+export function addMeasurePoint(points: Pt[], p: Pt, minDistPx: number): { points: Pt[]; corners: Corners | null } {
+  const next = addVertex(points, p, minDistPx);
+  if (next.length < 3) return { points: next, corners: null };
+  return { points: [], corners: rectangleFrom3Points(next[0]!, next[1]!, next[2]!) };
+}
+
+/** Medidas del rectángulo en mm; null sin GSD. */
+export function measureReadout(corners: Corners, gsd_mm_px: number | null): RectangleMeasurements | null {
+  if (gsd_mm_px == null || !(gsd_mm_px > 0)) return null;
+  return rectangleMeasurements(corners, gsd_mm_px);
 }
 
 /** Un clic de cierre (doble clic) repite el último punto: se descartan puntos casi iguales al anterior. */

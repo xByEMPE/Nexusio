@@ -100,7 +100,7 @@ export function SplitStage({
                 original.onOriginalError();
               }}
             />
-            <OverlayLayer view={view} crosshair={null} area={null} shapes={<FindingShapes findings={findings} image={image} zoom={view.zoom} selectedId={null} />} />
+            <OverlayLayer view={view} crosshair={null} shapes={<FindingShapes findings={findings} image={image} zoom={view.zoom} selectedId={null} />} />
           </>
         )}
       </div>

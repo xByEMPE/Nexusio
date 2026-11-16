@@ -65,3 +65,46 @@ export function findingMeasurements(region: Region, cap: MeasureCapture): Findin
 
   return { width_mm: clean(w * g), length_mm: clean(h * g), area_mm2: clean(area_mm2), radius_m };
 }
+
+// --- Medición temporal por 3 puntos (herramienta «Medir área» del visor) --------------------------
+
+/**
+ * Rectángulo (posiblemente girado) a partir de 3 clics en px del original: p1–p2 es un lado y la
+ * distancia perpendicular de p3 a la recta p1–p2 es el otro. Esquinas en orden: p1, p2, p2+n, p1+n,
+ * con n la componente de (p3 − p1) perpendicular a p1–p2. Si p1 y p2 coinciden, el rectángulo es nulo.
+ */
+export function rectangleFrom3Points(p1: Pt, p2: Pt, p3: Pt): [Pt, Pt, Pt, Pt] {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return [p1, p2, p2, p1];
+  const vx = p3.x - p1.x;
+  const vy = p3.y - p1.y;
+  const t = (vx * dx + vy * dy) / len2;
+  const n = { x: vx - t * dx, y: vy - t * dy };
+  return [p1, p2, { x: p2.x + n.x, y: p2.y + n.y }, { x: p1.x + n.x, y: p1.y + n.y }];
+}
+
+export type RectangleMeasurements = { longitudinal_mm: number; transversal_mm: number; area_mm2: number };
+
+/**
+ * Medidas de un rectángulo de 4 esquinas consecutivas (px del original) con el GSD en mm/px.
+ * Longitudinal: el lado cuya dirección está más cerca de la vertical de la foto (a lo largo de la
+ * pala); transversal: el otro. Con 45° exactos, el lado p1–p2 se toma como transversal.
+ */
+export function rectangleMeasurements(corners: [Pt, Pt, Pt, Pt], gsd_mm_px: number): RectangleMeasurements {
+  const [a, b, , d] = corners;
+  const s1 = { x: b.x - a.x, y: b.y - a.y };
+  const s2 = { x: d.x - a.x, y: d.y - a.y };
+  const l1 = Math.hypot(s1.x, s1.y);
+  const l2 = Math.hypot(s2.x, s2.y);
+  // Cuanto mayor |dy|/longitud, más vertical; un lado nulo no tiene dirección y cede al otro.
+  const v1 = l1 > 0 ? Math.abs(s1.y) / l1 : -1;
+  const v2 = l2 > 0 ? Math.abs(s2.y) / l2 : -1;
+  const [lon, tra] = v1 > v2 ? [l1, l2] : [l2, l1];
+  return {
+    longitudinal_mm: clean(lon * gsd_mm_px),
+    transversal_mm: clean(tra * gsd_mm_px),
+    area_mm2: clean(l1 * l2 * gsd_mm_px * gsd_mm_px),
+  };
+}

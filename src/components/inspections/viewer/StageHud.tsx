@@ -7,7 +7,7 @@ import { MIN_POLYGON_POINTS } from "./finding-logic";
 import { NewFindingForm } from "./FindingEditor";
 import { RULER_W } from "./Ruler";
 import type { Tool } from "./Toolbar";
-import { MIN_AREA_POINTS, type ScaleStatus } from "./viewer-logic";
+import type { ScaleStatus } from "./viewer-logic";
 
 export function Notice({ children, tone, testId }: { children: ReactNode; tone?: "warn"; testId?: string }) {
   return (
@@ -22,7 +22,7 @@ const stop = (e: SyntheticEvent) => e.stopPropagation();
 
 /**
  * Capa de avisos y controles sobre la foto: avisos de escala, mensajes, ayuda mientras se dibuja
- * (con «Cerrar» para área y polígono) y el formulario del daño nuevo cuando la región está lista.
+ * (con «Cerrar» para el polígono), «Borrar mediciones» y el formulario del daño nuevo cuando la región está lista.
  */
 export function StageHud({
   status,
@@ -32,6 +32,8 @@ export function StageHud({
   drawing,
   points,
   onCloseShape,
+  measurementCount,
+  onClearMeasurements,
   newFinding,
 }: {
   status: ScaleStatus;
@@ -43,9 +45,11 @@ export function StageHud({
   /** Vértices del dibujo en curso. */
   points: number;
   onCloseShape: () => void;
+  /** Mediciones de área en pantalla (temporales). */
+  measurementCount: number;
+  onClearMeasurements: () => void;
   newFinding: { inspectionId: string; captureId: string; region: Region; types: ViewerFindingType[]; onDone: () => void; onCancel: () => void } | null;
 }) {
-  const minPoints = tool === "area" ? MIN_AREA_POINTS : MIN_POLYGON_POINTS;
   return (
     <>
       <div className="pointer-events-none absolute right-2 top-2 z-20 flex max-w-[70%] flex-col items-end gap-1 text-2xs">
@@ -56,23 +60,41 @@ export function StageHud({
         {notice && <Notice tone="warn">{notice}</Notice>}
       </div>
 
-      {drawing && (
+      {(drawing || measurementCount > 0) && (
         <div
           className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 text-2xs"
           style={{ marginLeft: rulerShown ? RULER_W / 2 : 0 }}
           onPointerDown={stop}
           onDoubleClick={stop}
         >
-          <Notice>{tool === "newBox" ? "Clic en dos esquinas opuestas · Esc cancela" : "Clic en cada vértice · doble clic o «Cerrar» · Esc cancela"}</Notice>
-          {tool !== "newBox" && (
+          {drawing && (
+            <Notice>
+              {tool === "area"
+                ? "2 clics marcan un lado y el 3.º el lado opuesto · Esc cancela"
+                : tool === "newBox"
+                  ? "Clic en dos esquinas opuestas · Esc cancela"
+                  : "Clic en cada vértice · doble clic o «Cerrar» · Esc cancela"}
+            </Notice>
+          )}
+          {drawing && tool === "newPolygon" && (
             <button
               type="button"
               onClick={onCloseShape}
-              disabled={points < minPoints}
+              disabled={points < MIN_POLYGON_POINTS}
               className="rounded-[2px] bg-sky-500 px-2 py-1 font-medium text-black disabled:opacity-40"
-              data-testid={tool === "area" ? "area-close" : "polygon-close"}
+              data-testid="polygon-close"
             >
               Cerrar
+            </button>
+          )}
+          {measurementCount > 0 && (
+            <button
+              type="button"
+              onClick={onClearMeasurements}
+              className="whitespace-nowrap rounded-[2px] bg-black/70 px-2 py-1 font-medium text-neutral-100 hover:bg-black/85"
+              data-testid="area-clear"
+            >
+              Borrar mediciones ({measurementCount})
             </button>
           )}
         </div>

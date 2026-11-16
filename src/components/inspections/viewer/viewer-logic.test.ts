@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { imageToScreen, radiusAtRow, rulerTicks, screenToImage } from "@/lib/blade";
 import {
   addVertex,
-  areaReadout,
+  addMeasurePoint,
   cancelApplies,
   MAX_ORIGINAL_ATTEMPTS,
   shouldRequestOriginal,
@@ -11,7 +11,7 @@ import {
   frameFor,
   groupInt,
   keyAction,
-  MIN_AREA_POINTS,
+  measureReadout,
   navigationList,
   needsOriginal,
   neighbors,
@@ -161,26 +161,28 @@ describe("crosshair y regla", () => {
 });
 
 describe("medir área", () => {
-  const sq = [
-    { x: 100, y: 100 },
-    { x: 300, y: 100 },
-    { x: 300, y: 200 },
-    { x: 100, y: 200 },
-  ];
-  it("área, ancho y alto en mm", () => {
-    expect(areaReadout(sq, image, 0.5)).toEqual({ area_mm2: 200 * 100 * 0.25, width_mm: 100, height_mm: 50 });
+  it("con el 3.er punto se completa el rectángulo y se vacían los puntos", () => {
+    let st = addMeasurePoint([], { x: 0, y: 0 }, 3);
+    expect(st.corners).toBeNull();
+    st = addMeasurePoint(st.points, { x: 0, y: 40 }, 3);
+    expect(st.points).toHaveLength(2);
+    st = addMeasurePoint(st.points, { x: 10, y: 25 }, 3);
+    expect(st.points).toEqual([]);
+    expect(st.corners).toEqual([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 10, y: 40 }, { x: 10, y: 0 }]);
+    expect(measureReadout(st.corners!, 0.5)).toEqual({ longitudinal_mm: 20, transversal_mm: 5, area_mm2: 100 });
   });
-  it("sin GSD o con menos de 3 puntos: nada", () => {
-    expect(areaReadout(sq, image, null)).toBeNull();
-    expect(areaReadout(sq.slice(0, 2), image, 1)).toBeNull();
+  it("un punto repetido no cuenta", () => {
+    const st = addMeasurePoint([{ x: 1, y: 1 }], { x: 2, y: 2 }, 3);
+    expect(st.points).toHaveLength(1);
+    expect(st.corners).toBeNull();
+  });
+  it("sin GSD no hay medidas", () => {
+    expect(measureReadout([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], null)).toBeNull();
   });
   it("addVertex descarta el punto repetido del doble clic", () => {
     const p = addVertex([], { x: 1, y: 1 }, 3);
     expect(addVertex(p, { x: 2, y: 2 }, 3)).toHaveLength(1);
     expect(addVertex(p, { x: 10, y: 1 }, 3)).toHaveLength(2);
-  });
-  it("cierre con 4 puntos o más", () => {
-    expect(MIN_AREA_POINTS).toBe(4);
   });
 });
 

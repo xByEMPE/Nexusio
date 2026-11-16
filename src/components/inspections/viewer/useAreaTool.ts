@@ -1,36 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { screenToImage, type Pt, type ViewState } from "@/lib/blade";
-import type { AreaDraft } from "./OverlayLayer";
-import { addVertex, areaReadout, MIN_AREA_POINTS, type Size } from "./viewer-logic";
+import { addMeasurePoint, measureReadout, type AreaMeasurement } from "./viewer-logic";
 
 const DUP_VERTEX_PX = 4;
 
-/** Herramienta «Medir área»: vértices con clic, línea elástica y cierre con 4 o más puntos. */
-export function useAreaTool({ active, view, image, gsd }: { active: boolean; view: ViewState; image: Size; gsd: number | null }) {
-  const [area, setArea] = useState<AreaDraft | null>(null);
+/** Medición en curso: 1 o 2 puntos fijos y el cursor (px del original) para la vista previa. */
+export type MeasureDraft = { points: Pt[]; cursor: Pt | null };
+
+/**
+ * Herramienta «Medir área»: 3 clics forman un rectángulo (p1–p2 un lado; el 3.º fija el lado opuesto).
+ * Las mediciones se acumulan en pantalla, son temporales y se borran al cambiar de foto.
+ */
+export function useAreaTool({ active, view, gsd }: { active: boolean; view: ViewState; gsd: number | null }) {
+  const [draft, setDraft] = useState<MeasureDraft | null>(null);
+  const [measurements, setMeasurements] = useState<AreaMeasurement[]>([]);
+  const nextId = useRef(1);
 
   const hover = (p: Pt | null) => {
     if (!p || !active) return;
     const c = screenToImage(p, view);
-    // Actualización funcional: un movimiento justo después de un clic no debe pisar el vértice nuevo.
-    setArea((cur) => (cur && !cur.closed ? { ...cur, cursor: c } : cur));
+    // Actualización funcional: un movimiento justo después de un clic no debe pisar el punto nuevo.
+    setDraft((cur) => (cur ? { ...cur, cursor: c } : cur));
   };
 
   const tap = (p: Pt) => {
     const img = screenToImage(p, view);
-    const minDist = DUP_VERTEX_PX / view.zoom;
-    setArea((cur) => (!cur || cur.closed ? { points: [img], closed: false, cursor: img, readout: null } : { ...cur, points: addVertex(cur.points, img, minDist) }));
+    const step = addMeasurePoint(draft?.points ?? [], img, DUP_VERTEX_PX / view.zoom);
+    if (step.corners) {
+      const corners = step.corners;
+      setMeasurements((ms) => [...ms, { id: nextId.current++, corners, readout: measureReadout(corners, gsd) }]);
+      setDraft(null);
+    } else {
+      setDraft({ points: step.points, cursor: img });
+    }
   };
 
-  /** Cierra el polígono; devuelve un aviso si faltan puntos (null si cerró o no aplica). */
-  const close = (): string | null => {
-    if (!active || !area || area.closed) return null;
-    if (area.points.length < MIN_AREA_POINTS) return `Marca al menos ${MIN_AREA_POINTS} puntos para cerrar.`;
-    setArea({ ...area, closed: true, cursor: null, readout: areaReadout(area.points, image, gsd) });
-    return null;
+  return {
+    draft,
+    measurements,
+    hover,
+    tap,
+    /** Descarta la medición en curso (las terminadas siguen). */
+    cancelDraft: () => setDraft(null),
+    remove: (id: number) => setMeasurements((ms) => ms.filter((m) => m.id !== id)),
+    /** Borra todas las mediciones y la que está en curso. */
+    clear: () => {
+      setDraft(null);
+      setMeasurements([]);
+    },
   };
-
-  return { area, clear: () => setArea(null), hover, tap, close };
 }

@@ -194,7 +194,7 @@ describe("historial", () => {
   });
   it("cambio de severidad y medidas", () => {
     const lines = historyLines("update", { severity: 2, width_mm: 100 }, { severity: 4, width_mm: 120.4 }, types);
-    expect(lines).toEqual(["Severidad: Cat 2 → Cat 4", "Ancho: 100 mm → 120 mm"]);
+    expect(lines).toEqual(["Severidad: Cat 2 → Cat 4", "Transversal: 100 mm → 120 mm"]);
   });
   it("región y tipo", () => {
     expect(historyLines("update", { type_id: "t1", region: true }, { type_id: "t2", region: true }, types)).toEqual([
