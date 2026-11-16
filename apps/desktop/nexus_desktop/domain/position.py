@@ -9,7 +9,8 @@ from .exif import num
 def find_id_photo(folder: Path) -> Path | None:
     """Primer `*.JPG` (por nombre) dentro de una subcarpeta cuyo nombre termina en `_ID`."""
     for sub in sorted(p for p in folder.iterdir() if p.is_dir() and p.name.upper().endswith("_ID")):
-        jpgs = sorted(p for p in sub.iterdir() if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg"))
+        jpgs = sorted(p for p in sub.iterdir() if p.is_file() and p.suffix.lower() in (".jpg", ".jpeg")
+                      and not p.name.startswith("."))
         if jpgs:
             return jpgs[0]
     return None

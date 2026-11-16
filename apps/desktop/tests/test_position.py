@@ -40,3 +40,13 @@ def test_find_id_photo(tmp_path):
     (idd / "z.JPG").write_bytes(b"")
     (idd / "a.JPG").write_bytes(b"")
     assert find_id_photo(tmp_path) == idd / "a.JPG"
+
+
+def test_find_id_photo_ignores_hidden_files(tmp_path):
+    idd = tmp_path / "DJI_001_ID"
+    idd.mkdir()
+    (idd / "._a.JPG").write_bytes(b"")
+    (idd / ".hidden.jpg").write_bytes(b"")
+    assert find_id_photo(tmp_path) is None
+    (idd / "b.JPG").write_bytes(b"")
+    assert find_id_photo(tmp_path) == idd / "b.JPG"
