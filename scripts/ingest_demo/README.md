@@ -40,3 +40,12 @@ export NEXUS_PUBLISHABLE_KEY=<llave pública>        # npx supabase status -o en
 - Las tiras `*_img_stitched/<x>_<A|B|C>_<LeadingEdge|PressureSide|SuctionSide|TrailingEdge>.<ext>` se suben como
   mosaicos `blade_strip` (solo `strip.webp`, calidad 85; no se reduce si el lado mayor es <= 8000 px). Los nombres
   que no cumplen se ignoran con aviso. Sus ids se guardan en el índice local por nombre de archivo.
+
+## Posición de la turbina (carpeta `_ID`)
+
+- Si dentro de la carpeta hay una subcarpeta cuyo nombre termina en `_ID` (por ejemplo `DJI_202604291354_001_ID`),
+  su primer `*.JPG` se sube como captura RGB **sin bloque `blade`** y `inspections.id_capture_id` apunta a ella.
+- Posición (spec §9.1): si `LRFStatus = Normal`, `LRFTargetDistance > 0` y `LRFTargetLat/Lon` no son 0, se toma el
+  punto del láser (`asset_position_source = 'lrf_target'`); si no, el GPS del dron (`'gps'`). Sin ninguno, sin posición.
+- Después de `ingest_manifest` se escribe `asset_lat`, `asset_lon` y `asset_position_source` en la inspección con la
+  sesión del técnico (por eso la inspección no debe estar aprobada: RLS la bloquea).

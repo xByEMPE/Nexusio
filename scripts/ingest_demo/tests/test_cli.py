@@ -100,3 +100,11 @@ def test_resolve_inspection_creates_row_when_missing(tmp_path):
     insp = resolve_inspection(sb, args, index, tmp_path)
     assert sb.inserted == [{"id": insp, "project_id": "p", "asset_id": "a", "kind": "wind_blade", "status": "captured"}]
     assert load_index(tmp_path)["inspections"]["a"] == insp
+
+
+def test_id_photo_capture_has_no_blade_block():
+    d = Derivatives(Path("p"), Path("t"), 100, 100)
+    cap = build_capture(Path("id.jpg"), None, None, 0, {"LRFStatus": "Normal"}, "a" * 64, "id", "pre/", d)
+    assert "blade" not in cap and cap["spectrum"] == "rgb"
+    cap = build_capture(Path("a.jpg"), "A", "LE", 0, {}, "b" * 64, "id2", "pre/", d)
+    assert cap["blade"] == {"position": "A", "face": "LE"}

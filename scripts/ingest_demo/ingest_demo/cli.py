@@ -25,7 +25,7 @@ from supabase import create_client
 from .exif import num, read_exif
 from .gsd import compute_gsd
 from .manifest import build_manifest, object_prefix, validate
-from . import mosaics, vnd_manifest
+from . import mosaics, position, vnd_manifest
 from .media import make_derivatives, sha256_file
 from .upload import tus_upload
 
@@ -106,7 +106,7 @@ def exif_datetime(meta: dict) -> str | None:
         return None
 
 
-def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: str, cap_id: str,
+def build_capture(path: Path, blade: str | None, face: str | None, seq: int, meta: dict, sha: str, cap_id: str,
                   prefix: str, deriv, vnd: vnd_manifest.VndPhoto | None = None) -> dict:
     base = f"{prefix}captures/{cap_id}/"
     gsd = compute_gsd(meta, deriv.width_px)
@@ -117,12 +117,14 @@ def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: 
     gsd_json = {"mm_px": gsd.mm_px, "source": gsd.source, "confidence": gsd.confidence} if gsd else None
     if gsd_json is None and vnd and vnd.gsd_mm_px:  # sin EXIF útil: GSD del manifiesto de VND
         gsd_json = {"mm_px": vnd.gsd_mm_px, "source": "manual", "confidence": "low"}
-    blade_json = {"position": blade, "face": face}
-    if vnd and vnd.radius_m is not None:
-        blade_json["radius_center_m"] = vnd.radius_m
-    if vnd and vnd.sequence_direction:
-        blade_json["sequence_direction"] = vnd.sequence_direction
-    return {
+    blade_json = None  # la foto `_ID` no lleva datos de pala
+    if blade and face:
+        blade_json = {"position": blade, "face": face}
+        if vnd and vnd.radius_m is not None:
+            blade_json["radius_center_m"] = vnd.radius_m
+        if vnd and vnd.sequence_direction:
+            blade_json["sequence_direction"] = vnd.sequence_direction
+    cap = {
         "id": cap_id, "sha256": sha, "spectrum": "rgb", "file_name": path.name, "sequence_index": seq,
         "paths": {"original": base + "original.jpg", "preview": base + "preview.webp", "thumb": base + "thumb.webp"},
         "width_px": deriv.width_px, "height_px": deriv.height_px,
@@ -134,8 +136,10 @@ def build_capture(path: Path, blade: str, face: str, seq: int, meta: dict, sha: 
         "camera_model": meta.get("Model"),
         "lrf_distance_m": lrf if lrf and lrf > 0 else None,
         "gsd": gsd_json,
-        "blade": blade_json,
     }
+    if blade_json:
+        cap["blade"] = blade_json
+    return cap
 
 
 def choose_inspection(explicit: str | None, indexed: str | None, indexed_exists: bool,
@@ -238,7 +242,12 @@ def main(argv: list[str] | None = None) -> int:
         tus_upload(src, name, content_type, supabase_url=url, access_token=fresh_token(sb.auth),
                    publishable_key=key)
 
+    id_photo = position.find_id_photo(args.folder)
+    if id_photo:
+        files.append((id_photo, None, None))  # captura RGB sin bloque `blade`
     files = dedupe_by_sha(files)
+    id_cap_id = None
+    id_pos = None
     try:
       with tempfile.TemporaryDirectory() as tmp:
         for path, blade, face, sha in files:
@@ -247,14 +256,18 @@ def main(argv: list[str] | None = None) -> int:
             deriv = make_derivatives(path, Path(tmp) / cap_id)
             seq = seq_by_group.get((blade, face), 0)
             seq_by_group[(blade, face)] = seq + 1
-            cap = build_capture(path, blade, face, seq, meta, sha, cap_id, prefix, deriv, vnd.get(path.name))
+            cap = build_capture(path, blade, face, seq, meta, sha, cap_id, prefix, deriv,
+                                vnd.get(path.name) if blade else None)
+            if path == id_photo:
+                id_cap_id, id_pos = cap_id, position.turbine_position(meta)
             upload(path, cap["paths"]["original"], "image/jpeg")
             upload(deriv.preview, cap["paths"]["preview"], "image/webp")
             upload(deriv.thumb, cap["paths"]["thumb"], "image/webp")
             captures.append(cap)
             save_index(args.folder, index)
             gsd = cap["gsd"]["mm_px"] if cap["gsd"] else None
-            print(f"  subida {path.name} ({blade}/{face}) gsd_mm_px={gsd and round(gsd, 4)}")
+            where = f"{blade}/{face}" if blade else "_ID"
+            print(f"  subida {path.name} ({where}) gsd_mm_px={gsd and round(gsd, 4)}")
 
         index.setdefault("mosaics", {})
         for strip in mosaics.scan(args.folder):
@@ -272,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     inspection = {"id": insp_id, "asset_id": args.asset, "kind": "wind_blade"}
     if blade_length:
         inspection["blade_length_m"] = blade_length
+    if id_cap_id:
+        inspection["id_capture_id"] = id_cap_id
     manifest = build_manifest(args.project, inspection, captures)
     if mosaic_list:
         manifest["mosaics"] = mosaic_list
@@ -287,4 +302,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ingest_manifest rechazó el manifiesto: {detail}", file=sys.stderr)
         return 1
     print(json.dumps(res.data, indent=2, ensure_ascii=False))
+    if id_pos:
+        lat, lon, source = id_pos
+        try:
+            sb.table("inspections").update({"asset_lat": lat, "asset_lon": lon, "asset_position_source": source})                 .eq("id", insp_id).execute()
+        except Exception as e:
+            detail = getattr(e, "details", None) or getattr(e, "message", None) or str(e)
+            print(f"No se pudo guardar la posición: {detail}", file=sys.stderr)
+            return 1
+        print(f"  posición de la turbina: {lat}, {lon} ({source})")
+    elif id_photo:
+        print("  la foto _ID no tiene láser ni GPS válidos: sin posición")
+    else:
+        print("  sin carpeta *_ID: sin posición")
     return 0
