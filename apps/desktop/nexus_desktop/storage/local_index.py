@@ -14,25 +14,62 @@ class LocalIndex:
     def __init__(self, folder: Path) -> None:
         self.folder = Path(folder)
         self.path = self.folder / INDEX_NAME
+        self.load_warning: str | None = None
         self._uploaded: set[str] = set()
         self._data: dict = {"inspections": {}, "captures": {}, "mosaics": {}}
         self._load()
+
+    def _backup_path(self) -> Path:
+        candidate = self.path.with_name(INDEX_NAME + ".bak")
+        n = 0
+        while candidate.exists():
+            n += 1
+            candidate = self.path.with_name(f"{INDEX_NAME}.bak.{n}")
+        return candidate
+
+    @staticmethod
+    def _str_map(value: object) -> dict[str, str]:
+        if not isinstance(value, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in value.items()
+        ):
+            raise ValueError("mapa inválido")
+        return dict(value)
 
     def _load(self) -> None:
         if not self.path.exists():
             return
         try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            text = self.path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self.load_warning = (
+                f"No se pudo leer el índice local ({exc}); se usa un índice vacío."
+            )
+            return
+        try:
+            raw = json.loads(text)
             if not isinstance(raw, dict):
                 raise ValueError("índice no es un objeto")
             data = {
-                "inspections": dict(raw.get("inspections", {})),
-                "captures": dict(raw.get("captures", {})),
-                "mosaics": dict(raw.get("mosaics", {})),
+                key: self._str_map(raw.get(key, {}))
+                for key in ("inspections", "captures", "mosaics")
             }
-            uploaded = set(raw.get("uploaded", []))
+            up = raw.get("uploaded", [])
+            if not isinstance(up, list) or not all(isinstance(x, str) for x in up):
+                raise ValueError("uploaded inválido")
+            uploaded = set(up)
         except (ValueError, TypeError):
-            os.replace(self.path, self.path.with_name(INDEX_NAME + ".bak"))
+            try:
+                backup = self._backup_path()
+                os.replace(self.path, backup)
+                self.load_warning = (
+                    f"El índice local estaba dañado; se guardó copia en {backup.name} "
+                    "y se empezó uno nuevo."
+                )
+            except OSError as exc:
+                self.load_warning = (
+                    f"El índice local está dañado y no se pudo respaldar ({exc}); "
+                    "se usa un índice vacío en memoria."
+                )
             return
         self._data = data
         self._uploaded = uploaded
@@ -56,6 +93,11 @@ class LocalIndex:
         return object_path in self._uploaded
 
     def save(self) -> None:
+        """Escritura atómica (temporal + replace). Propaga OSError tras limpiar el temporal.
+
+        Contrato: llamar a save() justo después de crear ids y antes de subir; agrupar
+        los guardados (no uno por objeto) cuando se marquen miles de objetos.
+        """
         payload = {**self._data, "uploaded": sorted(self._uploaded)}
         fd, tmp = tempfile.mkstemp(dir=self.folder, prefix=INDEX_NAME + ".", suffix=".tmp")
         try:

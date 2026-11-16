@@ -55,3 +55,57 @@ def test_corrupt_file_is_renamed_and_new_index_started(tmp_path):
     assert idx.inspection_id("A1") is None
     idx.save()
     assert json.loads((tmp_path / INDEX_NAME).read_text(encoding="utf-8"))["captures"] == {}
+
+
+def test_second_corruption_does_not_clobber_first_bak(tmp_path):
+    (tmp_path / INDEX_NAME).write_text("uno", encoding="utf-8")
+    LocalIndex(tmp_path)
+    (tmp_path / INDEX_NAME).write_text("dos", encoding="utf-8")
+    LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).read_text(encoding="utf-8") == "uno"
+    assert (tmp_path / (INDEX_NAME + ".bak.1")).read_text(encoding="utf-8") == "dos"
+
+
+def test_json_list_is_backed_up_and_empty(tmp_path):
+    (tmp_path / INDEX_NAME).write_text("[1, 2]", encoding="utf-8")
+    idx = LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).exists()
+    assert idx.inspection_id("A") is None
+    assert idx.load_warning
+
+
+def test_wrong_typed_uploaded_is_corrupt(tmp_path):
+    (tmp_path / INDEX_NAME).write_text(json.dumps({"uploaded": "abc"}), encoding="utf-8")
+    idx = LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).exists()
+    assert not idx.is_uploaded("a")
+    assert idx.load_warning
+
+
+def test_wrong_typed_mapping_is_corrupt(tmp_path):
+    (tmp_path / INDEX_NAME).write_text(json.dumps({"captures": {"a": 1}}), encoding="utf-8")
+    LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).exists()
+
+
+def test_folder_with_accents_and_spaces(tmp_path):
+    folder = tmp_path / "Año 2026" / "WTG 25"
+    folder.mkdir(parents=True)
+    idx = LocalIndex(folder)
+    cid = idx.capture_id("s")
+    idx.save()
+    assert LocalIndex(folder).capture_id("s") == cid
+    assert LocalIndex(folder).load_warning is None
+
+
+def test_oserror_on_rename_leaves_usable_empty_index(tmp_path, monkeypatch):
+    (tmp_path / INDEX_NAME).write_text("{roto", encoding="utf-8")
+
+    def boom(*a, **k):
+        raise PermissionError("denegado")
+
+    monkeypatch.setattr("nexus_desktop.storage.local_index.os.replace", boom)
+    idx = LocalIndex(tmp_path)
+    assert idx.load_warning
+    assert idx.inspection_id("A") is None
+    assert idx.capture_id("x")
