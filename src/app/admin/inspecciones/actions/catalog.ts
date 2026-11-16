@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AssetInputSchema, SiteInputSchema } from "@/contracts/inspections-admin";
 import { dbErrorMessage, fail, requireAdminAction, type ActionResult } from "@/lib/inspections/admin-action";
 import { optNum, optStr } from "@/lib/inspections/form";
+import { latestInspectionPositions } from "@/lib/inspections/map";
 import { createSessionClient } from "@/services/supabase/server";
 
 function revalidateCatalog(siteId?: string) {
@@ -105,6 +106,40 @@ export async function upsertAsset(fd: FormData): Promise<ActionResult> {
     });
     if (error) return fail(dbErrorMessage(error, "El activo se guardó, pero no las especificaciones de la turbina."));
   }
+  revalidateCatalog(asset.site_id);
+  return { ok: true };
+}
+
+/**
+ * «Usar posición de la última inspección» (§9.1): copia `asset_lat/asset_lon` de la inspección más
+ * reciente con posición a `assets.lat/lon`. Solo admin; la posición se lee en el servidor, no del formulario,
+ * y solo se escribe si el activo aún no tiene posición propia.
+ */
+export async function applyInspectionPosition(fd: FormData): Promise<ActionResult> {
+  const gate = await requireAdminAction();
+  if ("error" in gate) return gate.error;
+  const id = optStr(fd, "asset_id");
+  if (!id || !z.uuid().safeParse(id).success) return fail("Activo no válido.");
+
+  const sb = await createSessionClient();
+  if (!sb) return fail("El servicio no está configurado.");
+  const { data: asset } = await sb.from("assets").select("id, site_id, lat, lon").eq("id", id).maybeSingle();
+  if (!asset) return fail("No se encontró el activo.");
+  if (asset.lat != null && asset.lon != null) return fail("El activo ya tiene posición; edítala en «Editar».");
+
+  const { data: insp, error: inspErr } = await sb
+    .from("inspections")
+    .select("asset_id, created_at, asset_lat, asset_lon")
+    .eq("asset_id", id)
+    .not("asset_lat", "is", null)
+    .not("asset_lon", "is", null);
+  if (inspErr) return fail(dbErrorMessage(inspErr, "No se pudieron leer las inspecciones del activo."));
+  const pos = latestInspectionPositions(insp ?? []).get(id);
+  if (!pos) return fail("Ninguna inspección de este activo tiene posición.");
+
+  const { data, error } = await sb.from("assets").update({ lat: pos.lat, lon: pos.lon }).eq("id", id).select("id");
+  if (error) return fail(dbErrorMessage(error, "No se pudo guardar la posición del activo."));
+  if (!data?.length) return fail("No se encontró el activo.");
   revalidateCatalog(asset.site_id);
   return { ok: true };
 }

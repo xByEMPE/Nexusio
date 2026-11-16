@@ -338,7 +338,7 @@ expect(findingMeasurements({ type: "box", points: [[0,0],[0.1,0.1]] }, { ...cap,
 
 - [ ] **Step 1: Pruebas** de `turbineColor` (cada estado y severidad) y `boundsOf` (un punto → caja mínima con margen; varios puntos).
 - [ ] **Step 2:** FAIL → **Step 3:** `npm i maplibre-gl` e implementar → **Step 4:** `npm run test`, `npm run typecheck`, `npm run build` (confirmar en la salida que `maplibre-gl` no entra en el bundle de las demás páginas).
-- [ ] **Step 5: Verificación en navegador**: sitio del Cliente A → WTG-25 en ≈16.56, −94.74 con color «en revisión»; filtros; clic abre la ventana con la foto `_ID` y el enlace; sin `NEXT_PUBLIC_ESRI_API_KEY` no aparece Satélite; como `gerente@cliente-a.local` el mapa del proyecto se ve; como `gerente@cliente-b.local` el proyecto de A responde 404.
+- [ ] **Step 5: Verificación en navegador**: sitio del Cliente A → WTG-25 en la posición real de la WTG 25 (no se versiona) con color «en revisión»; filtros; clic abre la ventana con la foto `_ID` y el enlace; sin `NEXT_PUBLIC_ESRI_API_KEY` no aparece Satélite; como `gerente@cliente-a.local` el mapa del proyecto se ve; como `gerente@cliente-b.local` el proyecto de A responde 404.
 - [ ] **Step 6:** Commit.
 
 ---

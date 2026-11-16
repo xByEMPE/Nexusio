@@ -6,6 +6,8 @@ import { groupInt, type Size } from "./viewer-logic";
 
 export const MIN_POLYGON_POINTS = 3;
 export const HANDLE_HIT_PX = 10;
+/** Desplazamiento mínimo (px de pantalla) para que apoyar el puntero sobre un asa cuente como arrastre. */
+export const HANDLE_DRAG_PX = 4;
 export const FACES = ["LE", "PS", "TE", "SS"] as const;
 export type Face = (typeof FACES)[number];
 
@@ -51,6 +53,26 @@ export function moveVertex(region: Region, i: number, p: Pt, size: Size): Region
   if (i < 0 || i >= pts.length) return region;
   pts[i] = p;
   return toRegion(region.type, pts, size);
+}
+
+/** Las asas solo se muestran (y se pueden tomar) con «Mover», permiso de edición y sin herramienta térmica activa. */
+export function handlesEnabled(o: { canEdit: boolean; hasSelection: boolean; tool: string; thermalToolActive: boolean }): boolean {
+  return o.canEdit && o.hasSelection && o.tool === "move" && !o.thermalToolActive;
+}
+
+/** Si el puntero se alejó del punto de apoyo más del umbral (px de pantalla): solo entonces es un arrastre. */
+export function handleDragMoved(start: Pt, p: Pt, threshold = HANDLE_DRAG_PX): boolean {
+  return Math.hypot(p.x - start.x, p.y - start.y) > threshold;
+}
+
+/**
+ * Arrastre de un asa: el vértice `i` se desplaza lo mismo que el puntero (`p − start`, px del original),
+ * en vez de saltar al cursor; así apoyar el puntero cerca del asa no la mueve.
+ */
+export function dragVertex(region: Region, i: number, start: Pt, p: Pt, size: Size): Region {
+  const v = regionPoints(region, size)[i];
+  if (!v) return region;
+  return moveVertex(region, i, { x: v.x + (p.x - start.x), y: v.y + (p.y - start.y) }, size);
 }
 
 /** Índice del asa más cercana a `p` (px de pantalla) dentro de `radius`; null si ninguna. */

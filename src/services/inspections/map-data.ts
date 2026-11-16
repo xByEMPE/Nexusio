@@ -33,6 +33,8 @@ type AssetRow = { id: string; name: string; lat: number | null; lon: number | nu
 /**
  * Arma los marcadores con la sesión del usuario (RLS decide qué inspecciones y daños ve).
  * Un cliente solo ve sus proyectos; los daños no visibles no cuentan en severidad ni totales.
+ * Solo cuentan los daños confirmados (en admin también): el color es la «severidad máxima visible»,
+ * igual que en la vista del cliente; los detectados (IA) y descartados no tiñen el marcador.
  */
 async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId: string | null, scope: Scope): Promise<MapTurbine[]> {
   if (assets.length === 0) return [];
@@ -56,7 +58,7 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
   const inspIds = [...latest.values()].map((i) => i.id);
   const idCaptureIds = [...latest.values()].flatMap((i) => (i.id_capture_id ? [i.id_capture_id] : []));
   const [findings, caps] = await Promise.all([
-    inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds) : Promise.resolve({ data: [], error: null }),
+    inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds).eq("status", "confirmed") : Promise.resolve({ data: [], error: null }),
     idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
   ]);
 

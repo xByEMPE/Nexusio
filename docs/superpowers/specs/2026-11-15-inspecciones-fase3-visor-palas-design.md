@@ -367,3 +367,9 @@ Dependencias nuevas: `fast-png` (decodificar y generar PNG de 16 bits), `tsx` (e
 - **Foto `_ID`**: también se sube como captura (sin pala) y define `id_capture_id`.
 - **Mapa**: «Mapa» es una sección (no una pestaña) del detalle del sitio y solo aparece en parques eólicos. El worker de MapLibre se copia a `public/maplibre` con `postinstall`/`predev`/`prebuild`, con URL versionada. Esri (satélite) solo se activa con `NEXT_PUBLIC_ESRI_API_KEY` (llave pública, restringida por referer).
 - **Datos del cliente**: las coordenadas reales de la WTG 25 no se versionan en estos documentos.
+- **Acciones del visor**: viven en `src/lib/inspections/viewer-actions.ts` (compartidas por admin y portal), no en `actions/findings.ts`, `comments.ts` ni `src/app/portal/actions/*.ts` como dice §7.
+- **«Usar posición de la última inspección»** (§9.1): acción nueva solo para admin, `applyInspectionPosition` en `actions/catalog.ts` (misma puerta `requireAdminAction` y sesión del usuario), en vez de `upsertAsset`. Lee en el servidor la posición de la inspección más reciente con posición y la copia a `assets.lat/lon` solo si el activo no tiene posición propia. El botón aparece en cada activo del detalle del sitio que cumple esa condición.
+- **Editar un comentario de un daño**: `comments_update` exige además que el daño sea visible, igual que `comments_select` (migración `20261116000100_inspections_comments_update.sql`, prueba `11_comments_update.test.sql`).
+- **Asas del visor**: un clic sobre un asa sin arrastrar (≤ 4 px) no guarda nada; el vértice se desplaza lo mismo que el puntero (no salta al cursor); con una herramienta térmica activa no hay asas.
+- **Color del mapa (admin)**: solo cuentan los daños confirmados, igual que en el portal («severidad máxima visible»).
+- **Foto `_ID` en el visor**: no aparece en la lista de fotos del visor (solo en el mapa).

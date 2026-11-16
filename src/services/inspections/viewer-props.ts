@@ -18,7 +18,7 @@ export async function buildViewerProps(
   viewer: Viewer,
   query: { foto?: string | string[]; dano?: string | string[] },
 ): Promise<PhotoViewerData | null> {
-  const photos = toViewerPhotos(data);
+  const photos = toViewerPhotos(data, data.inspection.id_capture_id);
   const sel = initialSelection(data.findings, query.dano);
   const first = initialPhotoId(photos, sel?.photoId ?? query.foto);
   if (!first) return null;

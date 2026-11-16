@@ -92,6 +92,9 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const selected = findings.find((f) => f.id === sel.selectedId) ?? null;
   const splitPhoto = sel.splitId ? (photoById.get(sel.splitId) ?? null) : null;
 
+  // --- Modo térmico: la foto térmica se muestra con su propia matriz y su propio ViewState ------
+  const thermal = useThermal(photo);
+
   const regionMut = useViewerMutation();
   const editing = useFindingEditing({
     tool,
@@ -99,11 +102,9 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
     image,
     selected: selected?.capture_id === photo.id ? selected : null,
     canEdit: canEditHere,
+    thermalToolActive: thermal.active && thermal.tool !== "off",
     onSaveRegion: (id: string, region: Region) => regionMut.run(updateFinding, { id, region: JSON.stringify(region) }),
   });
-
-  // --- Modo térmico: la foto térmica se muestra con su propia matriz y su propio ViewState ------
-  const thermal = useThermal(photo);
   const pair = thermalPair(photos, photo);
   const thermalShown = thermal.active && thermal.matrix != null && thermal.range != null;
 

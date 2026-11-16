@@ -38,7 +38,7 @@ select is((select count(*) from public.change_log where table_name = 'blade_capt
 update public.inspections set status = 'captured' where id = :'insp_a';
 select ok((select count(*) = 1 from public.change_log where table_name = 'inspections' and action = 'update' and new ->> 'status' = 'captured'), 'inspections: status registrado');
 update public.inspections set notes = 'x' where id = :'insp_a';
-select is((select count(*) from public.change_log where table_name = 'inspections' and action = 'update'), 1::bigint, 'inspections: columna no vigilada ignorada');
+select is((select count(*) from public.change_log where table_name = 'inspections' and action = 'update' and row_id = :'insp_a'::uuid), 1::bigint, 'inspections: columna no vigilada ignorada');
 
 -- delete usa OLD
 delete from public.findings where id = :'f_a';

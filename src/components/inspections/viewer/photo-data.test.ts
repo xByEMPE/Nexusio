@@ -37,6 +37,19 @@ describe("toViewerPhotos", () => {
   });
 });
 
+describe("toViewerPhotos y la foto _ID", () => {
+  it("excluye la captura _ID de la inspección (sin datos de pala)", () => {
+    const idCap = { ...cap("id", null), blade: null, face: null, radius_center_m: null };
+    const data = { captures: [idCap, cap("a", null)], previewUrls: new Map<string, string>() };
+    expect(toViewerPhotos(data, "id").map((p) => p.id)).toEqual(["a"]);
+    expect(toViewerPhotos(data).map((p) => p.id)).toEqual(["id", "a"]);
+  });
+  it("no excluye una foto de pala aunque coincida el id", () => {
+    const data = { captures: [cap("a", null)], previewUrls: new Map<string, string>() };
+    expect(toViewerPhotos(data, "a").map((p) => p.id)).toEqual(["a"]);
+  });
+});
+
 describe("toViewerPhotos térmico", () => {
   it("expone la calibración y la pareja, sin la ruta de la matriz", () => {
     const c = { ...cap("t", null), spectrum: "thermal" as const, paired_capture_id: "a", thermal: { matrix_path: "m/matrix.png", temp_scale: 0.01, temp_offset: -40, t_min_c: 20, t_max_c: 70 } };

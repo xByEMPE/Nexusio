@@ -19,11 +19,17 @@ export type ViewerPhoto = {
   thermal: { temp_scale: number; temp_offset: number; t_min_c: number | null; t_max_c: number | null } | null;
 };
 
-/** Fotos del visor en el orden de `orderCaptures` (ya aplicado por `loadInspectionViewer`). */
+/**
+ * Fotos del visor en el orden de `orderCaptures` (ya aplicado por `loadInspectionViewer`). La foto `_ID`
+ * de la inspección (`inspections.id_capture_id`, sin datos de pala) solo da la posición de la turbina
+ * y se muestra en el mapa: no entra en la lista del visor.
+ */
 export function toViewerPhotos(
   data: Pick<InspectionViewerData, "captures" | "previewUrls"> & Partial<Pick<InspectionViewerData, "thumbUrls">>,
+  idCaptureId: string | null = null,
 ): ViewerPhoto[] {
-  return data.captures.map((c) => ({
+  const captures = idCaptureId ? data.captures.filter((c) => !(c.id === idCaptureId && c.blade == null)) : data.captures;
+  return captures.map((c) => ({
     id: c.id,
     file_name: c.file_name,
     spectrum: c.spectrum,

@@ -7,9 +7,10 @@ import { AssetFields, SiteFields } from "@/components/inspections/admin/SiteFiel
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { ASSET_KIND_LABEL, SITE_KIND_LABEL } from "@/lib/inspections/labels";
+import { canUseInspectionPosition, latestInspectionPositions } from "@/lib/inspections/map";
 import { loadSiteMap } from "@/services/inspections/map-data";
 import { createSessionClient } from "@/services/supabase/server";
-import { upsertAsset, upsertSite } from "../../actions/catalog";
+import { applyInspectionPosition, upsertAsset, upsertSite } from "../../actions/catalog";
 
 export const metadata = { title: "Sitio" };
 
@@ -33,6 +34,19 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
     .select("id, name, kind, code, lat, lon, wind_turbine_specs(manufacturer, model, blade_length_m, rotor_diameter_m, hub_height_m)")
     .eq("site_id", id)
     .order("name");
+
+  // Posición de la última inspección por activo, para «Usar posición de la última inspección» (§9.1).
+  const assetIds = (assets ?? []).map((a) => a.id);
+  const { data: inspPos } =
+    isAdmin && assetIds.length
+      ? await sb
+          .from("inspections")
+          .select("asset_id, created_at, asset_lat, asset_lon")
+          .in("asset_id", assetIds)
+          .not("asset_lat", "is", null)
+          .not("asset_lon", "is", null)
+      : { data: [] };
+  const inspectionPos = latestInspectionPositions(inspPos ?? []);
 
   const mapTurbines = site.kind === "wind_farm" ? await loadSiteMap(sb, id, "admin") : [];
 
@@ -93,6 +107,14 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                     <span className="text-xs text-foreground-muted">{ASSET_KIND_LABEL[a.kind]}</span>
                   </div>
                   {spec.length > 0 && <div className="tabular mt-1 text-xs text-foreground-muted">{spec.join(" · ")}</div>}
+                  {isAdmin && canUseInspectionPosition(a, inspectionPos.get(a.id)) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
+                      <span>Sin posición propia; la última inspección tiene una.</span>
+                      <ActionForm action={applyInspectionPosition} submitLabel="Usar posición de la última inspección" successMessage="Posición guardada." variant="secondary" inline>
+                        <input type="hidden" name="asset_id" value={a.id} />
+                      </ActionForm>
+                    </div>
+                  )}
                   {isAdmin && (
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-foreground-muted hover:text-foreground">Editar</summary>

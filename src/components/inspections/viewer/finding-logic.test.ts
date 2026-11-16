@@ -5,9 +5,12 @@ import {
   canDeleteComment,
   canEditComment,
   closestByFace,
+  dragVertex,
   fmtArea,
   fmtMm,
   fmtRadius,
+  handleDragMoved,
+  handlesEnabled,
   hitFinding,
   historyLines,
   modelLength,
@@ -75,6 +78,33 @@ describe("asas y selección", () => {
     const handles = [{ x: 10, y: 10 }, { x: 18, y: 10 }];
     expect(nearestHandle(handles, { x: 16, y: 11 })).toBe(1);
     expect(nearestHandle(handles, { x: 100, y: 100 })).toBeNull();
+  });
+
+  it("apoyar sin moverse (≤ 4 px) no es arrastre: no se guarda", () => {
+    expect(handleDragMoved({ x: 100, y: 100 }, { x: 100, y: 100 })).toBe(false);
+    expect(handleDragMoved({ x: 100, y: 100 }, { x: 103, y: 102 })).toBe(false);
+    expect(handleDragMoved({ x: 100, y: 100 }, { x: 105, y: 100 })).toBe(true);
+  });
+
+  it("el vértice se desplaza lo mismo que el puntero, sin saltar al cursor", () => {
+    const sz = { w: 1000, h: 500 };
+    const poly: Region = { type: "polygon", points: [[0.1, 0.1], [0.5, 0.1], [0.3, 0.5]] };
+    // Apoyo a 8 px del vértice 0 (100, 50) y arrastro 20 px a la derecha y 10 abajo.
+    const r = dragVertex(poly, 0, { x: 108, y: 55 }, { x: 128, y: 65 }, sz);
+    expect(r.points[0]).toEqual([0.12, 0.12]);
+    expect(r.points.slice(1)).toEqual(poly.points.slice(1));
+    // Sin desplazamiento la región queda igual aunque el apoyo no esté sobre el vértice.
+    expect(dragVertex(poly, 0, { x: 108, y: 55 }, { x: 108, y: 55 }, sz)).toEqual(poly);
+    expect(dragVertex(poly, 9, { x: 0, y: 0 }, { x: 5, y: 5 }, sz)).toBe(poly);
+  });
+
+  it("sin asas con una herramienta térmica activa, sin permiso o fuera de «Mover»", () => {
+    const base = { canEdit: true, hasSelection: true, tool: "move", thermalToolActive: false };
+    expect(handlesEnabled(base)).toBe(true);
+    expect(handlesEnabled({ ...base, thermalToolActive: true })).toBe(false);
+    expect(handlesEnabled({ ...base, canEdit: false })).toBe(false);
+    expect(handlesEnabled({ ...base, tool: "area" })).toBe(false);
+    expect(handlesEnabled({ ...base, hasSelection: false })).toBe(false);
   });
 
   it("punto en polígono", () => {

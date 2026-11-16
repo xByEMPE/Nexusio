@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { imageToScreen, screenToImage, type Pt, type Region, type ViewState } from "@/lib/blade";
 import type { ViewerFinding } from "./finding-data";
-import { MIN_POLYGON_POINTS, moveVertex, nearestHandle, regionPoints, toRegion } from "./finding-logic";
+import { MIN_POLYGON_POINTS, dragVertex, handleDragMoved, handlesEnabled, nearestHandle, regionPoints, toRegion } from "./finding-logic";
 import type { ShapeDraft } from "./FindingShapes";
 import type { Tool } from "./Toolbar";
 import { addVertex, type Size } from "./viewer-logic";
@@ -15,7 +15,9 @@ const regionKey = (r: Region | null) => JSON.stringify(r);
 
 /**
  * Dibujo de un daño nuevo (recuadro con 2 clics; polígono con clics y «Cerrar») y edición de
- * vértices del daño elegido arrastrando sus asas. La región se guarda al soltar el asa.
+ * vértices del daño elegido arrastrando sus asas. La región se guarda al soltar el asa, solo si hubo
+ * arrastre (más de `HANDLE_DRAG_PX`); el vértice se desplaza lo mismo que el puntero. Con una herramienta
+ * térmica activa no hay asas: sus clics nunca se convierten en ediciones de la región.
  */
 export function useFindingEditing({
   tool,
@@ -23,6 +25,7 @@ export function useFindingEditing({
   image,
   selected,
   canEdit,
+  thermalToolActive,
   onSaveRegion,
 }: {
   tool: Tool;
@@ -30,12 +33,14 @@ export function useFindingEditing({
   image: Size;
   selected: ViewerFinding | null;
   canEdit: boolean;
+  thermalToolActive: boolean;
   onSaveRegion: (id: string, region: Region) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState<(ShapeDraft & { ready: boolean }) | null>(null);
   // `start`: región al empezar el arrastre. Cada movimiento parte de ella (no de la última), para que al
   // cruzar las esquinas de un recuadro (que se reordenan) el índice siga apuntando a la esquina tomada.
-  const [drag, setDrag] = useState<{ id: string; index: number; start: Region; region: Region } | null>(null);
+  // `from`: punto de apoyo (px de pantalla); `moved`: si ya pasó el umbral de arrastre.
+  const [drag, setDrag] = useState<{ id: string; index: number; start: Region; region: Region; from: Pt; moved: boolean } | null>(null);
   const [saved, setSaved] = useState<{ id: string; region: Region; baseKey: string } | null>(null);
 
   const drawType: Region["type"] | null = tool === "newBox" ? "box" : tool === "newPolygon" ? "polygon" : null;
@@ -44,7 +49,8 @@ export function useFindingEditing({
   const pendingSaved = saved && selected && saved.id === selected.id && saved.baseKey === regionKey(selected.region) ? saved : null;
   const override = drag ?? pendingSaved;
   const editRegion = selected ? (override?.id === selected.id ? override.region : selected.region) : null;
-  const handles = canEdit && selected && editRegion && tool === "move" ? regionPoints(editRegion, image) : null;
+  const handles =
+    selected && editRegion && handlesEnabled({ canEdit, hasSelection: true, tool, thermalToolActive }) ? regionPoints(editRegion, image) : null;
 
   /** Clic en la foto con una herramienta de daño nuevo; devuelve si lo usó. */
   const tap = (screen: Pt): boolean => {
@@ -87,21 +93,27 @@ export function useFindingEditing({
     if (!handles || !selected || !editRegion) return false;
     const i = nearestHandle(handles.map((h) => imageToScreen(h, view)), screen);
     if (i == null) return false;
-    setDrag({ id: selected.id, index: i, start: editRegion, region: editRegion });
+    setDrag({ id: selected.id, index: i, start: editRegion, region: editRegion, from: screen, moved: false });
     return true;
   };
 
+  const dragged = (d: NonNullable<typeof drag>, screen: Pt) =>
+    dragVertex(d.start, d.index, screenToImage(d.from, view), screenToImage(screen, view), image);
+
   const pressMove = (screen: Pt) => {
     if (!drag) return;
-    const p = screenToImage(screen, view);
-    setDrag({ ...drag, region: moveVertex(drag.start, drag.index, p, image) });
+    const moved = drag.moved || handleDragMoved(drag.from, screen);
+    if (!moved) return;
+    setDrag({ ...drag, moved, region: dragged(drag, screen) });
   };
 
   const pressEnd = async (screen: Pt | null) => {
     const d = drag;
     setDrag(null);
     if (!d || !screen || !selected) return;
-    const region = moveVertex(d.start, d.index, screenToImage(screen, view), image);
+    // Un clic sobre el asa (sin pasar el umbral) no edita nada.
+    if (!d.moved && !handleDragMoved(d.from, screen)) return;
+    const region = dragged(d, screen);
     if (regionKey(region) === regionKey(selected.region)) return;
     setSaved({ id: d.id, region, baseKey: regionKey(selected.region) });
     const ok = await onSaveRegion(d.id, region);

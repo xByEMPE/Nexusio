@@ -39,3 +39,24 @@ export function boundsOf(points: { lat: number; lon: number }[]): [[number, numb
   }
   return [[minLon, minLat], [maxLon, maxLat]];
 }
+
+type InspectionPos = { asset_id: string; created_at: string; asset_lat: number | null; asset_lon: number | null };
+
+/**
+ * Posición de la inspección más reciente con posición, por activo (§9.1). Sirve para la acción
+ * «Usar posición de la última inspección» del admin: solo se ofrece si el activo no tiene `lat/lon`.
+ */
+export function latestInspectionPositions(rows: InspectionPos[]): Map<string, { lat: number; lon: number }> {
+  const best = new Map<string, { at: string; lat: number; lon: number }>();
+  for (const r of rows) {
+    if (r.asset_lat == null || r.asset_lon == null) continue;
+    const cur = best.get(r.asset_id);
+    if (!cur || r.created_at > cur.at) best.set(r.asset_id, { at: r.created_at, lat: r.asset_lat, lon: r.asset_lon });
+  }
+  return new Map([...best].map(([id, b]) => [id, { lat: b.lat, lon: b.lon }]));
+}
+
+/** Si al activo le falta posición propia y hay una de inspección para copiar. */
+export function canUseInspectionPosition(asset: { lat: number | null; lon: number | null }, fromInspection: { lat: number; lon: number } | undefined): boolean {
+  return (asset.lat == null || asset.lon == null) && fromInspection != null;
+}
