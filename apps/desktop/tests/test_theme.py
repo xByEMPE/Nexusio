@@ -68,15 +68,24 @@ def test_font_tuple():
     assert theme.font(10, "bold")[1:] == (10, "bold")
 
 
-@pytest.fixture
-def root():
+@pytest.fixture(scope="module")
+def _tk_root():
+    # Una sola raíz Tk por módulo: crear/destruir varias en el mismo proceso hace que
+    # Tcl a veces no encuentre init.tcl en Windows (fallo intermitente observado).
     try:
         r = tk.Tk()
-    except tk.TclError:
-        pytest.skip("sin pantalla")
+    except tk.TclError as exc:
+        pytest.skip(f"sin pantalla: {exc}")
     r.withdraw()
     yield r
     r.destroy()
+
+
+@pytest.fixture
+def root(_tk_root):
+    yield _tk_root
+    for child in _tk_root.winfo_children():
+        child.destroy()
 
 
 def test_apply_theme_defines_accent_button_style(root):
@@ -115,3 +124,68 @@ def test_demo_window_updates_without_error(root):
     tk.Listbox(root).pack()
     tk.Toplevel(root).destroy()
     root.update()
+
+
+def contrast_ratio(fg: str, bg: str) -> float:
+    def lum(c: str) -> float:
+        out = []
+        for v in _hex_to_rgb(c):
+            v /= 255
+            out.append(v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4)
+        return 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2]
+
+    a, b = sorted((lum(fg), lum(bg)), reverse=True)
+    return (a + 0.05) / (b + 0.05)
+
+
+@pytest.mark.parametrize("style", ["Accent.TButton", "Danger.TButton", "TButton"])
+@pytest.mark.parametrize("state", [[], ["active"], ["pressed"], ["disabled"]])
+def test_button_contrast_aa(root, style, state):
+    theme.apply_theme(root)
+    st = ttk.Style(root)
+    fg = st.lookup(style, "foreground", state)
+    bg = st.lookup(style, "background", state)
+    assert contrast_ratio(fg, bg) >= 4.5, (style, state, fg, bg)
+
+
+def test_button_states_are_distinct(root):
+    theme.apply_theme(root)
+    st = ttk.Style(root)
+    for style in ("Accent.TButton", "Danger.TButton"):
+        bgs = {st.lookup(style, "background", s) for s in ([], ["active"], ["pressed"], ["disabled"])}
+        assert len(bgs) == 4, style
+
+
+@pytest.mark.parametrize("fg", ["text_muted", "text_subtle"])
+@pytest.mark.parametrize("bg", ["background", "surface", "raised"])
+def test_secondary_text_contrast(fg, bg):
+    assert contrast_ratio(theme.TOKENS[fg], theme.TOKENS[bg]) >= 4.5
+
+
+def test_apply_theme_twice_is_idempotent(root):
+    theme.apply_theme(root)
+    st = ttk.Style(root)
+    probe = [("Accent.TButton", "background"), ("TEntry", "fieldbackground"), ("Treeview", "background")]
+    first = [st.lookup(a, b) for a, b in probe]
+    maps = st.map("Accent.TButton")
+    theme.apply_theme(root)
+    assert [st.lookup(a, b) for a, b in probe] == first
+    assert st.map("Accent.TButton") == maps
+
+
+def test_accent_button_map_entries(root):
+    theme.apply_theme(root)
+    m = ttk.Style(root).map("Accent.TButton", "background")
+    states = {s for s, _ in m}
+    assert {"active", "pressed", "disabled"} <= states
+
+
+def test_configured_colors(root):
+    theme.apply_theme(root)
+    st = ttk.Style(root)
+    assert st.lookup("Muted.TLabel", "foreground") == theme.TOKENS["text_muted"]
+    assert st.lookup("TEntry", "fieldbackground") == theme.TOKENS["raised"]
+    assert st.lookup("Treeview", "background") == theme.TOKENS["surface"]
+    assert st.lookup("Panel.TLabel", "background") == theme.TOKENS["surface"]
+    assert st.lookup("Panel.Muted.TLabel", "background") == theme.TOKENS["surface"]
+    assert st.lookup("Panel.Muted.TLabel", "foreground") == theme.TOKENS["text_muted"]

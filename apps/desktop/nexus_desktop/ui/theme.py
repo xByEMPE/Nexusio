@@ -35,15 +35,13 @@ def logo_path() -> Path:
 
 def _font_family() -> str:
     global _family
-    if _family is None:
-        try:
-            available = set(tkfont.families())
-        except (tk.TclError, RuntimeError):  # sin ventana raíz todavía
-            available = set()
-        _family = next((f for f in _FAMILY_CANDIDATES if f in available), "TkDefaultFont")
-        if not available:
-            _family = "Segoe UI"
-            return _family  # no se memoiza: aún no hay Tk
+    if _family is not None:
+        return _family
+    try:
+        available = set(tkfont.families())
+    except (tk.TclError, RuntimeError):  # sin ventana raíz todavía: no se memoiza
+        return "Segoe UI"
+    _family = next((f for f in _FAMILY_CANDIDATES if f in available), "TkDefaultFont")
     return _family
 
 
@@ -100,6 +98,8 @@ def apply_theme(root: tk.Tk) -> None:
 
     s.configure("TLabel", background=t["background"], foreground=t["text"])
     s.configure("Muted.TLabel", foreground=t["text_muted"])
+    s.configure("Panel.TLabel", background=t["surface"])
+    s.configure("Panel.Muted.TLabel", background=t["surface"], foreground=t["text_muted"])
     s.configure("Title.TLabel", font=font(16, "bold"))
 
     def button(style: str, bg: str, fg: str, hover: str, pressed: str, disabled_bg: str) -> None:
@@ -115,10 +115,10 @@ def apply_theme(root: tk.Tk) -> None:
 
     button("TButton", t["raised"], t["text"], t["border"], t["border_strong"], t["surface"])
     s.configure("TButton", bordercolor=t["border_strong"])
-    button("Accent.TButton", t["accent_button"], "#ffffff", _shade(t["accent_button"], 1.18),
-           _shade(t["accent_button"], 0.78), t["accent_deep"])
-    button("Danger.TButton", t["critical"], "#ffffff", _shade(t["critical"], 1.12),
-           _shade(t["critical"], 0.80), t["raised"])
+    button("Accent.TButton", t["accent_button"], "#ffffff", _shade(t["accent_button"], 0.88),
+           _shade(t["accent_button"], 0.74), t["raised"])
+    button("Danger.TButton", t["critical"], t["background"], _shade(t["critical"], 1.12),
+           _shade(t["critical"], 0.88), t["raised"])
 
     for style in ("TEntry", "TCombobox"):
         s.configure(style, fieldbackground=t["raised"], foreground=t["text"],
