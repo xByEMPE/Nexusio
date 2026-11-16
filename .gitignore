@@ -22,7 +22,10 @@ EXIF/
 
 .env*.local
 supabase/.branches
-scripts/ingest_demo/.venv/
+apps/desktop/.venv/
+apps/desktop/dist/
+apps/desktop/build/
+apps/desktop/models/*.onnx
 __pycache__/
 
 *.egg-info/

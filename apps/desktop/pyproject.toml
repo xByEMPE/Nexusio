@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-desktop"
+version = "0.1.0"
+description = "App de escritorio NEXUS: procesa fotos de inspección y las sube a la plataforma"
+requires-python = ">=3.12"
+dependencies = [
+  "pillow",
+  "tuspy",
+  "supabase",
+  "jsonschema",
+  "numpy",
+  "opencv-python",
+  "onnxruntime",
+  "openpyxl",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["nexus_desktop*"]
+
+[tool.setuptools.package-data]
+nexus_desktop = ["schema/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

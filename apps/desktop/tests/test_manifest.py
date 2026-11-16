@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 from jsonschema import ValidationError
 
-from ingest_demo.manifest import build_manifest, object_prefix, validate
+from nexus_desktop.nexus.manifest import build_manifest, object_prefix, validate
 
 ORG = "11111111-1111-4111-8111-111111111111"
 PROJECT = "22222222-2222-4222-8222-222222222222"
@@ -39,3 +41,16 @@ def test_validate_rejects_bad_manifest():
 def test_validate_rejects_empty_manifest():
     with pytest.raises(ValidationError):
         validate(build_manifest(PROJECT, INSPECTION, []))
+
+
+def test_schema_copy_matches_repo():
+    from nexus_desktop.nexus.manifest import SCHEMA_PATH
+    repo = Path(__file__).resolve().parents[3] / "src" / "contracts" / "ingest-manifest.v1.schema.json"
+    assert SCHEMA_PATH.read_text(encoding="utf-8") == repo.read_text(encoding="utf-8")
+
+
+def test_build_manifest_includes_mosaics_and_app():
+    from nexus_desktop import config
+    m = build_manifest("p", INSPECTION, [], mosaics=[{"id": "x"}])
+    assert m["mosaics"] == [{"id": "x"}]
+    assert m["app"] == {"name": config.APP_NAME, "version": config.VERSION}

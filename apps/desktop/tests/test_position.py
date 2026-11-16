@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from ingest_demo.position import find_id_photo, turbine_position
+from nexus_desktop.domain.position import find_id_photo, turbine_position
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "m4e_id_exif.json").read_text(encoding="utf-8"))
 

@@ -7,24 +7,26 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-from . import __version__
+from .. import config
 
-SCHEMA_PATH = Path(__file__).resolve().parents[3] / "src" / "contracts" / "ingest-manifest.v1.schema.json"
+SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schema" / "ingest-manifest.v1.schema.json"
 
 
 def object_prefix(org_id: str, project_id: str, inspection_id: str) -> str:
     return f"{org_id}/{project_id}/{inspection_id}/".lower()
 
 
-def build_manifest(project_id: str, inspection: dict, captures: list[dict], findings: list[dict] | None = None) -> dict:
+def build_manifest(project_id: str, inspection: dict, captures: list[dict],
+                   findings: list[dict] | None = None, mosaics: list[dict] | None = None) -> dict:
     return {
         "manifest_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "app": {"name": "nexus-ingest-demo", "version": __version__},
+        "app": {"name": config.APP_NAME, "version": config.VERSION},
         "project_id": project_id,
         "inspection": inspection,
         "captures": captures,
         "findings": list(findings or []),
+        "mosaics": list(mosaics or []),
     }
 
 

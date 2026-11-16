@@ -1,4 +1,4 @@
-from ingest_demo.exif import num
+from nexus_desktop.domain.exif import num
 
 
 def test_num_parses_signed_strings():

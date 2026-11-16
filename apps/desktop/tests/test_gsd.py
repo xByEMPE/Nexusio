@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ingest_demo.gsd import compute_gsd
+from nexus_desktop.domain.gsd import compute_gsd
 
 FIX = Path(__file__).parent / "fixtures"
 
