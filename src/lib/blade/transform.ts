@@ -72,22 +72,33 @@ export function rotatedSize(imageW: number, imageH: number, deg: number): { w: n
 
 /**
  * Desplazamiento de un eje: el contenedor mide `len`, la zona útil es [start, len − end] y la foto
- * (encuadre girado) mide `size` px de pantalla. Si cabe, queda pegada al inicio (izquierda/arriba);
- * si es mayor, se puede desplazar pero siempre cubre la zona útil (sin huecos más allá de sus bordes).
+ * (encuadre girado) mide `size` px de pantalla. Si cabe, queda pegada al inicio (`anchorEnd` falso)
+ * o al final (`anchorEnd` verdadero); si es mayor, se puede desplazar pero siempre cubre la zona útil
+ * (sin huecos más allá de sus bordes).
  */
-export function clampPanAxis(pan: number, len: number, size: number, start: number, end: number): number {
-  const anchored = start - len / 2 + size / 2; // borde de la foto en `start`
-  if (size <= len - start - end) return anchored;
+export function clampPanAxis(
+  pan: number,
+  len: number,
+  size: number,
+  start: number,
+  end: number,
+  anchorEnd = false,
+): number {
+  const max = start - len / 2 + size / 2; // borde de la foto en `start`
   const min = len - end - len / 2 - size / 2; // borde opuesto en `len − end`
-  return Math.min(anchored, Math.max(min, pan));
+  if (size <= len - start - end) return anchorEnd ? min : max;
+  return Math.min(max, Math.max(min, pan));
 }
 
-/** Desplazamiento permitido para la vista (foto fija a la izquierda y arriba; con zoom, sin huecos). */
+/**
+ * Desplazamiento permitido para la vista: foto pegada a la regla izquierda y a la regla inferior;
+ * con zoom, sin huecos.
+ */
 export function clampPan(v: ViewState, insets: Insets = NO_INSETS): { panX: number; panY: number } {
   const b = rotatedSize(v.imageW, v.imageH, v.rotationDeg);
   return {
     panX: clampPanAxis(v.panX, v.containerW, b.w * v.zoom, insets.left, 0),
-    panY: clampPanAxis(v.panY, v.containerH, b.h * v.zoom, 0, insets.bottom),
+    panY: clampPanAxis(v.panY, v.containerH, b.h * v.zoom, 0, insets.bottom, true),
   };
 }
 

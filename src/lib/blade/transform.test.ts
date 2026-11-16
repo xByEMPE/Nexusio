@@ -55,7 +55,7 @@ describe("vista fija (ajuste a la izquierda y desplazamiento limitado)", () => {
     expect(rotatedSize(4000, 6000, 180)).toEqual({ w: 4000, h: 6000 });
   });
 
-  it("si la foto cabe en un eje, queda pegada al inicio (izquierda/arriba) aunque se intente mover", () => {
+  it("si la foto cabe en un eje, queda pegada a la izquierda y abajo aunque se intente mover", () => {
     // 4000·0.1 = 400 px de ancho en 800: pegada a la izquierda; 6000·0.1 = 600 llena el alto.
     for (const pan of [-300, 0, 250]) {
       const c = clampPan({ ...base, panX: pan, panY: pan });
@@ -96,7 +96,7 @@ describe("vista fija (ajuste a la izquierda y desplazamiento limitado)", () => {
     const e = edges({ ...r, ...clampPan({ ...r, panX: 300, panY: 300 }) });
     expect(e.left).toBeCloseTo(0);
     expect(e.right).toBeCloseTo(600);
-    expect(e.top).toBeCloseTo(0);
+    expect(e.bottom).toBeCloseTo(600); // 400 px de alto en 600: pegada abajo
   });
 
   it("clampPanAxis: tamaño exacto a la zona útil = sin desplazamiento posible", () => {

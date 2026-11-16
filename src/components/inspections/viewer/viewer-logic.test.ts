@@ -37,12 +37,12 @@ describe("fitTransform", () => {
     const b = imageToScreen({ x: img.w, y: img.h }, v);
     return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) };
   };
-  it("llena el alto (o el ancho, si limita) sin margen y queda pegada a la izquierda", () => {
+  it("llena el alto (o el ancho, si limita) sin margen y queda pegada a la izquierda y abajo", () => {
     const t = fitTransform(container, image, 0);
     expect(t.zoom).toBeCloseTo(Math.min(800 / 5280, 600 / 3956));
     const e = leftTop(t);
     expect(e.left).toBeCloseTo(0);
-    expect(e.top).toBeCloseTo(0);
+    expect(e.bottom).toBeCloseTo(600); // apaisada limitada por el ancho: pegada abajo, junto a la regla
     // Foto vertical en contenedor apaisado: llena el alto, pegada a la izquierda.
     const tall = { w: 3000, h: 6000 };
     const e2 = leftTop(fitTransform(container, tall, 0), container, tall);
@@ -52,7 +52,7 @@ describe("fitTransform", () => {
     const t = fitTransform(container, image, 90);
     expect(t.zoom).toBeCloseTo(Math.min(800 / 3956, 600 / 5280));
     expect(leftTop(t).left).toBeCloseTo(0);
-    expect(leftTop(t).top).toBeCloseTo(0);
+    expect(leftTop(t).bottom).toBeCloseTo(600);
   });
   it("deja libres los márgenes de las reglas", () => {
     const tall = { w: 3000, h: 6000 };
