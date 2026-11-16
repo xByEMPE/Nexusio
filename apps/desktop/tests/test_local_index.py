@@ -109,3 +109,23 @@ def test_oserror_on_rename_leaves_usable_empty_index(tmp_path, monkeypatch):
     assert idx.load_warning
     assert idx.inspection_id("A") is None
     assert idx.capture_id("x")
+
+
+def test_invalid_utf8_is_backed_up_and_empty(tmp_path):
+    (tmp_path / INDEX_NAME).write_bytes(b"\xff\xfe\x00")
+    idx = LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).read_bytes() == b"\xff\xfe\x00"
+    assert idx.inspection_id("A") is None
+    assert idx.load_warning
+
+
+def test_read_oserror_leaves_usable_empty_index(tmp_path, monkeypatch):
+    (tmp_path / INDEX_NAME).write_text("{}", encoding="utf-8")
+
+    def boom(self, *a, **k):
+        raise PermissionError("bloqueado")
+
+    monkeypatch.setattr("pathlib.Path.read_text", boom)
+    idx = LocalIndex(tmp_path)
+    assert idx.load_warning
+    assert idx.capture_id("x")

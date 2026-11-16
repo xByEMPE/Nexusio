@@ -35,11 +35,28 @@ class LocalIndex:
             raise ValueError("mapa inválido")
         return dict(value)
 
+    def _quarantine(self) -> None:
+        try:
+            backup = self._backup_path()
+            os.replace(self.path, backup)
+            self.load_warning = (
+                f"El índice local estaba dañado; se guardó copia en {backup.name} "
+                "y se empezó uno nuevo."
+            )
+        except OSError as exc:
+            self.load_warning = (
+                f"El índice local está dañado y no se pudo respaldar ({exc}); "
+                "se usa un índice vacío en memoria."
+            )
+
     def _load(self) -> None:
         if not self.path.exists():
             return
         try:
             text = self.path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            self._quarantine()
+            return
         except OSError as exc:
             self.load_warning = (
                 f"No se pudo leer el índice local ({exc}); se usa un índice vacío."
@@ -58,18 +75,7 @@ class LocalIndex:
                 raise ValueError("uploaded inválido")
             uploaded = set(up)
         except (ValueError, TypeError):
-            try:
-                backup = self._backup_path()
-                os.replace(self.path, backup)
-                self.load_warning = (
-                    f"El índice local estaba dañado; se guardó copia en {backup.name} "
-                    "y se empezó uno nuevo."
-                )
-            except OSError as exc:
-                self.load_warning = (
-                    f"El índice local está dañado y no se pudo respaldar ({exc}); "
-                    "se usa un índice vacío en memoria."
-                )
+            self._quarantine()
             return
         self._data = data
         self._uploaded = uploaded
