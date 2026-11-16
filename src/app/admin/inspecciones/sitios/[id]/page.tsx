@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
+import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { AssetFields, SiteFields } from "@/components/inspections/admin/SiteFields";
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { ASSET_KIND_LABEL, SITE_KIND_LABEL } from "@/lib/inspections/labels";
+import { loadSiteMap } from "@/services/inspections/map-data";
 import { createSessionClient } from "@/services/supabase/server";
 import { upsertAsset, upsertSite } from "../../actions/catalog";
 
@@ -32,6 +34,8 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
     .eq("site_id", id)
     .order("name");
 
+  const mapTurbines = site.kind === "wind_farm" ? await loadSiteMap(sb, id, "admin") : [];
+
   return (
     <div className="max-w-4xl">
       <Link href={`/admin/inspecciones/sitios?org=${site.organization_id}`} className="text-xs text-foreground-muted hover:text-foreground">
@@ -56,6 +60,13 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
             <SiteFields organizationId={site.organization_id} defaults={{ kind: site.kind, name: site.name, lat: site.lat, lon: site.lon }} />
           </ActionForm>
         </details>
+      )}
+
+      {site.kind === "wind_farm" && (
+        <section className="mt-8">
+          <h2 className="label-caps mb-3">Mapa</h2>
+          <ParkMapLoader turbines={mapTurbines} />
+        </section>
       )}
 
       <section className="mt-8">

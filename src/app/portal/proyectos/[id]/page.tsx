@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { PortalHeader } from "@/components/inspections/portal/PortalHeader";
 import { requireClient } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { INSPECTION_KIND_LABEL, INSPECTION_STATUS_LABEL, PROJECT_STATUS_LABEL, formatDay } from "@/lib/inspections/labels";
+import { loadProjectMap } from "@/services/inspections/map-data";
 import { createSessionClient } from "@/services/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +34,7 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
     .eq("project_id", id)
     .order("created_at");
 
+  const mapTurbines = await loadProjectMap(sb, id, "portal");
   const start = formatDay(project.start_date);
   const end = formatDay(project.end_date);
 
@@ -52,6 +55,13 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
             </span>
           )}
         </p>
+
+        {mapTurbines.length > 0 && (
+          <section className="mt-8">
+            <h2 className="label-caps mb-3">Mapa</h2>
+            <ParkMapLoader turbines={mapTurbines} />
+          </section>
+        )}
 
         <section className="mt-8">
           <h2 className="label-caps mb-3">Inspecciones</h2>

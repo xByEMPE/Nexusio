@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, SelectField } from "@/components/inspections/admin/ActionForm";
+import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { ProjectFields } from "@/components/inspections/admin/ProjectFields";
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { formatContacts } from "@/lib/inspections/form";
 import { INSPECTION_KIND_LABEL, INSPECTION_STATUS_LABEL, PROJECT_STATUS_LABEL } from "@/lib/inspections/labels";
+import { loadProjectMap } from "@/services/inspections/map-data";
 import { createSessionClient } from "@/services/supabase/server";
 import {
   assignUser,
@@ -56,6 +58,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     ? await sb.from("assets").select("id, name, kind, sites(name)").in("site_id", linkedSiteIds).order("name")
     : { data: [] };
 
+  const mapTurbines = await loadProjectMap(sb, id, "admin");
   const linkedSet = new Set(linkedSiteIds);
   const assignedSet = new Set((assigned.data ?? []).map((a) => a.user_id));
   const availableSites = (orgSites?.data ?? []).filter((s) => !linkedSet.has(s.id));
@@ -97,6 +100,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <section className="mt-6">
           <h2 className="label-caps">Contactos</h2>
           <pre className="panel mt-3 whitespace-pre-wrap p-5 text-xs text-foreground-muted">{formatContacts(project.contacts)}</pre>
+        </section>
+      )}
+
+      {mapTurbines.length > 0 && (
+        <section className="mt-8">
+          <h2 className="label-caps mb-3">Mapa</h2>
+          <ParkMapLoader turbines={mapTurbines} />
         </section>
       )}
 

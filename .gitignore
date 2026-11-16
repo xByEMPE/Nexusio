@@ -7,6 +7,9 @@ out
 next-env.d.ts
 supabase/.temp
 
+# Worker de MapLibre copiado por scripts/copy-maplibre-worker.mjs
+public/maplibre/
+
 # Material fuente pesado (el video web optimizado está en public/media)
 material/*.mp4
 
