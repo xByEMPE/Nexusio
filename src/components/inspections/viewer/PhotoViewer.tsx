@@ -13,7 +13,7 @@ import { ImageStage, DEFAULT_FILTERS, type ImageFilters } from "./ImageStage";
 import { SplitStage } from "./OtherFaces";
 import { OverlayLayer } from "./OverlayLayer";
 import type { ViewerPhoto } from "./photo-data";
-import { Ruler } from "./Ruler";
+import { BottomRuler, Ruler, RULER_H, RULER_W } from "./Ruler";
 import { StageHud } from "./StageHud";
 import { ThermalCanvas, ThermalShapes } from "./ThermalCanvas";
 import { SpectrumSwitch, ThermalControls } from "./ThermalControls";
@@ -31,7 +31,7 @@ import { useViewerMutation } from "./useViewerMutation";
 import { useViewerSelection } from "./useViewerSelection";
 import { useViewState } from "./useViewState";
 import { ViewerSidePanel } from "./ViewerSidePanel";
-import { cancelApplies, crosshairText, frameFor, neighbors, scaleStatus } from "./viewer-logic";
+import { cancelApplies, crosshairText, frameFor, neighbors, rulerInsets, scaleStatus } from "./viewer-logic";
 
 export type PhotoViewerData = {
   photos: ViewerPhoto[];
@@ -72,15 +72,18 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const stageRef = useRef<HTMLDivElement>(null);
   const container = useElementSize(stageRef);
   const image = { w: photo.width_px, h: photo.height_px };
-  const { view, zoomBy, panBy, rotate, fit, reset } = useViewState(image, container);
+  const [rulerOn, setRulerOn] = useState(true);
+  // Vista fija a la izquierda; la foto se ajusta a la zona que no ocupan las reglas.
+  const insetsFor = (rot: number) => rulerInsets(scaleStatus(photo, rot), rulerOn, RULER_W, RULER_H);
+  const { view, zoomBy, panBy, rotate, fit, reset } = useViewState(image, container, insetsFor);
 
   const [filters, setFilters] = useState<ImageFilters>(DEFAULT_FILTERS);
   const [tool, setTool] = useState<Tool>("move");
-  const [rulerOn, setRulerOn] = useState(true);
   const [cursor, setCursor] = useState<Pt | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const status = { ...scaleStatus(photo, view.rotationDeg), frame: frameFor(photo, tipAtTop) };
+  const insets = insetsFor(view.rotationDeg);
   const desktop = useIsDesktop();
   const canEditHere = capabilities.editFindings && desktop;
 
@@ -122,11 +125,12 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const original = useOriginalImage(photo, view.zoom, setMessage);
 
   // --- Herramientas ----------------------------------------------------------------------------
-  const areaTool = useAreaTool({ active: tool === "area", view, gsd: photo.gsd_mm_px });
+  const measuring = tool === "area" || tool === "distance";
+  const areaTool = useAreaTool({ mode: tool === "area" || tool === "distance" ? tool : null, view, gsd: photo.gsd_mm_px });
   const chooseTool = (t: Tool) => {
     setTool(t);
     if (t !== "move") thermal.chooseTool("off");
-    if (t !== "area") areaTool.cancelDraft();
+    areaTool.cancelDraft();
     editing.clearDraft();
     setMessage(null);
   };
@@ -161,7 +165,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
         const id = hitFinding(photoFindings, screenToImage(p, view), image);
         return sel.select(id ? (findings.find((f) => f.id === id) ?? null) : null);
       }
-      if (tool === "area" && status.canMeasure) areaTool.tap(p);
+      if (measuring && status.canMeasure) areaTool.tap(p);
     },
     onPressStart: editing.pressStart,
     onPressMove: editing.pressMove,
@@ -171,7 +175,8 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const crosshair = tool === "crosshair" && cursor ? { screen: cursor, text: crosshairText(screenToImage(cursor, view), status.frame) } : null;
   const measured = container.w > 0 && container.h > 0;
   const rulerShown = rulerOn && status.ruler && status.frame != null;
-  const drawing = tool === "area" || ((tool === "newBox" || tool === "newPolygon") && !editing.draftRegion);
+  const bottomRulerShown = rulerOn && status.bottomRuler && photo.gsd_mm_px != null;
+  const drawing = measuring || ((tool === "newBox" || tool === "newPolygon") && !editing.draftRegion);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2px] border border-border-subtle" data-mode={mode}>
@@ -185,7 +190,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
         onTool={chooseTool}
         canMeasure={status.canMeasure}
         rulerOn={rulerOn}
-        rulerAvailable={status.ruler}
+        rulerAvailable={status.ruler || status.bottomRuler}
         onToggleRuler={() => setRulerOn((v) => !v)}
         onDownload={() => void original.download(photo.file_name)}
         spectrumSwitch={pair ? <SpectrumSwitch thermalActive={photo.spectrum === "thermal"} rgbId={pair.rgbId} thermalId={pair.thermalId} onGo={sel.goTo} /> : undefined}
@@ -224,8 +229,9 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
                 <OverlayLayer
                   view={view}
                   crosshair={crosshair}
-                  measureDraft={tool === "area" ? areaTool.draft : null}
+                  measureDraft={areaTool.draft}
                   measurements={areaTool.measurements}
+                  distances={areaTool.distances}
                   onRemoveMeasurement={areaTool.remove}
                   shapes={
                     <>
@@ -234,18 +240,20 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
                     </>
                   }
                 />
-                {rulerShown && <Ruler view={view} frame={status.frame!} estimated={status.estimated} />}
+                {rulerShown && <Ruler view={view} frame={status.frame!} estimated={status.estimated} bottom={insets.bottom} />}
+                {bottomRulerShown && <BottomRuler view={view} gsd={photo.gsd_mm_px!} estimated={status.estimated} left={insets.left} />}
               </>
             )}
             <StageHud
               status={status}
-              rulerShown={rulerShown}
+              rulerShown={rulerShown || bottomRulerShown}
+              insets={insets}
               notice={message ?? regionMut.error}
               tool={tool}
               drawing={drawing}
               points={editing.draft?.points.length ?? 0}
               onCloseShape={closeShape}
-              measurementCount={areaTool.measurements.length}
+              measurementCount={areaTool.count}
               onClearMeasurements={areaTool.clear}
               newFinding={
                 editing.draftRegion

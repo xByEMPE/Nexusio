@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distanceToLine, findingMeasurements, polygonAreaPx, rectangleFrom3Points, rectangleMeasurements } from "./measure";
+import { distanceToLine, findingMeasurements, polygonAreaPx, rectangleFrom3Points, rectangleMeasurements, segmentMeasurement } from "./measure";
 import { radiusAtRow } from "./radius";
 import { rulerTicks } from "./ruler";
 
@@ -152,5 +152,42 @@ describe("rectangleMeasurements: empates y lados nulos", () => {
   it("distanceToLine", () => {
     expect(distanceToLine({ x: 5, y: 3 }, { x: 0, y: 0 }, { x: 10, y: 0 })).toBe(3);
     expect(distanceToLine({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(5);
+  });
+});
+
+describe("segmentMeasurement", () => {
+  const at = (deg: number, len = 100) => {
+    const a = (deg * Math.PI) / 180;
+    return { x: 10 + Math.sin(a) * len, y: 20 + Math.cos(a) * len };
+  };
+  const o = { x: 10, y: 20 };
+
+  it("distancia en mm con el GSD", () => {
+    expect(segmentMeasurement({ x: 0, y: 0 }, { x: 30, y: 40 }, 2).distance_mm).toBe(100);
+    expect(segmentMeasurement({ x: 30, y: 40 }, { x: 0, y: 0 }, 0.5).distance_mm).toBe(25);
+  });
+
+  it("tipo según el ángulo con la vertical de la foto", () => {
+    expect(segmentMeasurement(o, at(0), 1).kind).toBe("longitudinal");
+    expect(segmentMeasurement(o, at(10), 1).kind).toBe("longitudinal");
+    expect(segmentMeasurement(o, at(180 + 10), 1).kind).toBe("longitudinal"); // hacia arriba
+    expect(segmentMeasurement(o, at(30), 1).kind).toBe("diagonal");
+    expect(segmentMeasurement(o, at(60), 1).kind).toBe("diagonal");
+    expect(segmentMeasurement(o, at(80), 1).kind).toBe("transversal");
+    expect(segmentMeasurement(o, at(90), 1).kind).toBe("transversal");
+    expect(segmentMeasurement(o, at(-85), 1).kind).toBe("transversal"); // hacia la izquierda
+  });
+
+  it("límites exactos: 15° longitudinal, 75° transversal, 45° diagonal", () => {
+    expect(segmentMeasurement(o, at(15), 1).kind).toBe("longitudinal");
+    expect(segmentMeasurement(o, at(15.01), 1).kind).toBe("diagonal");
+    expect(segmentMeasurement(o, at(75), 1).kind).toBe("transversal");
+    expect(segmentMeasurement(o, at(74.99), 1).kind).toBe("diagonal");
+    expect(segmentMeasurement(o, at(45), 1).kind).toBe("diagonal");
+    expect(segmentMeasurement({ x: 0, y: 0 }, { x: 100, y: 100 }, 1).kind).toBe("diagonal");
+  });
+
+  it("entrada degenerada: dos puntos iguales dan 0 mm y longitudinal", () => {
+    expect(segmentMeasurement(o, o, 3)).toEqual({ distance_mm: 0, kind: "longitudinal" });
   });
 });

@@ -1,11 +1,10 @@
 "use client";
 
 import type { ReactNode, SyntheticEvent } from "react";
-import type { Region } from "@/lib/blade";
+import type { Insets, Region } from "@/lib/blade";
 import type { ViewerFindingType } from "./finding-data";
 import { MIN_POLYGON_POINTS } from "./finding-logic";
 import { NewFindingForm } from "./FindingEditor";
-import { RULER_W } from "./Ruler";
 import type { Tool } from "./Toolbar";
 import type { ScaleStatus } from "./viewer-logic";
 
@@ -27,6 +26,7 @@ const stop = (e: SyntheticEvent) => e.stopPropagation();
 export function StageHud({
   status,
   rulerShown,
+  insets,
   notice,
   tool,
   drawing,
@@ -37,7 +37,10 @@ export function StageHud({
   newFinding,
 }: {
   status: ScaleStatus;
+  /** Alguna regla visible. */
   rulerShown: boolean;
+  /** Márgenes que ocupan las reglas. */
+  insets: Insets;
   notice: string | null;
   tool: Tool;
   /** Hay un dibujo en curso (área o daño nuevo). */
@@ -45,7 +48,7 @@ export function StageHud({
   /** Vértices del dibujo en curso. */
   points: number;
   onCloseShape: () => void;
-  /** Mediciones de área en pantalla (temporales). */
+  /** Mediciones en pantalla (áreas y distancias, temporales). */
   measurementCount: number;
   onClearMeasurements: () => void;
   newFinding: { inspectionId: string; captureId: string; region: Region; types: ViewerFindingType[]; onDone: () => void; onCancel: () => void } | null;
@@ -62,8 +65,8 @@ export function StageHud({
 
       {(drawing || measurementCount > 0) && (
         <div
-          className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 text-2xs"
-          style={{ marginLeft: rulerShown ? RULER_W / 2 : 0 }}
+          className="absolute left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 text-2xs"
+          style={{ marginLeft: insets.left / 2, bottom: insets.bottom + 8 }}
           onPointerDown={stop}
           onDoubleClick={stop}
         >
@@ -71,9 +74,11 @@ export function StageHud({
             <Notice>
               {tool === "area"
                 ? "2 clics marcan un lado y el 3.º el lado opuesto · Esc cancela"
-                : tool === "newBox"
-                  ? "Clic en dos esquinas opuestas · Esc cancela"
-                  : "Clic en cada vértice · doble clic o «Cerrar» · Esc cancela"}
+                : tool === "distance"
+                  ? "Clic en el inicio y en el final · Esc cancela"
+                  : tool === "newBox"
+                    ? "Clic en dos esquinas opuestas · Esc cancela"
+                    : "Clic en cada vértice · doble clic o «Cerrar» · Esc cancela"}
             </Notice>
           )}
           {drawing && tool === "newPolygon" && (
@@ -101,7 +106,7 @@ export function StageHud({
       )}
 
       {newFinding && (
-        <div className="absolute left-2 top-2 z-30" style={{ marginLeft: rulerShown ? RULER_W : 0 }} onPointerDown={stop} onDoubleClick={stop}>
+        <div className="absolute left-2 top-2 z-30" style={{ marginLeft: insets.left }} onPointerDown={stop} onDoubleClick={stop}>
           <NewFindingForm {...newFinding} />
         </div>
       )}

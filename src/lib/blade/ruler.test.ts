@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rowAtRadius } from "./radius";
 import { imageToScreen } from "./transform";
-import { rulerStep, rulerTicks } from "./ruler";
+import { horizontalRulerTicks, rulerStep, rulerTicks } from "./ruler";
 
 const f = { rc_m: 10, gsd_mm_px: 1, height_px: 3000, tipAtTop: true };
 const v = { zoom: 1, panX: 0, panY: 0, rotationDeg: 0, containerW: 800, containerH: 600, imageW: 5280, imageH: 3000 };
@@ -58,5 +58,56 @@ describe("rulerTicks", () => {
       const y = imageToScreen({ x: w.imageW / 2, y: rowAtRadius(t.r_m, f) }, w).y;
       expect(t.y).toBeCloseTo(y);
     }
+  });
+});
+
+describe("horizontalRulerTicks", () => {
+  // Foto 2000 px de ancho, GSD 1 mm/px, zoom 0.4 → 800 px de pantalla, centro en x = 400.
+  const h = { zoom: 0.4, panX: 0, panY: 0, rotationDeg: 0, containerW: 800, containerH: 600, imageW: 2000, imageH: 3000 };
+
+  it("0 en la columna central de la foto", () => {
+    const ticks = horizontalRulerTicks(h, 1);
+    const zero = ticks.find((t) => t.offset_mm === 0);
+    expect(zero?.label).toBe("0");
+    expect(zero?.x).toBeCloseTo(imageToScreen({ x: 1000, y: 0 }, h).x);
+    expect(zero?.x).toBeCloseTo(400);
+  });
+
+  it("simétrica y con etiquetas positivas a los dos lados", () => {
+    const ticks = horizontalRulerTicks(h, 1);
+    const step = rulerStep(h.zoom, 1) * 1000; // 200 mm
+    expect(step).toBeCloseTo(200);
+    for (const t of ticks) {
+      expect(Number(t.label)).toBeGreaterThanOrEqual(0);
+      expect(t.label).toBe(String(Math.round(Math.abs(t.offset_mm))));
+      const mirror = ticks.find((m) => m.offset_mm === -t.offset_mm);
+      expect(mirror?.label).toBe(t.label);
+      expect(mirror!.x - 400).toBeCloseTo(400 - t.x);
+    }
+    const left = ticks.find((t) => t.offset_mm === -200);
+    const right = ticks.find((t) => t.offset_mm === 200);
+    expect(left?.label).toBe("200");
+    expect(right?.label).toBe("200");
+    expect(left?.x).toBeCloseTo(320);
+    expect(right?.x).toBeCloseTo(480);
+  });
+
+  it("respeta zoom y desplazamiento, y solo da marcas visibles", () => {
+    const w = { ...h, zoom: 2, panX: 900 };
+    const ticks = horizontalRulerTicks(w, 1);
+    expect(ticks.length).toBeGreaterThan(0);
+    for (const t of ticks) {
+      expect(t.x).toBeGreaterThanOrEqual(-50);
+      expect(t.x).toBeLessThanOrEqual(850);
+      expect(t.x).toBeCloseTo(imageToScreen({ x: 1000 + t.offset_mm, y: 0 }, w).x);
+    }
+    // Centro de la foto en 400 + 900 = 1300: fuera de la pantalla, sin marca 0.
+    expect(ticks.find((t) => t.offset_mm === 0)).toBeUndefined();
+  });
+
+  it("sin GSD o con giro no hay marcas", () => {
+    expect(horizontalRulerTicks(h, 0)).toEqual([]);
+    expect(horizontalRulerTicks({ ...h, rotationDeg: 90 }, 1)).toEqual([]);
+    expect(horizontalRulerTicks({ ...h, rotationDeg: 360 }, 1).length).toBeGreaterThan(0);
   });
 });

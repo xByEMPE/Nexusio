@@ -48,3 +48,33 @@ export function rulerTicks(v: ViewState, f: BladeFrame): RulerTick[] {
   }
   return ticks;
 }
+
+export type HorizontalRulerTick = { x: number; offset_mm: number; label: string };
+
+/**
+ * Marcas de la regla inferior en columnas de pantalla: 0 en la columna central de la foto (x = W/2)
+ * y la distancia en mm hacia los dos lados, siempre positiva (|x − W/2|·GSD). Mismo paso 1·2·5·10
+ * (unos 80 px). Solo con la vista sin girar; sin GSD o con giro no hay marcas. `offset_mm` lleva el signo
+ * (negativo a la izquierda) para identificar cada marca; la etiqueta no.
+ */
+export function horizontalRulerTicks(v: ViewState, gsd_mm_px: number): HorizontalRulerTick[] {
+  if (((v.rotationDeg % 360) + 360) % 360 !== 0) return [];
+  if (!(gsd_mm_px > 0) || !(v.zoom > 0)) return [];
+
+  const lo = -MARGIN_PX;
+  const hi = v.containerW + MARGIN_PX;
+  const cx = v.imageW / 2;
+  const mmAtScreenX = (x: number): number => (screenToImage({ x, y: v.containerH / 2 }, v).x - cx) * gsd_mm_px;
+  const step_mm = rulerStep(v.zoom, gsd_mm_px) * 1000;
+  const kMin = Math.ceil(mmAtScreenX(lo) / step_mm);
+  const kMax = Math.floor(mmAtScreenX(hi) / step_mm);
+
+  const ticks: HorizontalRulerTick[] = [];
+  for (let k = kMin; k <= kMax; k++) {
+    const offset_mm = Math.round(k * step_mm * 1e6) / 1e6;
+    const x = imageToScreen({ x: cx + offset_mm / gsd_mm_px, y: v.imageH / 2 }, v).x;
+    if (x < lo || x > hi) continue;
+    ticks.push({ x, offset_mm: offset_mm === 0 ? 0 : offset_mm, label: String(Math.round(Math.abs(offset_mm))) });
+  }
+  return ticks;
+}

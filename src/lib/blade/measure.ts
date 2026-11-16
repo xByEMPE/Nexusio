@@ -128,3 +128,27 @@ export function rectangleMeasurements(corners: Corners, gsd_mm_px: number): Rect
     area_mm2: clean(l1 * l2 * gsd_mm_px * gsd_mm_px),
   };
 }
+
+// --- Distancia entre 2 puntos (herramienta «Medir distancia» del visor) ---------------------------
+
+export type SegmentKind = "longitudinal" | "transversal" | "diagonal";
+export type SegmentMeasurement = { distance_mm: number; kind: SegmentKind };
+
+/** Hasta este ángulo (°) con la vertical de la foto el segmento es longitudinal; desde 90 − esto, transversal. */
+export const SEGMENT_AXIS_TOLERANCE_DEG = 15;
+
+/**
+ * Distancia (mm) entre 2 puntos en px del original con el GSD en mm/px, y su tipo según el ángulo con
+ * la vertical de la foto (a lo largo de la pala): ≤ 15° longitudinal, ≥ 75° (≤ 15° de la horizontal)
+ * transversal y, entre medias, diagonal. Los límites exactos (15° y 75°) cuentan como longitudinal y
+ * transversal. Dos puntos iguales dan 0 mm y «longitudinal».
+ */
+export function segmentMeasurement(p1: Pt, p2: Pt, gsd_mm_px: number): SegmentMeasurement {
+  const dx = Math.abs(p2.x - p1.x);
+  const dy = Math.abs(p2.y - p1.y);
+  const deg = (Math.atan2(dx, dy) * 180) / Math.PI; // 0° vertical, 90° horizontal
+  const EPS = 1e-9;
+  const kind: SegmentKind =
+    deg <= SEGMENT_AXIS_TOLERANCE_DEG + EPS ? "longitudinal" : deg >= 90 - SEGMENT_AXIS_TOLERANCE_DEG - EPS ? "transversal" : "diagonal";
+  return { distance_mm: clean(Math.hypot(dx, dy) * gsd_mm_px), kind };
+}

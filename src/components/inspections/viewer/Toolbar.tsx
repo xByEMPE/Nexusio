@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { DEFAULT_FILTERS, type ImageFilters } from "./ImageStage";
 
 /** `newBox`/`newPolygon`: dibujar un daño nuevo (solo con `capabilities.editFindings`). */
-export type Tool = "move" | "crosshair" | "area" | "newBox" | "newPolygon";
+export type Tool = "move" | "crosshair" | "area" | "distance" | "newBox" | "newPolygon";
 
 const FACE_LABEL: Record<string, string> = { TE: "Borde de salida", PS: "Lado de presión", LE: "Borde de ataque", SS: "Lado de succión" };
 
@@ -161,6 +161,14 @@ export function Toolbar({
             title={canMeasure ? "3 clics: 2 puntos para un lado y un 3.º para el lado opuesto" : "Esta foto no tiene escala"}
           >
             Medir área
+          </ToolButton>
+          <ToolButton
+            active={tool === "distance"}
+            onClick={() => onTool("distance")}
+            disabled={!canMeasure}
+            title={canMeasure ? "2 clics: longitudinal, transversal o diagonal según la inclinación" : "Esta foto no tiene escala"}
+          >
+            Medir distancia
           </ToolButton>
           <ToolButton active={rulerOn} onClick={onToggleRuler} disabled={!rulerAvailable} title={rulerAvailable ? "Mostrar u ocultar la regla" : "Regla no disponible en esta foto o vista"}>
             Regla

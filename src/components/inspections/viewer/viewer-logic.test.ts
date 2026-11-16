@@ -4,6 +4,10 @@ import {
   addVertex,
   addMeasurePoint,
   cancelApplies,
+  constrainTransform,
+  addDistancePoint,
+  distanceReadout,
+  rulerInsets,
   MAX_ORIGINAL_ATTEMPTS,
   shouldRequestOriginal,
   crosshairText,
@@ -25,24 +29,113 @@ const container = { w: 800, h: 600 };
 const image = { w: 5280, h: 3956 };
 
 describe("fitTransform", () => {
-  it("encaja sin giro y centra", () => {
+  const leftTop = (t: ReturnType<typeof fitTransform>, c = container, img = image) => {
+    const v = toViewState(t, c, img);
+    const a = imageToScreen({ x: 0, y: 0 }, v);
+    const b = imageToScreen({ x: img.w, y: img.h }, v);
+    return { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) };
+  };
+  it("llena el alto (o el ancho, si limita) sin margen y queda pegada a la izquierda", () => {
     const t = fitTransform(container, image, 0);
-    expect(t.zoom).toBeCloseTo(Math.min(800 / 5280, 600 / 3956) * 0.9);
-    expect(t).toMatchObject({ panX: 0, panY: 0, rotationDeg: 0 });
+    expect(t.zoom).toBeCloseTo(Math.min(800 / 5280, 600 / 3956));
+    const e = leftTop(t);
+    expect(e.left).toBeCloseTo(0);
+    expect(e.top).toBeCloseTo(0);
+    // Foto vertical en contenedor apaisado: llena el alto, pegada a la izquierda.
+    const tall = { w: 3000, h: 6000 };
+    const e2 = leftTop(fitTransform(container, tall, 0), container, tall);
+    expect(e2).toMatchObject({ left: expect.closeTo(0), top: expect.closeTo(0), bottom: expect.closeTo(600), right: expect.closeTo(300) });
   });
   it("con 90° usa las medidas intercambiadas", () => {
     const t = fitTransform(container, image, 90);
-    expect(t.zoom).toBeCloseTo(Math.min(800 / 3956, 600 / 5280) * 0.9);
+    expect(t.zoom).toBeCloseTo(Math.min(800 / 3956, 600 / 5280));
+    expect(leftTop(t).left).toBeCloseTo(0);
+    expect(leftTop(t).top).toBeCloseTo(0);
+  });
+  it("deja libres los márgenes de las reglas", () => {
+    const tall = { w: 3000, h: 6000 };
+    const t = fitTransform(container, tall, 0, { left: 64, bottom: 30 });
+    expect(t.zoom).toBeCloseTo(570 / 6000);
+    const e = leftTop(t, container, tall);
+    expect(e.left).toBeCloseTo(64);
+    expect(e.bottom).toBeCloseTo(570);
   });
   it("normaliza el ángulo", () => {
     expect(fitTransform(container, image, -90).rotationDeg).toBe(270);
     expect(fitTransform(container, image, 450).rotationDeg).toBe(90);
   });
   it("en un celular el ajuste puede quedar por debajo de MIN_ZOOM", () => {
-    expect(fitTransform({ w: 360, h: 400 }, image, 0).zoom).toBeCloseTo((360 / 5280) * 0.9);
+    expect(fitTransform({ w: 360, h: 400 }, image, 0).zoom).toBeCloseTo(360 / 5280);
   });
   it("contenedor sin medir: zoom 1", () => {
     expect(fitTransform({ w: 0, h: 0 }, image, 0).zoom).toBe(1);
+  });
+});
+
+describe("constrainTransform (vista fija)", () => {
+  const fit = fitTransform(container, image, 0);
+  it("en el zoom de ajuste no se puede desplazar", () => {
+    const moved = constrainTransform(panTransform(fit, 120, -80), container, image);
+    expect(moved.panX).toBeCloseTo(fit.panX);
+    expect(moved.panY).toBeCloseTo(fit.panY);
+  });
+  it("no deja alejar por debajo del ajuste", () => {
+    const out = constrainTransform(zoomAt(fit, container, 0.5, { x: 700, y: 500 }), container, image);
+    expect(out.zoom).toBeCloseTo(fit.zoom);
+    expect(out.panX).toBeCloseTo(fit.panX);
+    expect(out.panY).toBeCloseTo(fit.panY);
+  });
+  it("con zoom se desplaza sin huecos y el zoom hacia el cursor se respeta dentro de los límites", () => {
+    const z = constrainTransform(zoomAt(fit, container, 3, { x: 200, y: 300 }), container, image);
+    expect(z.zoom).toBeCloseTo(fit.zoom * 3);
+    const v = toViewState(z, container, image);
+    const before = screenToImage({ x: 200, y: 300 }, toViewState(fit, container, image));
+    const after = imageToScreen(before, v);
+    expect(after.x).toBeCloseTo(200);
+    expect(after.y).toBeCloseTo(300);
+    for (const [dx, dy] of [[5000, 5000], [-5000, -5000]] as const) {
+      const p = toViewState(constrainTransform(panTransform(z, dx, dy), container, image), container, image);
+      const a = imageToScreen({ x: 0, y: 0 }, p);
+      const b = imageToScreen({ x: image.w, y: image.h }, p);
+      expect(a.x).toBeLessThanOrEqual(1e-6);
+      expect(a.y).toBeLessThanOrEqual(1e-6);
+      expect(b.x).toBeGreaterThanOrEqual(800 - 1e-6);
+      expect(b.y).toBeGreaterThanOrEqual(600 - 1e-6);
+    }
+  });
+  it("con giro limita el encuadre girado", () => {
+    const r = fitTransform(container, image, 90);
+    const moved = constrainTransform(panTransform(r, 300, 300), container, image);
+    expect(moved.panX).toBeCloseTo(r.panX);
+    expect(moved.panY).toBeCloseTo(r.panY);
+  });
+  it("contenedor sin medir: no cambia nada", () => {
+    const t = { zoom: 2, panX: 5, panY: 6, rotationDeg: 0 };
+    expect(constrainTransform(t, { w: 0, h: 0 }, image)).toEqual(t);
+  });
+});
+
+describe("rulerInsets", () => {
+  it("márgenes solo para las reglas visibles", () => {
+    expect(rulerInsets({ ruler: true, bottomRuler: true }, true, 64, 30)).toEqual({ left: 64, bottom: 30 });
+    expect(rulerInsets({ ruler: false, bottomRuler: true }, true, 64, 30)).toEqual({ left: 0, bottom: 30 });
+    expect(rulerInsets({ ruler: true, bottomRuler: true }, false, 64, 30)).toEqual({ left: 0, bottom: 0 });
+  });
+});
+
+describe("medir distancia", () => {
+  it("2 clics dan el segmento; un 2.º clic casi encima del 1.º se ignora", () => {
+    const one = addDistancePoint([], { x: 10, y: 10 }, 4);
+    expect(one).toEqual({ points: [{ x: 10, y: 10 }], segment: null });
+    expect(addDistancePoint(one.points, { x: 12, y: 11 }, 4)).toEqual({ points: [{ x: 10, y: 10 }], segment: null });
+    expect(addDistancePoint(one.points, { x: 10, y: 110 }, 4)).toEqual({ points: [], segment: [{ x: 10, y: 10 }, { x: 10, y: 110 }] });
+  });
+  it("lectura en mm con tipo; null sin GSD", () => {
+    expect(distanceReadout({ x: 0, y: 0 }, { x: 0, y: 100 }, 2)).toEqual({ distance_mm: 200, kind: "longitudinal" });
+    expect(distanceReadout({ x: 0, y: 0 }, { x: 100, y: 0 }, 2)?.kind).toBe("transversal");
+    expect(distanceReadout({ x: 0, y: 0 }, { x: 100, y: 100 }, 2)?.kind).toBe("diagonal");
+    expect(distanceReadout({ x: 0, y: 0 }, { x: 0, y: 100 }, null)).toBeNull();
+    expect(distanceReadout({ x: 0, y: 0 }, { x: 0, y: 100 }, 0)).toBeNull();
   });
 });
 
@@ -110,8 +203,9 @@ describe("navegación", () => {
 describe("scaleStatus", () => {
   const full = { gsd_mm_px: 0.97, radius_center_m: 20, gsd_confidence: "high" as const };
   it("con GSD y radio: regla salvo si está girada", () => {
-    expect(scaleStatus(full, 0)).toMatchObject({ ruler: true, canMeasure: true, hasRadius: true, estimated: false, noScale: false });
+    expect(scaleStatus(full, 0)).toMatchObject({ bottomRuler: true, ruler: true, canMeasure: true, hasRadius: true, estimated: false, noScale: false });
     expect(scaleStatus(full, 90).ruler).toBe(false);
+    expect(scaleStatus(full, 90).bottomRuler).toBe(false);
     expect(scaleStatus(full, 360).ruler).toBe(true);
     expect(scaleStatus(full, 90).hasRadius).toBe(true);
   });
@@ -119,10 +213,10 @@ describe("scaleStatus", () => {
     expect(scaleStatus({ ...full, gsd_confidence: "low" }, 0).estimated).toBe(true);
   });
   it("sin GSD: sin escala, sin regla ni medición", () => {
-    expect(scaleStatus({ ...full, gsd_mm_px: null }, 0)).toMatchObject({ noScale: true, ruler: false, canMeasure: false, hasRadius: false });
+    expect(scaleStatus({ ...full, gsd_mm_px: null }, 0)).toMatchObject({ noScale: true, bottomRuler: false, ruler: false, canMeasure: false, hasRadius: false });
   });
   it("GSD sin radio: se mide, pero sin regla ni radio", () => {
-    expect(scaleStatus({ ...full, radius_center_m: null }, 0)).toMatchObject({ canMeasure: true, ruler: false, hasRadius: false, noScale: false });
+    expect(scaleStatus({ ...full, radius_center_m: null }, 0)).toMatchObject({ canMeasure: true, ruler: false, bottomRuler: true, hasRadius: false, noScale: false });
   });
 });
 
@@ -225,5 +319,6 @@ describe("cancelApplies", () => {
     expect(cancelApplies("move", true)).toBe(true);
     expect(cancelApplies("crosshair", false)).toBe(true);
     expect(cancelApplies("area", false)).toBe(true);
+    expect(cancelApplies("distance", false)).toBe(true);
   });
 });

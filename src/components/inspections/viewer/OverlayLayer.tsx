@@ -3,7 +3,7 @@
 import type { ReactNode, SyntheticEvent } from "react";
 import { imageToScreen, rectangleFrom3Points, type Pt, type ViewState } from "@/lib/blade";
 import type { MeasureDraft } from "./useAreaTool";
-import { groupInt, type AreaMeasurement } from "./viewer-logic";
+import { groupInt, type AreaMeasurement, type DistanceMeasurement } from "./viewer-logic";
 
 /** Transformación SVG equivalente a la CSS de la imagen: dentro del grupo se dibuja en px del original. */
 export function imageGroupTransform(v: ViewState): string {
@@ -13,7 +13,11 @@ export function imageGroupTransform(v: ViewState): string {
 const LABEL_BG = "rgba(0,0,0,0.72)";
 
 const MEASURE_STROKE = "#38BDF8";
+const DISTANCE_STROKE = "#A3E635";
 const LABEL_W = 196;
+const DISTANCE_LABEL_W = 176;
+
+const KIND_LABEL = { longitudinal: "Longitudinal", transversal: "Transversal", diagonal: "Diagonal" } as const;
 const LABEL_LINE = 15;
 
 // El botón ✕ no debe iniciar gestos del escenario (ni añadir puntos).
@@ -21,15 +25,26 @@ const stop = (e: SyntheticEvent) => e.stopPropagation();
 
 const ptsAttr = (pts: Pt[]) => pts.map((p) => `${p.x},${p.y}`).join(" ");
 
-/** Etiqueta de una medición, en px de pantalla, encima de la esquina más alta del rectángulo. */
-function labelOf(m: AreaMeasurement, view: ViewState): { at: Pt; lines: string[] } {
+type Label = { id: number; at: Pt; lines: string[]; w: number; kind: "area" | "distance" };
+
+/** Etiqueta de una medición de área, en px de pantalla, encima de la esquina más alta del rectángulo. */
+function areaLabel(m: AreaMeasurement, view: ViewState): Label {
   const s = m.corners.map((p) => imageToScreen(p, view));
   const at = { x: s.reduce((a, p) => a + p.x, 0) / s.length, y: Math.min(...s.map((p) => p.y)) - 8 };
   const r = m.readout;
   const lines = r
     ? [`Longitudinal ${groupInt(r.longitudinal_mm)} mm`, `Transversal ${groupInt(r.transversal_mm)} mm`, `Área ${groupInt(r.area_mm2)} mm²`]
     : ["Sin escala"];
-  return { at, lines };
+  return { id: m.id, at, lines, w: LABEL_W, kind: "area" };
+}
+
+/** Etiqueta de una distancia, en px de pantalla, encima del punto medio del segmento. */
+function distanceLabel(d: DistanceMeasurement, view: ViewState): Label {
+  const a = imageToScreen(d.a, view);
+  const b = imageToScreen(d.b, view);
+  const at = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 10 };
+  const r = d.readout;
+  return { id: d.id, at, lines: [r ? `${KIND_LABEL[r.kind]} ${groupInt(r.distance_mm)} mm` : "Sin escala"], w: DISTANCE_LABEL_W, kind: "distance" };
 }
 
 /**
@@ -41,6 +56,7 @@ export function OverlayLayer({
   crosshair,
   measureDraft = null,
   measurements = [],
+  distances = [],
   onRemoveMeasurement,
   shapes,
 }: {
@@ -49,20 +65,24 @@ export function OverlayLayer({
   shapes?: ReactNode;
   /** Cursor en px del contenedor y texto (radio o coordenadas). */
   crosshair: { screen: Pt; text: string } | null;
-  /** Medición de área en curso (1 o 2 puntos y el cursor). */
+  /** Medición en curso (área: 1 o 2 puntos; distancia: 1 punto; y el cursor). */
   measureDraft?: MeasureDraft | null;
   /** Mediciones de área terminadas (temporales). */
   measurements?: AreaMeasurement[];
+  /** Distancias terminadas (temporales). */
+  distances?: DistanceMeasurement[];
   onRemoveMeasurement?: (id: number) => void;
 }) {
   const vertexR = 4 / view.zoom;
   const dPts = measureDraft?.points ?? [];
   const cur = measureDraft?.cursor ?? null;
   let preview: Pt[] | null = null;
+  const isDistance = measureDraft?.mode === "distance";
+  const stroke = isDistance ? DISTANCE_STROKE : MEASURE_STROKE;
   if (dPts.length === 1 && cur) preview = [dPts[0]!, cur];
   else if (dPts.length === 2 && cur) preview = rectangleFrom3Points(dPts[0]!, dPts[1]!, cur);
   const removable = onRemoveMeasurement != null;
-  const labels = measurements.map((m) => ({ id: m.id, ...labelOf(m, view) }));
+  const labels = [...measurements.map((m) => areaLabel(m, view)), ...distances.map((d) => distanceLabel(d, view))];
 
   return (
     <>
@@ -80,29 +100,43 @@ export function OverlayLayer({
             data-testid="area-polygon"
           />
         ))}
+        {distances.map((d) => (
+          <line
+            key={d.id}
+            x1={d.a.x}
+            y1={d.a.y}
+            x2={d.b.x}
+            y2={d.b.y}
+            stroke={DISTANCE_STROKE}
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+            data-testid="distance-line"
+          />
+        ))}
+        {distances.flatMap((d) => [d.a, d.b].map((p, i) => <circle key={`${d.id}-${i}`} cx={p.x} cy={p.y} r={vertexR} fill={DISTANCE_STROKE} stroke="#1A2E05" strokeWidth={1} vectorEffect="non-scaling-stroke" />))}
         {preview && (
           <polygon
             points={ptsAttr(preview)}
-            fill="rgba(56,189,248,0.08)"
-            stroke={MEASURE_STROKE}
+            fill={isDistance ? "none" : "rgba(56,189,248,0.08)"}
+            stroke={stroke}
             strokeWidth={1.5}
             strokeDasharray="6 4"
             vectorEffect="non-scaling-stroke"
-            data-testid="area-preview"
+            data-testid={isDistance ? "distance-preview" : "area-preview"}
           />
         )}
         {dPts.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={vertexR} fill={MEASURE_STROKE} stroke="#0C4A6E" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          <circle key={i} cx={p.x} cy={p.y} r={vertexR} fill={stroke} stroke="#0C4A6E" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         ))}
       </g>
 
       {labels.map((l) => {
         const h = l.lines.length * LABEL_LINE + 6;
         return (
-          <g key={l.id} transform={`translate(${l.at.x} ${l.at.y})`} data-testid="area-readout">
-            <rect x={-LABEL_W / 2} y={-h} width={LABEL_W} height={h} rx={2} fill={LABEL_BG} />
+          <g key={l.id} transform={`translate(${l.at.x} ${l.at.y})`} data-testid={`${l.kind}-readout`}>
+            <rect x={-l.w / 2} y={-h} width={l.w} height={h} rx={2} fill={LABEL_BG} />
             {l.lines.map((t, i) => (
-              <text key={i} x={-LABEL_W / 2 + 8} y={-h + 15 + i * LABEL_LINE} fill="#E0F2FE" fontSize={12} fontFamily="ui-monospace, monospace">
+              <text key={i} x={-l.w / 2 + 8} y={-h + 15 + i * LABEL_LINE} fill={l.kind === "distance" ? "#ECFCCB" : "#E0F2FE"} fontSize={12} fontFamily="ui-monospace, monospace">
                 {t}
               </text>
             ))}
@@ -133,8 +167,8 @@ export function OverlayLayer({
           onDoubleClick={stop}
           onClick={() => onRemoveMeasurement(l.id)}
           className="absolute z-[6] flex h-5 w-5 items-center justify-center rounded-[2px] text-xs text-sky-100 hover:bg-white/20"
-          style={{ left: l.at.x + LABEL_W / 2 - 22, top: l.at.y - h + 2 }}
-          data-testid="area-remove"
+          style={{ left: l.at.x + l.w / 2 - 22, top: l.at.y - h + 2 }}
+          data-testid={`${l.kind}-remove`}
         >
           ✕
         </button>

@@ -1,6 +1,10 @@
 import {
+  clampPan,
   clampZoom,
-  fitZoom,
+  fillZoom,
+  NO_INSETS,
+  rotatedSize,
+  segmentMeasurement,
   MAX_ZOOM,
   MIN_ZOOM,
   radiusAtRow,
@@ -8,6 +12,8 @@ import {
   rectangleMeasurements,
   distanceToLine,
   type BladeFrame,
+  type Insets,
+  type SegmentMeasurement,
   type Corners,
   type RectangleMeasurements,
   type Pt,
@@ -22,14 +28,29 @@ export type Transform = Pick<ViewState, "zoom" | "panX" | "panY" | "rotationDeg"
 /** Ángulo en [0, 360). */
 export const normDeg = (deg: number): number => ((deg % 360) + 360) % 360;
 
-/** Vista ajustada: centrada, sin desplazamiento; con giro de 90°/270° se usan las medidas intercambiadas. */
-export function fitTransform(container: Size, image: Size, rotationDeg: number): Transform {
-  const quarter = normDeg(rotationDeg) % 180 !== 0;
-  const w = quarter ? image.h : image.w;
-  const h = quarter ? image.w : image.h;
+/**
+ * Vista ajustada: la foto llena el alto (o el ancho, si limita) de la zona libre de reglas y queda
+ * pegada a la izquierda y arriba; con giro se usa el encuadre girado (90°/270° intercambian medidas).
+ */
+export function fitTransform(container: Size, image: Size, rotationDeg: number, insets: Insets = NO_INSETS): Transform {
+  const rot = normDeg(rotationDeg);
+  const b = rotatedSize(image.w, image.h, rot);
   // Sin límite inferior: en un celular la foto completa puede pedir menos de MIN_ZOOM.
-  const zoom = container.w > 0 && container.h > 0 && w > 0 && h > 0 ? Math.min(MAX_ZOOM, fitZoom(container.w, container.h, w, h)) : 1;
-  return { zoom, panX: 0, panY: 0, rotationDeg: normDeg(rotationDeg) };
+  const zoom = Math.min(MAX_ZOOM, fillZoom(container.w - insets.left, container.h - insets.bottom, b.w, b.h));
+  const t = { zoom, panX: 0, panY: 0, rotationDeg: rot };
+  return { ...t, ...clampPan(toViewState(t, container, image), insets) };
+}
+
+/**
+ * Restricciones de la vista fija: el zoom no baja del de ajuste y el desplazamiento se limita para que
+ * la foto siga pegada a la izquierda/arriba si cabe o cubra toda la zona libre si es mayor.
+ */
+export function constrainTransform(t: Transform, container: Size, image: Size, insets: Insets = NO_INSETS): Transform {
+  if (!(container.w > 0) || !(container.h > 0)) return t;
+  const fit = fitTransform(container, image, t.rotationDeg, insets);
+  const zoom = Math.max(fit.zoom, t.zoom);
+  const z = { ...t, zoom };
+  return { ...z, ...clampPan(toViewState(z, container, image), insets) };
 }
 
 /**
@@ -101,6 +122,8 @@ export type ScaleStatus = {
   canMeasure: boolean;
   /** La regla se puede dibujar (GSD, radio y sin giro). */
   ruler: boolean;
+  /** La regla inferior se puede dibujar (GSD y sin giro; no necesita radio). */
+  bottomRuler: boolean;
   /** Mostrar «escala estimada». */
   estimated: boolean;
   /** Mostrar «Esta foto no tiene escala». */
@@ -116,9 +139,15 @@ export function scaleStatus(c: ScaleInfo, rotationDeg: number): ScaleStatus {
     canMeasure,
     hasRadius,
     ruler: hasRadius && normDeg(rotationDeg) === 0,
+    bottomRuler: canMeasure && normDeg(rotationDeg) === 0,
     estimated: canMeasure && c.gsd_confidence === "low",
     noScale: !canMeasure,
   };
+}
+
+/** Márgenes que ocupan las reglas visibles (la foto se ajusta al resto del escenario). */
+export function rulerInsets(status: Pick<ScaleStatus, "ruler" | "bottomRuler">, rulerOn: boolean, rulerW: number, rulerH: number): Insets {
+  return { left: rulerOn && status.ruler ? rulerW : 0, bottom: rulerOn && status.bottomRuler ? rulerH : 0 };
 }
 
 /** Marco para convertir filas en radio; null si falta GSD o radio. */
@@ -154,6 +183,25 @@ export function addMeasurePoint(points: Pt[], p: Pt, minDistPx: number): { point
   // Un 3.er punto sobre la recta 1–2 daría un rectángulo sin área: se ignora.
   if (distanceToLine(next[2]!, next[0]!, next[1]!) < minDistPx) return { points, corners: null };
   return { points: [], corners: rectangleFrom3Points(next[0]!, next[1]!, next[2]!) };
+}
+
+/** Medición temporal de «Medir distancia» (extremos en px del original); no se guarda. */
+export type DistanceMeasurement = { id: number; a: Pt; b: Pt; readout: SegmentMeasurement | null };
+
+/**
+ * Un clic de «Medir distancia»: el 1.º fija el inicio y el 2.º devuelve el segmento y vacía los puntos.
+ * Un 2.º clic casi encima del 1.º se ignora.
+ */
+export function addDistancePoint(points: Pt[], p: Pt, minDistPx: number): { points: Pt[]; segment: [Pt, Pt] | null } {
+  const next = addVertex(points, p, minDistPx);
+  if (next.length < 2) return { points: next, segment: null };
+  return { points: [], segment: [next[0]!, next[1]!] };
+}
+
+/** Distancia del segmento en mm y su tipo; null sin GSD. */
+export function distanceReadout(a: Pt, b: Pt, gsd_mm_px: number | null): SegmentMeasurement | null {
+  if (gsd_mm_px == null || !(gsd_mm_px > 0)) return null;
+  return segmentMeasurement(a, b, gsd_mm_px);
 }
 
 /** Medidas del rectángulo en mm; null sin GSD. */

@@ -43,9 +43,49 @@ export function imageToScreen(p: Pt, v: ViewState): Pt {
   };
 }
 
-/** Zoom inicial que encaja la imagen en el contenedor (nunca amplía, deja 10 % de margen). */
-export function fitZoom(containerW: number, containerH: number, imageW: number, imageH: number): number {
-  return Math.min(containerW / imageW, containerH / imageH, 1) * 0.9;
+/** Márgenes del contenedor ocupados por las reglas (px de pantalla); la foto se ajusta al resto. */
+export type Insets = { left: number; bottom: number };
+
+export const NO_INSETS: Insets = { left: 0, bottom: 0 };
+
+/**
+ * Zoom de ajuste: la foto llena el alto disponible (o el ancho, si es la medida que limita), sin margen.
+ * 1 si alguna medida no es positiva (contenedor aún sin medir).
+ */
+export function fillZoom(viewW: number, viewH: number, imageW: number, imageH: number): number {
+  if (!(viewW > 0) || !(viewH > 0) || !(imageW > 0) || !(imageH > 0)) return 1;
+  return Math.min(viewW / imageW, viewH / imageH);
+}
+
+/** Ancho y alto (px del original) del rectángulo que encierra la foto girada `deg` grados. */
+export function rotatedSize(imageW: number, imageH: number, deg: number): { w: number; h: number } {
+  const a = (deg * Math.PI) / 180;
+  const c = Math.abs(Math.cos(a));
+  const s = Math.abs(Math.sin(a));
+  // Redondeo para que 90°/270° den el intercambio exacto (cos(π/2) ≈ 6e-17).
+  const r = (n: number) => Math.round(n * 1e9) / 1e9;
+  return { w: r(imageW * c + imageH * s), h: r(imageW * s + imageH * c) };
+}
+
+/**
+ * Desplazamiento de un eje: el contenedor mide `len`, la zona útil es [start, len − end] y la foto
+ * (encuadre girado) mide `size` px de pantalla. Si cabe, queda pegada al inicio (izquierda/arriba);
+ * si es mayor, se puede desplazar pero siempre cubre la zona útil (sin huecos más allá de sus bordes).
+ */
+export function clampPanAxis(pan: number, len: number, size: number, start: number, end: number): number {
+  const anchored = start - len / 2 + size / 2; // borde de la foto en `start`
+  if (size <= len - start - end) return anchored;
+  const min = len - end - len / 2 - size / 2; // borde opuesto en `len − end`
+  return Math.min(anchored, Math.max(min, pan));
+}
+
+/** Desplazamiento permitido para la vista (foto fija a la izquierda y arriba; con zoom, sin huecos). */
+export function clampPan(v: ViewState, insets: Insets = NO_INSETS): { panX: number; panY: number } {
+  const b = rotatedSize(v.imageW, v.imageH, v.rotationDeg);
+  return {
+    panX: clampPanAxis(v.panX, v.containerW, b.w * v.zoom, insets.left, 0),
+    panY: clampPanAxis(v.panY, v.containerH, b.h * v.zoom, 0, insets.bottom),
+  };
 }
 
 export function clampZoom(z: number): number {
