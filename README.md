@@ -117,3 +117,10 @@ Ver [`docs/backend-blueprint.md`](docs/backend-blueprint.md). Resumen:
 - PostGIS para sitios, activos, rutas, capturas y hallazgos. Telemetría particionada por mes.
 - Cadena de custodia SHA-256 inmutable y auditoría de solo inserción.
 - Cinco buckets privados con políticas por organización y rol; acceso por URL firmada.
+
+## Mapa del parque (MapLibre): worker
+
+`scripts/copy-maplibre-worker.mjs` copia el worker de `maplibre-gl` a `public/maplibre/` (ignorado por git).
+Corre en `postinstall`, `predev` y `prebuild`, así que `npm install`, `npm run dev` y `npm run build` lo dejan listo;
+si se ejecuta `next build` directo, basta que antes se haya hecho `npm install`. La URL lleva `?v=<versión de maplibre-gl>`
+para invalidar cachés al actualizar. Opcional: `NEXT_PUBLIC_ESRI_API_KEY` (pública; restringir por referrer y a basemaps) habilita el botón Satélite.

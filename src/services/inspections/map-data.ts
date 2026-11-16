@@ -43,7 +43,8 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
     .in("asset_id", ids)
     .order("created_at", { ascending: false });
   if (projectId) q = q.eq("project_id", projectId);
-  const { data: insp } = await q;
+  const { data: insp, error: inspErr } = await q;
+  if (inspErr) console.error("[map-data] inspecciones:", inspErr.message);
 
   const latest = new Map<string, NonNullable<typeof insp>[number]>();
   const withPos = new Map<string, NonNullable<typeof insp>[number]>();
@@ -55,9 +56,12 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
   const inspIds = [...latest.values()].map((i) => i.id);
   const idCaptureIds = [...latest.values()].flatMap((i) => (i.id_capture_id ? [i.id_capture_id] : []));
   const [findings, caps] = await Promise.all([
-    inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds) : Promise.resolve({ data: [] }),
-    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path").in("id", idCaptureIds) : Promise.resolve({ data: [] }),
+    inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds) : Promise.resolve({ data: [], error: null }),
+    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
   ]);
+
+  if (findings.error) console.error("[map-data] daños:", findings.error.message);
+  if (caps.error) console.error("[map-data] capturas _ID:", caps.error.message);
 
   const byInsp = new Map<string, Record<Sev, number>>();
   for (const f of findings.data ?? []) {
@@ -72,14 +76,15 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
   return assets.map((a): MapTurbine => {
     const cur = latest.get(a.id) ?? null;
     const pos = withPos.get(a.id);
+    const assetHasPos = a.lat != null && a.lon != null;
     const counts = (cur && byInsp.get(cur.id)) ?? emptyCounts();
     const sevs = ([1, 2, 3, 4, 5] as Sev[]).filter((s) => counts[s] > 0);
     const thumbPath = cur?.id_capture_id ? capPath.get(cur.id_capture_id) : undefined;
     return {
       assetId: a.id,
       name: a.name,
-      lat: a.lat ?? pos?.asset_lat ?? null,
-      lon: a.lon ?? pos?.asset_lon ?? null,
+      lat: assetHasPos ? a.lat : (pos?.asset_lat ?? null),
+      lon: assetHasPos ? a.lon : (pos?.asset_lon ?? null),
       status: cur?.status ?? null,
       maxSeverity: sevs.length ? sevs[sevs.length - 1]! : null,
       counts,
@@ -90,14 +95,17 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
 }
 
 export async function loadSiteMap(sb: SupabaseClient<Database>, siteId: string, scope: Scope = "admin"): Promise<MapTurbine[]> {
-  const { data } = await sb.from("assets").select("id, name, lat, lon").eq("site_id", siteId).eq("kind", "wind_turbine").order("name");
+  const { data, error } = await sb.from("assets").select("id, name, lat, lon").eq("site_id", siteId).eq("kind", "wind_turbine").order("name");
+  if (error) console.error("[map-data] activos del sitio:", error.message);
   return build(sb, data ?? [], null, scope);
 }
 
 export async function loadProjectMap(sb: SupabaseClient<Database>, projectId: string, scope: Scope = "admin"): Promise<MapTurbine[]> {
-  const { data: links } = await sb.from("project_sites").select("site_id").eq("project_id", projectId);
+  const { data: links, error: linkErr } = await sb.from("project_sites").select("site_id").eq("project_id", projectId);
+  if (linkErr) console.error("[map-data] sitios del proyecto:", linkErr.message);
   const siteIds = (links ?? []).map((l) => l.site_id);
   if (siteIds.length === 0) return [];
-  const { data } = await sb.from("assets").select("id, name, lat, lon").in("site_id", siteIds).eq("kind", "wind_turbine").order("name");
+  const { data, error } = await sb.from("assets").select("id, name, lat, lon").in("site_id", siteIds).eq("kind", "wind_turbine").order("name");
+  if (error) console.error("[map-data] activos del proyecto:", error.message);
   return build(sb, data ?? [], projectId, scope);
 }

@@ -4,6 +4,7 @@
   "private": true,
   "description": "NEXUS — software a medida para drones DJI, inspección estructural automatizada y SaaS geoespacial.",
   "scripts": {
+    "postinstall": "node scripts/copy-maplibre-worker.mjs",
     "predev": "node scripts/copy-maplibre-worker.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/copy-maplibre-worker.mjs",

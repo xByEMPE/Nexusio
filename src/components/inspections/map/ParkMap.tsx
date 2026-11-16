@@ -12,7 +12,7 @@ import { nexusStyle, satelliteStyle } from "./nexus-style";
 import { TurbinePopup } from "./TurbinePopup";
 
 // El worker se sirve desde public/ (ver scripts/copy-maplibre-worker.mjs).
-maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+maplibregl.setWorkerUrl(`/maplibre/maplibre-gl-worker.mjs?v=${maplibregl.getVersion()}`);
 
 const SRC = "turbines";
 
