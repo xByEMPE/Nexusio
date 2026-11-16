@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findingMeasurements, polygonAreaPx, rectangleFrom3Points, rectangleMeasurements } from "./measure";
+import { distanceToLine, findingMeasurements, polygonAreaPx, rectangleFrom3Points, rectangleMeasurements } from "./measure";
 import { radiusAtRow } from "./radius";
 import { rulerTicks } from "./ruler";
 
@@ -127,5 +127,30 @@ describe("rectangleMeasurements", () => {
   it("lado horizontal largo: transversal mayor que longitudinal", () => {
     const m = rectangleMeasurements([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 10 }, { x: 0, y: 10 }], 1);
     expect(m).toEqual({ longitudinal_mm: 10, transversal_mm: 100, area_mm2: 1000 });
+  });
+});
+
+describe("rectangleMeasurements: empates y lados nulos", () => {
+  it("empate exacto a 45°: gana el lado con más recorrido vertical", () => {
+    // p1–p2 a 45° con 10 px de recorrido vertical; p1–p4 a −45° con 20 px: este es el longitudinal.
+    const m = rectangleMeasurements([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 30, y: -10 }, { x: 20, y: -20 }], 1);
+    expect(m.longitudinal_mm).toBeCloseTo(Math.hypot(20, 20));
+    expect(m.transversal_mm).toBeCloseTo(Math.hypot(10, 10));
+  });
+  it("empate total a 45° (cuadrado): p1–p2 es el longitudinal, de forma determinista", () => {
+    const sq = [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 0 }, { x: 10, y: -10 }] as const;
+    const m = rectangleMeasurements([...sq], 1);
+    expect(m.longitudinal_mm).toBeCloseTo(Math.hypot(10, 10));
+    expect(m.transversal_mm).toBeCloseTo(Math.hypot(10, 10));
+  });
+  it("lado nulo: un lado horizontal nunca es longitudinal", () => {
+    const flat = rectangleMeasurements([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 0 }], 1);
+    expect(flat).toEqual({ longitudinal_mm: 0, transversal_mm: 100, area_mm2: 0 });
+    const tall = rectangleMeasurements([{ x: 0, y: 0 }, { x: 0, y: 50 }, { x: 0, y: 50 }, { x: 0, y: 0 }], 1);
+    expect(tall).toEqual({ longitudinal_mm: 50, transversal_mm: 0, area_mm2: 0 });
+  });
+  it("distanceToLine", () => {
+    expect(distanceToLine({ x: 5, y: 3 }, { x: 0, y: 0 }, { x: 10, y: 0 })).toBe(3);
+    expect(distanceToLine({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(5);
   });
 });

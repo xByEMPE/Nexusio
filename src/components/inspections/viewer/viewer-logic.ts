@@ -6,7 +6,9 @@ import {
   radiusAtRow,
   rectangleFrom3Points,
   rectangleMeasurements,
+  distanceToLine,
   type BladeFrame,
+  type Corners,
   type RectangleMeasurements,
   type Pt,
   type ViewState,
@@ -138,18 +140,19 @@ export function crosshairText(img: Pt, frame: BladeFrame | null): string {
   return `R: ${groupInt(radiusAtRow(img.y, frame) * 1000)} mm`;
 }
 
-export type Corners = [Pt, Pt, Pt, Pt];
-
 /** Medición temporal de «Medir área» (px del original); no se guarda. */
 export type AreaMeasurement = { id: number; corners: Corners; readout: RectangleMeasurements | null };
 
 /**
  * Un clic de «Medir área»: los 2 primeros puntos fijan un lado y el 3.º, el lado opuesto. Con el 3.º
- * devuelve las esquinas del rectángulo y vacía los puntos; un clic casi encima del anterior se ignora.
+ * devuelve las esquinas del rectángulo y vacía los puntos; se ignoran un clic casi encima del anterior
+ * y un 3.º casi sobre la recta 1–2.
  */
 export function addMeasurePoint(points: Pt[], p: Pt, minDistPx: number): { points: Pt[]; corners: Corners | null } {
   const next = addVertex(points, p, minDistPx);
   if (next.length < 3) return { points: next, corners: null };
+  // Un 3.er punto sobre la recta 1–2 daría un rectángulo sin área: se ignora.
+  if (distanceToLine(next[2]!, next[0]!, next[1]!) < minDistPx) return { points, corners: null };
   return { points: [], corners: rectangleFrom3Points(next[0]!, next[1]!, next[2]!) };
 }
 

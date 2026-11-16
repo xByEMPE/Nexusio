@@ -31,7 +31,7 @@ export default async function PortalHomePage() {
   return (
     <>
       <PortalHeader email={viewer.user.email} />
-      <main className="container max-w-5xl py-8 md:py-10">
+      <main className="w-full px-4 py-6 md:px-6 md:py-8">
         <h1 className="text-2xl font-medium">Mis proyectos</h1>
         {groups.size === 0 && (
           <div className="panel mt-6 p-10 text-center text-sm text-foreground-muted">Aún no tienes proyectos disponibles.</div>

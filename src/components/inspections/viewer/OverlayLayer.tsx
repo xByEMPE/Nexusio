@@ -12,10 +12,6 @@ export function imageGroupTransform(v: ViewState): string {
 
 const LABEL_BG = "rgba(0,0,0,0.72)";
 
-/**
- * Capa SVG sobre la foto. Las formas van en coordenadas de imagen (grupo transformado, trazo que no
- * escala); los textos van en coordenadas de pantalla para que no giren ni cambien de tamaño.
- */
 const MEASURE_STROKE = "#38BDF8";
 const LABEL_W = 196;
 const LABEL_LINE = 15;

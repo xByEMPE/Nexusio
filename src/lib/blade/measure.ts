@@ -68,12 +68,24 @@ export function findingMeasurements(region: Region, cap: MeasureCapture): Findin
 
 // --- Medición temporal por 3 puntos (herramienta «Medir área» del visor) --------------------------
 
+/** Las 4 esquinas consecutivas de un rectángulo (px del original). */
+export type Corners = [Pt, Pt, Pt, Pt];
+
+/** Distancia (px) de `p` a la recta que pasa por `a` y `b` (o a `a` si coinciden). */
+export function distanceToLine(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  return Math.abs(dx * (p.y - a.y) - dy * (p.x - a.x)) / len;
+}
+
 /**
  * Rectángulo (posiblemente girado) a partir de 3 clics en px del original: p1–p2 es un lado y la
  * distancia perpendicular de p3 a la recta p1–p2 es el otro. Esquinas en orden: p1, p2, p2+n, p1+n,
  * con n la componente de (p3 − p1) perpendicular a p1–p2. Si p1 y p2 coinciden, el rectángulo es nulo.
  */
-export function rectangleFrom3Points(p1: Pt, p2: Pt, p3: Pt): [Pt, Pt, Pt, Pt] {
+export function rectangleFrom3Points(p1: Pt, p2: Pt, p3: Pt): Corners {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const len2 = dx * dx + dy * dy;
@@ -90,18 +102,26 @@ export type RectangleMeasurements = { longitudinal_mm: number; transversal_mm: n
 /**
  * Medidas de un rectángulo de 4 esquinas consecutivas (px del original) con el GSD en mm/px.
  * Longitudinal: el lado cuya dirección está más cerca de la vertical de la foto (a lo largo de la
- * pala); transversal: el otro. Con 45° exactos, el lado p1–p2 se toma como transversal.
+ * pala); transversal: el otro. Empate exacto a 45°: gana el lado con más recorrido vertical en px
+ * y, si también empatan, el lado p1–p2. Un lado nulo toma la dirección perpendicular al otro, así
+ * que un lado horizontal nunca se etiqueta como longitudinal.
  */
-export function rectangleMeasurements(corners: [Pt, Pt, Pt, Pt], gsd_mm_px: number): RectangleMeasurements {
+export function rectangleMeasurements(corners: Corners, gsd_mm_px: number): RectangleMeasurements {
   const [a, b, , d] = corners;
-  const s1 = { x: b.x - a.x, y: b.y - a.y };
-  const s2 = { x: d.x - a.x, y: d.y - a.y };
+  let s1 = { x: b.x - a.x, y: b.y - a.y };
+  let s2 = { x: d.x - a.x, y: d.y - a.y };
   const l1 = Math.hypot(s1.x, s1.y);
   const l2 = Math.hypot(s2.x, s2.y);
-  // Cuanto mayor |dy|/longitud, más vertical; un lado nulo no tiene dirección y cede al otro.
-  const v1 = l1 > 0 ? Math.abs(s1.y) / l1 : -1;
-  const v2 = l2 > 0 ? Math.abs(s2.y) / l2 : -1;
-  const [lon, tra] = v1 > v2 ? [l1, l2] : [l2, l1];
+  // Dirección de un lado nulo: la perpendicular del otro (lado vertical si los dos son nulos).
+  if (l1 === 0) s1 = l2 === 0 ? { x: 0, y: 1 } : { x: -s2.y, y: s2.x };
+  if (l2 === 0) s2 = l1 === 0 ? { x: 1, y: 0 } : { x: -s1.y, y: s1.x };
+  // |cos| con la vertical, sin dividir por cero.
+  const v1 = Math.abs(s1.y) / Math.hypot(s1.x, s1.y);
+  const v2 = Math.abs(s2.y) / Math.hypot(s2.x, s2.y);
+  const EPS = 1e-9;
+  // Empate: más recorrido vertical real (px) gana; si también empatan, p1–p2.
+  const firstIsLon = Math.abs(v1 - v2) > EPS ? v1 > v2 : Math.abs(b.y - a.y) >= Math.abs(d.y - a.y);
+  const [lon, tra] = firstIsLon ? [l1, l2] : [l2, l1];
   return {
     longitudinal_mm: clean(lon * gsd_mm_px),
     transversal_mm: clean(tra * gsd_mm_px),

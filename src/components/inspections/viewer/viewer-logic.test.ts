@@ -171,6 +171,13 @@ describe("medir área", () => {
     expect(st.corners).toEqual([{ x: 0, y: 0 }, { x: 0, y: 40 }, { x: 10, y: 40 }, { x: 10, y: 0 }]);
     expect(measureReadout(st.corners!, 0.5)).toEqual({ longitudinal_mm: 20, transversal_mm: 5, area_mm2: 100 });
   });
+  it("un 3.er punto casi sobre la recta 1–2 se ignora (no hay medición sin área)", () => {
+    const two = [{ x: 0, y: 0 }, { x: 0, y: 40 }];
+    const st = addMeasurePoint(two, { x: 2, y: 60 }, 3);
+    expect(st.corners).toBeNull();
+    expect(st.points).toEqual(two);
+    expect(addMeasurePoint(two, { x: 3, y: 60 }, 3).corners).not.toBeNull();
+  });
   it("un punto repetido no cuenta", () => {
     const st = addMeasurePoint([{ x: 1, y: 1 }], { x: 2, y: 2 }, 3);
     expect(st.points).toHaveLength(1);

@@ -152,6 +152,15 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
                 className="relative h-[70vh] min-h-[360px] touch-none select-none overflow-hidden rounded-[2px] border border-border-subtle bg-background-base"
                 style={{ cursor: strip ? (view.zoom > 1 ? "grab" : "zoom-in") : "default" }}
                 title={strip ? "Clic para abrir esta cara en un visor aparte" : undefined}
+                role={strip ? "button" : undefined}
+                tabIndex={strip ? 0 : undefined}
+                aria-label={strip ? `Abrir ${FACE_LABEL[face]} en un visor aparte` : undefined}
+                onKeyDown={(e) => {
+                  if (!strip || (e.key !== "Enter" && e.key !== " ")) return;
+                  e.preventDefault();
+                  const i = items.findIndex((it) => it.face === face);
+                  if (i >= 0) setOpen(i);
+                }}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={() => endPress(face)}

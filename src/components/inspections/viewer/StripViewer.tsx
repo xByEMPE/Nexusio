@@ -20,6 +20,19 @@ const fitView = (box: { w: number; h: number }, img: { w: number; h: number }): 
   return { zoom, x: (box.w - img.w * zoom) / 2, y: (box.h - img.h * zoom) / 2 };
 };
 
+/** Mínimo de la tira (px de pantalla) que sigue a la vista al desplazar o hacer zoom. */
+const KEEP_VISIBLE_PX = 64;
+
+/** Limita el desplazamiento para que la tira no salga por completo de la vista. */
+export function clampStripView(v: View, box: { w: number; h: number }, img: { w: number; h: number }): View {
+  const w = img.w * v.zoom;
+  const h = img.h * v.zoom;
+  const kx = Math.min(KEEP_VISIBLE_PX, w);
+  const ky = Math.min(KEEP_VISIBLE_PX, h);
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+  return { zoom: v.zoom, x: clamp(v.x, kx - w, box.w - kx), y: clamp(v.y, ky - h, box.h - ky) };
+}
+
 /**
  * Visor aparte de una tira de pala completa: zoom (rueda o botones), desplazamiento (arrastre),
  * ajustar, cerrar (Esc o botón) y flechas para pasar a la cara anterior o siguiente de la misma pala.
@@ -45,6 +58,14 @@ export function StripViewer({
   const [natural, setNatural] = useState({ w: item.width_px, h: item.height_px });
   const [view, setView] = useState<View | null>(null);
   const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Foco: al abrir pasa al botón «Cerrar»; al cerrar vuelve a donde estaba (la tira que se pulsó).
+  useEffect(() => {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    return () => before?.focus();
+  }, []);
 
   const fit = fitView(box, natural);
   const v = view ?? fit;
@@ -58,7 +79,7 @@ export function StripViewer({
       if (zoom === fit.zoom) return null; // vuelve a «ajustar»
       const k = zoom / c.zoom;
       const p = at ?? { x: box.w / 2, y: box.h / 2 };
-      return { zoom, x: p.x - (p.x - c.x) * k, y: p.y - (p.y - c.y) * k };
+      return clampStripView({ zoom, x: p.x - (p.x - c.x) * k, y: p.y - (p.y - c.y) * k }, box, natural);
     });
 
   const zoomRef = useRef(zoomAt);
@@ -115,7 +136,7 @@ export function StripViewer({
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
-    setView((cur) => ({ zoom: (cur ?? fit).zoom, x: d.x + e.clientX - d.px, y: d.y + e.clientY - d.py }));
+    setView((cur) => clampStripView({ zoom: (cur ?? fit).zoom, x: d.x + e.clientX - d.px, y: d.y + e.clientY - d.py }, box, natural));
   };
   const endDrag = () => {
     drag.current = null;
@@ -154,7 +175,7 @@ export function StripViewer({
             Ajustar
           </button>
         </div>
-        <button type="button" className={cn(btn, "ml-auto text-xs")} onClick={onClose} title="Cerrar (Esc)" data-testid="strip-viewer-close">
+        <button ref={closeRef} type="button" className={cn(btn, "ml-auto text-xs")} onClick={onClose} title="Cerrar (Esc)" data-testid="strip-viewer-close">
           ✕ Cerrar
         </button>
       </div>
