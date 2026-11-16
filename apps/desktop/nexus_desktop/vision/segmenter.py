@@ -16,14 +16,25 @@ def find_model(search: list[Path]) -> Path | None:
     return None
 
 
+def largest_contour(mask: np.ndarray) -> np.ndarray | None:
+    """Contorno externo de mayor área de la máscara, o None si está vacía."""
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    return max(contours, key=cv2.contourArea)
+
+
 def bounding_box(mask: np.ndarray) -> tuple[int, int, int, int]:
-    """Caja (x, y, ancho, alto) de la máscara; (0, 0, 0, 0) si está vacía."""
-    ys, xs = np.nonzero(mask)
-    if xs.size == 0:
+    """Caja (x, y, ancho, alto) del contorno externo más grande.
+
+    Ignora manchas pequeñas de falsos positivos. Si la máscara está vacía
+    devuelve (0, 0, 0, 0); quien llame (p. ej. el cosedor) debe comprobarlo.
+    """
+    contour = largest_contour(mask)
+    if contour is None:
         return 0, 0, 0, 0
-    x0, x1 = int(xs.min()), int(xs.max())
-    y0, y1 = int(ys.min()), int(ys.max())
-    return x0, y0, x1 - x0 + 1, y1 - y0 + 1
+    x, y, w, h = cv2.boundingRect(contour)
+    return int(x), int(y), int(w), int(h)
 
 
 class BladeSegmenter:
@@ -31,6 +42,9 @@ class BladeSegmenter:
 
     def __init__(self, model_path: Path, img_size: int = 512):
         import onnxruntime as ort
+
+        if not Path(model_path).is_file():
+            raise FileNotFoundError(f"No se encontró el modelo de segmentación: {model_path}")
 
         available = ort.get_available_providers()
         providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nexus_desktop.vision.segmenter import BladeSegmenter, bounding_box, find_model
+from nexus_desktop.vision.segmenter import BladeSegmenter, bounding_box, find_model, largest_contour
 
 
 def test_find_model_returns_first_existing(tmp_path):
@@ -51,3 +51,21 @@ def test_predict_returns_mask_same_size(tmp_path):
     assert (mask == 255).all()
     black = seg.predict(np.zeros((40, 60, 3), np.uint8))
     assert (black == 0).all()
+
+
+def test_bounding_box_ignores_small_specks():
+    m = np.zeros((100, 200), np.uint8)
+    m[20:60, 50:120] = 255
+    m[2:4, 2:4] = 255
+    m[95:97, 190:192] = 255
+    assert bounding_box(m) == (50, 20, 70, 40)
+
+
+def test_largest_contour_none_for_empty_mask():
+    assert largest_contour(np.zeros((10, 10), np.uint8)) is None
+
+
+def test_missing_model_raises_file_not_found(tmp_path):
+    pytest.importorskip("onnxruntime")
+    with pytest.raises(FileNotFoundError):
+        BladeSegmenter(tmp_path / "no.onnx")
