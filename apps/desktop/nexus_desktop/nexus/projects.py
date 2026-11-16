@@ -13,6 +13,10 @@ class InspectionLocked(Exception):
     """La inspección ya está aprobada y no admite más subidas."""
 
 
+class InspectionError(Exception):
+    """No se pudo crear o resolver la inspección (mensaje legible, sin datos sensibles)."""
+
+
 @dataclass
 class Project:
     id: str
@@ -62,28 +66,47 @@ def choose_inspection(explicit: str | None, indexed: str | None, indexed_exists:
     return indexed or new_id(), True
 
 
+def _find(client, project_id: str, asset_id: str):
+    rows = (client.table("inspections").select("id,status").eq("project_id", project_id)
+            .eq("asset_id", asset_id).eq("kind", KIND).limit(1).execute().data)
+    return rows[0] if rows else None
+
+
 def resolve_inspection(client, project_id: str, asset_id: str, index: LocalIndex) -> str:
     """Resuelve la inspección y, si es nueva, crea la fila antes de subir: la política de
-    Storage exige que exista. Falla con InspectionLocked si ya está aprobada."""
-    q = client.table("inspections")
+    Storage exige que exista. Falla con InspectionLocked si ya está aprobada.
+
+    La clave única del servidor (proyecto, activo, tipo) manda; el índice local solo ayuda."""
     indexed = index.inspection_id(asset_id)
     indexed_row = None
     if indexed:
-        found = q.select("id,status").eq("id", indexed).limit(1).execute().data
+        found = (client.table("inspections").select("id,status").eq("id", indexed)
+                 .eq("project_id", project_id).eq("asset_id", asset_id).eq("kind", KIND)
+                 .limit(1).execute().data)
         indexed_row = found[0] if found else None
-    # Única por (proyecto, activo, tipo): si existe en el servidor, se reutiliza.
-    existing = indexed_row
-    if existing is None:
-        rows = (client.table("inspections").select("id,status").eq("project_id", project_id)
-                .eq("asset_id", asset_id).eq("kind", KIND).limit(1).execute().data)
-        existing = rows[0] if rows else None
+    existing = indexed_row or _find(client, project_id, asset_id)
     if existing is not None and existing["status"] == "approved":
         raise InspectionLocked("La inspección de esta turbina ya está aprobada; no se pueden subir más fotos.")
-    insp, create = choose_inspection(None, indexed, indexed_row is not None,
+    # Un id del índice que no corresponde a este proyecto no se reutiliza.
+    insp, create = choose_inspection(None, indexed if indexed_row else None, indexed_row is not None,
                                      existing["id"] if existing else None)
     if create:
-        client.table("inspections").insert({"id": insp, "project_id": project_id, "asset_id": asset_id,
-                                            "kind": KIND, "status": "captured"}).execute()
+        try:
+            client.table("inspections").insert({"id": insp, "project_id": project_id, "asset_id": asset_id,
+                                                "kind": KIND, "status": "captured"}).execute()
+        except Exception:
+            try:
+                existing = _find(client, project_id, asset_id)
+            except Exception:
+                existing = None
+            if existing is None:
+                raise InspectionError(
+                    "No se pudo crear la inspección en NEXUS; revise la conexión y sus permisos "
+                    "sobre el proyecto e inténtelo de nuevo.") from None
+            if existing["status"] == "approved":
+                raise InspectionLocked(
+                    "La inspección de esta turbina ya está aprobada; no se pueden subir más fotos.") from None
+            insp = existing["id"]
     if index.inspection_id(asset_id) != insp:
         index.set_inspection(asset_id, insp)
         index.save()

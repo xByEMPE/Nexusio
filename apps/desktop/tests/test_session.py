@@ -34,3 +34,11 @@ def test_access_token_raises_session_lost_without_session():
     with pytest.raises(SessionLost) as exc:
         Session(FakeClient()).access_token()
     assert "iniciar sesión" in str(exc.value)
+
+
+@pytest.mark.parametrize("mode", ["refresh_fails", "refresh_none"])
+def test_access_token_raises_session_lost_when_refresh_fails(mode):
+    client = FakeClient(session=FakeSession("viejo", 1000))
+    setattr(client.auth, mode, True)
+    with pytest.raises(SessionLost):
+        Session(client, now=lambda: 1000).access_token()

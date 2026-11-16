@@ -13,6 +13,7 @@ class FakeAuth:
     def __init__(self, session=None, login_error=None):
         self.session, self.login_error, self.refreshed, self.signed_out = session, login_error, 0, False
         self.credentials = None
+        self.refresh_fails = self.refresh_none = False
 
     def sign_in_with_password(self, creds):
         self.credentials = creds
@@ -26,6 +27,10 @@ class FakeAuth:
 
     def refresh_session(self, refresh_token):
         self.refreshed += 1
+        if self.refresh_fails:
+            raise RuntimeError("red")
+        if self.refresh_none:
+            return type("R", (), {"session": None})()
         self.session = FakeSession("nuevo", 10_000)
         return type("R", (), {"session": self.session})()
 
@@ -63,6 +68,8 @@ class FakeQuery:
 
     def execute(self):
         if self.row is not None:
+            if self.client.insert_hook:
+                self.client.insert_hook(self.client, self.row)
             self.client.inserted.append((self.name, self.row))
             self.client.tables.setdefault(self.name, []).append(dict(self.row))
             return type("R", (), {"data": [self.row]})()
@@ -76,6 +83,7 @@ class FakeClient:
     def __init__(self, tables=None, session=None, login_error=None):
         self.tables = {k: [dict(r) for r in v] for k, v in (tables or {}).items()}
         self.inserted = []
+        self.insert_hook = None
         self.auth = FakeAuth(session, login_error)
 
     def table(self, name):

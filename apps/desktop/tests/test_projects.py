@@ -1,6 +1,6 @@
 import pytest
 
-from nexus_desktop.nexus.projects import (Asset, InspectionLocked, Project, choose_inspection, list_assets,
+from nexus_desktop.nexus.projects import (Asset, InspectionError, InspectionLocked, Project, choose_inspection, list_assets,
                                           list_projects, resolve_inspection)
 from nexus_desktop.storage.local_index import LocalIndex
 from tests.conftest import FakeClient
@@ -64,3 +64,45 @@ def test_resolve_inspection_refuses_approved(tmp_path):
     with pytest.raises(InspectionLocked):
         resolve_inspection(c, "p", "a", LocalIndex(tmp_path / "otra") if (tmp_path / "otra").mkdir() is None else None)
     assert c.inserted == []
+
+
+def test_resolve_inspection_ignores_index_hit_from_other_project(tmp_path):
+    c = FakeClient({"inspections": [{"id": "deA", "project_id": "A", "asset_id": "a",
+                                     "kind": "wind_blade", "status": "captured"}]})
+    index = LocalIndex(tmp_path)
+    index.set_inspection("a", "deA")
+    insp = resolve_inspection(c, "B", "a", index)
+    assert insp != "deA" and c.inserted[0][1]["project_id"] == "B"
+    assert LocalIndex(tmp_path).inspection_id("a") == insp
+
+
+def test_resolve_inspection_other_project_approved_does_not_lock(tmp_path):
+    c = FakeClient({"inspections": [{"id": "deA", "project_id": "A", "asset_id": "a",
+                                     "kind": "wind_blade", "status": "approved"},
+                                    {"id": "deB", "project_id": "B", "asset_id": "a",
+                                     "kind": "wind_blade", "status": "pending"}]})
+    index = LocalIndex(tmp_path)
+    index.set_inspection("a", "deA")
+    assert resolve_inspection(c, "B", "a", index) == "deB"
+
+
+def test_resolve_inspection_insert_race_reuses_row(tmp_path):
+    c = FakeClient()
+
+    def race(client, row):
+        client.tables["inspections"] = [{"id": "ganador", "project_id": "p", "asset_id": "a",
+                                         "kind": "wind_blade", "status": "captured"}]
+        raise RuntimeError("duplicate key value violates unique constraint")
+    c.insert_hook = race
+    assert resolve_inspection(c, "p", "a", LocalIndex(tmp_path)) == "ganador"
+
+
+def test_resolve_inspection_insert_failure_raises_readable_error(tmp_path):
+    c = FakeClient()
+
+    def boom(client, row):
+        raise RuntimeError("Bearer eyJsecreto")
+    c.insert_hook = boom
+    with pytest.raises(InspectionError) as exc:
+        resolve_inspection(c, "p", "a", LocalIndex(tmp_path))
+    assert "No se pudo crear la inspección" in str(exc.value) and "eyJ" not in str(exc.value)

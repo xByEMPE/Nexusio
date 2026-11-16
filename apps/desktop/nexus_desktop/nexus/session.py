@@ -57,5 +57,7 @@ class Session:
             try:
                 session = self.client.auth.refresh_session(session.refresh_token).session
             except Exception:
-                raise SessionLost("Sesión caducada: vuelva a iniciar sesión.") from None
+                session = None
+            if session is None:
+                raise SessionLost("Sesión caducada: vuelva a iniciar sesión.")
         return session.access_token
