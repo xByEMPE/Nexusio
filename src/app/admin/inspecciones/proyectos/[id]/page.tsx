@@ -65,7 +65,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const availableStaff = (staff?.data ?? []).filter((u) => !assignedSet.has(u.id));
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Link href="/admin/inspecciones/proyectos" className="text-xs text-foreground-muted hover:text-foreground">
         ← Proyectos
       </Link>
@@ -77,7 +77,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </p>
 
       {isAdmin && (
-        <details className="panel mt-6 p-5">
+        <details className="panel mt-6 max-w-4xl p-5">
           <summary className="label-caps cursor-pointer">Editar proyecto y contactos</summary>
           <ActionForm action={upsertProject} submitLabel="Guardar" successMessage="Proyecto actualizado." className="mt-4 flex flex-col gap-4">
             <input type="hidden" name="id" value={project.id} />

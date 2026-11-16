@@ -49,7 +49,7 @@ export default async function InspectionPage({
   const canEdit = isAdmin || !approved;
 
   return (
-    <div className="max-w-7xl">
+    <div>
       <Link href={`/admin/inspecciones/proyectos/${id}`} className="text-xs text-foreground-muted hover:text-foreground">
         ← {inspection.projects?.name ?? "Proyecto"}
       </Link>

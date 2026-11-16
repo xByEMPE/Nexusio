@@ -43,7 +43,7 @@ export default async function PortalPhotoViewerPage({
   return (
     <>
       <PortalHeader email={viewer.user.email} />
-      <main className="container flex flex-col gap-3 py-4 md:py-6">
+      <main className="flex w-full flex-col gap-3 px-4 py-3 md:px-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <Link href={backHref} className="text-xs text-foreground-muted hover:text-foreground">
             ← {asset?.name ?? "Inspección"} · fotos
@@ -51,7 +51,7 @@ export default async function PortalPhotoViewerPage({
           {data.inspection.status !== "approved" && <span className="text-2xs text-foreground-muted">En revisión por NEXUS</span>}
         </div>
         {viewerData ? (
-          <div className="h-[calc(100dvh-9rem)] min-h-[420px]">
+          <div className="h-[calc(100dvh-8rem)] min-h-[420px]">
             <PhotoViewer
               data={viewerData}
               mode="client"

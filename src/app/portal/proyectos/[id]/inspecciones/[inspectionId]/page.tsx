@@ -46,7 +46,7 @@ export default async function PortalInspectionPage({
   return (
     <>
       <PortalHeader email={viewer.user.email} />
-      <main className="container max-w-7xl py-8 md:py-10">
+      <main className="w-full px-4 py-6 md:px-6 md:py-8">
         <Link href={`/portal/proyectos/${id}`} className="text-xs text-foreground-muted hover:text-foreground">
           ← {inspection.projects?.name ?? "Proyecto"}
         </Link>

@@ -15,7 +15,7 @@ export function InspectionsNav() {
   const pathname = usePathname();
   return (
     <nav aria-label="Inspecciones" className="border-b border-border-subtle bg-surface-layer">
-      <ul className="container flex gap-1 overflow-x-auto py-2">
+      <ul className="flex gap-1 overflow-x-auto px-4 py-2 md:px-6">
         {ITEMS.map((i) => {
           const active = pathname === i.href || pathname.startsWith(`${i.href}/`);
           return (

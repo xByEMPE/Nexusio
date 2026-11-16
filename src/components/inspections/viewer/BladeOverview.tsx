@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { cn } from "@/lib/cn";
+import { StripViewer, type StripItem } from "./StripViewer";
 
 export type OverviewStrip = {
   blade: "A" | "B" | "C";
@@ -16,15 +17,21 @@ const FACE_ORDER = ["LE", "PS", "TE", "SS"] as const;
 const FACE_LABEL = { LE: "Borde de ataque (LE)", PS: "Lado de presión (PS)", TE: "Borde de salida (TE)", SS: "Lado de succión (SS)" } as const;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
+/** Movimiento (px) por debajo del cual un arrastre cuenta como clic y abre la tira en el visor aparte. */
+const CLICK_SLOP_PX = 4;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** Las 4 caras de una pala lado a lado con un solo zoom y desplazamiento compartidos. Solo visual. */
+/**
+ * Las 4 caras de una pala lado a lado con un solo zoom y desplazamiento compartidos; un clic en una
+ * tira la abre sola en un visor aparte. Solo visual.
+ */
 export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
   const available = BLADES.filter((b) => strips.some((s) => s.blade === b));
   const [blade, setBlade] = useState<(typeof BLADES)[number]>(available[0] ?? "A");
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
-  const drag = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
+  const drag = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const size = () => {
@@ -60,11 +67,12 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y };
+    drag.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false };
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
     if (!d) return;
+    if (Math.hypot(e.clientX - d.px, e.clientY - d.py) > CLICK_SLOP_PX) d.moved = true;
     const { w, h } = size();
     setView((v) => ({
       ...v,
@@ -75,6 +83,19 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
   const endDrag = () => {
     drag.current = null;
   };
+  /** Suelta el arrastre; si no hubo movimiento, abre la tira en el visor aparte. */
+  const endPress = (face: (typeof FACE_ORDER)[number]) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || d.moved) return;
+    const i = items.findIndex((it) => it.face === face);
+    if (i >= 0) setOpen(i);
+  };
+
+  const items: StripItem[] = FACE_ORDER.flatMap((face) => {
+    const s = strips.find((x) => x.blade === blade && x.face === face);
+    return s ? [{ face, label: FACE_LABEL[face], url: s.url, width_px: s.width_px, height_px: s.height_px }] : [];
+  });
 
   if (available.length === 0) {
     return <div className="panel p-10 text-center text-sm text-foreground-muted">Esta inspección aún no tiene tiras de pala completa.</div>;
@@ -129,10 +150,11 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
               <div
                 ref={face === "LE" ? boxRef : undefined}
                 className="relative h-[70vh] min-h-[360px] touch-none select-none overflow-hidden rounded-[2px] border border-border-subtle bg-background-base"
-                style={{ cursor: view.zoom > 1 ? "grab" : "default" }}
+                style={{ cursor: strip ? (view.zoom > 1 ? "grab" : "zoom-in") : "default" }}
+                title={strip ? "Clic para abrir esta cara en un visor aparte" : undefined}
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
-                onPointerUp={endDrag}
+                onPointerUp={() => endPress(face)}
                 onPointerCancel={endDrag}
               >
                 {strip ? (
@@ -148,7 +170,10 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
           );
         })}
       </div>
-      <p className="text-2xs text-foreground-subtle">Punta arriba, raíz abajo. Rueda o botones para el zoom; arrastre para desplazar. Vista informativa, sin marcas.</p>
+      <p className="text-2xs text-foreground-subtle">
+        Punta arriba, raíz abajo. Rueda o botones para el zoom; arrastre para desplazar; clic en una tira para abrirla sola en un visor aparte. Vista informativa, sin marcas.
+      </p>
+      {open != null && items[open] && <StripViewer blade={blade} items={items} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />}
     </div>
   );
 }

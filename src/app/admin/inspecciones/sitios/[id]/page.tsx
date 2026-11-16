@@ -51,7 +51,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
   const mapTurbines = site.kind === "wind_farm" ? await loadSiteMap(sb, id, "admin") : [];
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <Link href={`/admin/inspecciones/sitios?org=${site.organization_id}`} className="text-xs text-foreground-muted hover:text-foreground">
         ← Sitios
       </Link>
@@ -67,7 +67,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
       </p>
 
       {isAdmin && (
-        <details className="panel mt-6 p-5">
+        <details className="panel mt-6 max-w-4xl p-5">
           <summary className="label-caps cursor-pointer">Editar sitio</summary>
           <ActionForm action={upsertSite} submitLabel="Guardar" successMessage="Sitio actualizado." className="mt-4 flex flex-col gap-4">
             <input type="hidden" name="id" value={site.id} />
@@ -146,7 +146,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
       </section>
 
       {isAdmin && (
-        <section className="panel mt-6 p-5">
+        <section className="panel mt-6 max-w-4xl p-5">
           <h2 className="label-caps">Nuevo activo</h2>
           <ActionForm action={upsertAsset} submitLabel="Crear" successMessage="Activo creado." className="mt-4 flex flex-col gap-4">
             <AssetFields siteId={site.id} />

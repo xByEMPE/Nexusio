@@ -140,3 +140,37 @@
     border-right-width: 1px;
   }
 }
+
+/* Recuadro del mapa del parque al pasar sobre una turbina. El estilo base de MapLibre
+   es una caja blanca que hereda el color del texto: en el tema oscuro (texto blanco)
+   quedaba en blanco. El mapa siempre es oscuro, así que el recuadro usa colores fijos. */
+.nexus-map-tip .maplibregl-popup-content {
+  background: #0a1124;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: 2px;
+  padding: 6px 9px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.45);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.nexus-map-tip .nexus-map-tip-status {
+  color: #cbd5e1;
+}
+.nexus-map-tip.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.nexus-map-tip.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.nexus-map-tip.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: #0a1124;
+}
+.nexus-map-tip.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.nexus-map-tip.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.nexus-map-tip.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: #0a1124;
+}
+.nexus-map-tip.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: #0a1124;
+}
+.nexus-map-tip.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: #0a1124;
+}

@@ -6,7 +6,7 @@ import { portalSignOut } from "@/app/portal/actions";
 export function PortalHeader({ email }: { email: string | undefined }) {
   return (
     <header className="border-b border-border-subtle bg-surface-layer">
-      <div className="container flex h-16 items-center justify-between gap-4">
+      <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-6">
         <Link href="/portal" className="flex items-center gap-3">
           <NexusMark className="h-7 w-7" animated={false} spinning={false} />
           <Wordmark className="hidden text-lg sm:inline" />

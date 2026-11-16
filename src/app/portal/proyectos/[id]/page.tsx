@@ -41,7 +41,7 @@ export default async function PortalProjectPage({ params }: { params: Promise<{ 
   return (
     <>
       <PortalHeader email={viewer.user.email} />
-      <main className="container max-w-5xl py-8 md:py-10">
+      <main className="w-full px-4 py-6 md:px-6 md:py-8">
         <Link href="/portal" className="text-xs text-foreground-muted hover:text-foreground">
           ← Mis proyectos
         </Link>

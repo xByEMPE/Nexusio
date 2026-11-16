@@ -46,6 +46,22 @@ function addLayers(map: MlMap, data: GeoJSON.FeatureCollection) {
   });
 }
 
+/** Contenido del recuadro al pasar sobre una turbina: nombre y estado (estilo en globals.css). */
+function tipContent(name: string, status: string | null): HTMLElement {
+  const el = document.createElement("div");
+  const n = document.createElement("div");
+  n.style.fontWeight = "600";
+  n.textContent = name;
+  el.append(n);
+  if (status) {
+    const s = document.createElement("div");
+    s.className = "nexus-map-tip-status";
+    s.textContent = status;
+    el.append(s);
+  }
+  return el;
+}
+
 type Positioned = MapTurbine & { lat: number; lon: number };
 
 export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapTurbine[]; satelliteEnabled: boolean }) {
@@ -100,7 +116,7 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14 });
+    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: "nexus-map-tip" });
     map.on("style.load", () => addLayers(map, dataRef.current));
     map.on("mousemove", "turbine-circles", (e) => {
       map.getCanvas().style.cursor = "pointer";
@@ -109,7 +125,7 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
       const t = turbinesRef.current.find((x) => x.assetId === f.properties.id);
       tip
         .setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
-        .setText(`${f.properties.name}${t ? ` · ${t.status ? INSPECTION_STATUS_LABEL[t.status] : "Sin inspección"}` : ""}`)
+        .setDOMContent(tipContent(t?.name ?? String(f.properties.name ?? ""), t ? (t.status ? INSPECTION_STATUS_LABEL[t.status] : "Sin inspección") : null))
         .addTo(map);
     });
     map.on("mouseleave", "turbine-circles", () => {
@@ -143,7 +159,7 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
   return (
     <div className="flex flex-col gap-3">
       <MapFilters value={filters} onChange={setFilters} />
-      <div className="panel relative h-[28rem] overflow-hidden">
+      <div className="panel relative h-[max(28rem,65dvh)] overflow-hidden">
         <div ref={box} className="h-full w-full" />
         {satelliteEnabled && (
           <button

@@ -12,7 +12,7 @@ export default async function InspectionsAdminLayout({ children }: { children: R
     <>
       <AdminHeader email={viewer.user.email} />
       <InspectionsNav />
-      <main className="container py-8 md:py-10">{children}</main>
+      <main className="w-full px-4 py-6 md:px-6 md:py-8">{children}</main>
     </>
   );
 }
