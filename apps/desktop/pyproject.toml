@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "onnx"]
 
 [tool.setuptools.packages.find]
 include = ["nexus_desktop*"]
