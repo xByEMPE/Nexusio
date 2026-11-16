@@ -28,3 +28,6 @@ __pycache__/
 *.egg-info/
 .ingest_index.json
 .pytest_cache/
+
+# Inspecciones reales (fotos de clientes): nunca en el repo
+WTG*/
