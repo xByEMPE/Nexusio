@@ -1,5 +1,5 @@
 import { radiusAtRow, rowAtRadius, type BladeFrame } from "./radius";
-import { imageToScreen, screenToImage, type ViewState } from "./transform";
+import { imageToScreen, normDeg, screenToImage, type ViewState } from "./transform";
 
 const TARGET_PX_BETWEEN_TICKS = 80;
 const MARGIN_PX = 50;
@@ -26,7 +26,7 @@ export type RulerTick = { y: number; r_m: number; label: string };
  * (múltiplo de 360°); con rotación no hay regla.
  */
 export function rulerTicks(v: ViewState, f: BladeFrame): RulerTick[] {
-  if (((v.rotationDeg % 360) + 360) % 360 !== 0) return [];
+  if (normDeg(v.rotationDeg) !== 0) return [];
   if (!(f.gsd_mm_px > 0) || !(v.zoom > 0)) return [];
 
   const lo = -MARGIN_PX;
@@ -58,7 +58,7 @@ export type HorizontalRulerTick = { x: number; offset_mm: number; label: string 
  * (negativo a la izquierda) para identificar cada marca; la etiqueta no.
  */
 export function horizontalRulerTicks(v: ViewState, gsd_mm_px: number): HorizontalRulerTick[] {
-  if (((v.rotationDeg % 360) + 360) % 360 !== 0) return [];
+  if (normDeg(v.rotationDeg) !== 0) return [];
   if (!(gsd_mm_px > 0) || !(v.zoom > 0)) return [];
 
   const lo = -MARGIN_PX;

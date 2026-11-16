@@ -12,6 +12,9 @@ export type ViewState = {
 };
 
 export const MIN_ZOOM = 0.1;
+
+/** Ángulo en [0, 360). */
+export const normDeg = (deg: number): number => ((deg % 360) + 360) % 360;
 export const MAX_ZOOM = 10;
 
 /**

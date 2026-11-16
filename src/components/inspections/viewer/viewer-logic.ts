@@ -3,6 +3,7 @@ import {
   clampZoom,
   fillZoom,
   NO_INSETS,
+  normDeg,
   rotatedSize,
   segmentMeasurement,
   MAX_ZOOM,
@@ -25,8 +26,7 @@ import {
 export type Size = { w: number; h: number };
 export type Transform = Pick<ViewState, "zoom" | "panX" | "panY" | "rotationDeg">;
 
-/** Ángulo en [0, 360). */
-export const normDeg = (deg: number): number => ((deg % 360) + 360) % 360;
+export { normDeg };
 
 /**
  * Vista ajustada: la foto llena el alto (o el ancho, si limita) de la zona libre de reglas y queda
@@ -34,9 +34,13 @@ export const normDeg = (deg: number): number => ((deg % 360) + 360) % 360;
  */
 export function fitTransform(container: Size, image: Size, rotationDeg: number, insets: Insets = NO_INSETS): Transform {
   const rot = normDeg(rotationDeg);
+  const viewW = container.w - insets.left;
+  const viewH = container.h - insets.bottom;
+  // Contenedor sin medir o más chico que las reglas: zoom 1, sin desplazamiento (como `constrainTransform`).
+  if (!(viewW > 0) || !(viewH > 0) || !(image.w > 0) || !(image.h > 0)) return { zoom: 1, panX: 0, panY: 0, rotationDeg: rot };
   const b = rotatedSize(image.w, image.h, rot);
   // Sin límite inferior: en un celular la foto completa puede pedir menos de MIN_ZOOM.
-  const zoom = Math.min(MAX_ZOOM, fillZoom(container.w - insets.left, container.h - insets.bottom, b.w, b.h));
+  const zoom = Math.min(MAX_ZOOM, fillZoom(viewW, viewH, b.w, b.h));
   const t = { zoom, panX: 0, panY: 0, rotationDeg: rot };
   return { ...t, ...clampPan(toViewState(t, container, image), insets) };
 }
@@ -46,11 +50,32 @@ export function fitTransform(container: Size, image: Size, rotationDeg: number, 
  * la foto siga pegada a la izquierda/arriba si cabe o cubra toda la zona libre si es mayor.
  */
 export function constrainTransform(t: Transform, container: Size, image: Size, insets: Insets = NO_INSETS): Transform {
-  if (!(container.w > 0) || !(container.h > 0)) return t;
+  if (!(container.w - insets.left > 0) || !(container.h - insets.bottom > 0)) return t;
   const fit = fitTransform(container, image, t.rotationDeg, insets);
   const zoom = Math.max(fit.zoom, t.zoom);
   const z = { ...t, zoom };
   return { ...z, ...clampPan(toViewState(z, container, image), insets) };
+}
+
+/** Modo de la vista: ajustada (sigue al contenedor y a las reglas) o manual (zoom/desplazamiento propios). */
+export type ViewMode = { kind: "fit"; rotationDeg: number } | { kind: "manual"; t: Transform };
+
+/** Dos transformaciones iguales salvo error numérico (zoom relativo ε, desplazamiento ±0,001 px). */
+export function sameTransform(a: Transform, b: Transform, eps = 1e-6): boolean {
+  return (
+    normDeg(a.rotationDeg) === normDeg(b.rotationDeg) &&
+    Math.abs(a.zoom - b.zoom) <= eps * Math.max(1, Math.abs(b.zoom)) &&
+    Math.abs(a.panX - b.panX) <= 1e-3 &&
+    Math.abs(a.panY - b.panY) <= 1e-3
+  );
+}
+
+/**
+ * Modo tras un gesto ya limitado (`constrainTransform`): si quedó igual que el ajuste, vuelve al modo
+ * ajustado (un cambio de tamaño posterior vuelve a ajustar); si no, queda en manual.
+ */
+export function nextViewMode(t: Transform, fit: Transform): ViewMode {
+  return sameTransform(t, fit) ? { kind: "fit", rotationDeg: normDeg(t.rotationDeg) } : { kind: "manual", t };
 }
 
 /**

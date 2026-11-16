@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { NO_INSETS, type Insets, type Pt, type ViewState } from "@/lib/blade";
-import { constrainTransform, fitTransform, normDeg, panTransform, toViewState, zoomAt, type Size, type Transform } from "./viewer-logic";
+import { constrainTransform, fitTransform, nextViewMode, normDeg, panTransform, toViewState, zoomAt, type Size, type Transform, type ViewMode } from "./viewer-logic";
 
-type Mode = { kind: "fit"; rotationDeg: number } | { kind: "manual"; t: Transform };
+type Mode = ViewMode;
 
 const noInsets = (): Insets => NO_INSETS;
 
@@ -23,10 +23,15 @@ export function useViewState(image: Size, container: Size, insetsFor: (rotationD
     return constrainTransform(m.t, container, image, insetsFor(m.t.rotationDeg));
   };
   const view: ViewState = toViewState(current(mode), container, image);
+  /** Limita el resultado de un gesto; si coincide con el ajuste, sigue en modo ajustado. */
+  const settle = (t: Transform): Mode => {
+    const insets = insetsFor(t.rotationDeg);
+    return nextViewMode(constrainTransform(t, container, image, insets), fitTransform(container, image, t.rotationDeg, insets));
+  };
 
   /** Zoom por un factor; con `at` (px del contenedor) el punto bajo el cursor queda fijo (y luego se limita). */
-  const zoomBy = (f: number, at?: Pt) => setMode((m) => ({ kind: "manual", t: current({ kind: "manual", t: zoomAt(current(m), container, f, at) }) }));
-  const panBy = (dx: number, dy: number) => setMode((m) => ({ kind: "manual", t: current({ kind: "manual", t: panTransform(current(m), dx, dy) }) }));
+  const zoomBy = (f: number, at?: Pt) => setMode((m) => settle(zoomAt(current(m), container, f, at)));
+  const panBy = (dx: number, dy: number) => setMode((m) => settle(panTransform(current(m), dx, dy)));
   /** Gira `deg` grados y vuelve a ajustar (con 90° cambian el ancho y el alto visibles). */
   const rotate = (deg: number) => setMode((m) => ({ kind: "fit", rotationDeg: normDeg(current(m).rotationDeg + deg) }));
   /** Ajusta conservando el giro. */

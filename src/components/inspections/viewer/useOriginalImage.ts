@@ -72,3 +72,10 @@ export function useOriginalImage(photo: Photo, zoom: number, onMessage: (m: stri
 
   return { originalUrl: originals[id] ?? null, onPreviewSize, onOriginalError, freshOriginalUrl, download, downloading };
 }
+
+/** Precarga imágenes (p. ej. las vistas previas de las 2 fotos vecinas). */
+export function usePreloadImages(a: string | null | undefined, b: string | null | undefined) {
+  useEffect(() => {
+    for (const url of [a, b]) if (url) new Image().src = url;
+  }, [a, b]);
+}

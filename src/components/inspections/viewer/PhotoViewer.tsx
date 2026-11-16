@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { screenToImage, type Pt, type Region } from "@/lib/blade";
 import type { ViewerCapabilities } from "@/lib/inspections/capabilities";
 import { updateFinding } from "@/lib/inspections/viewer-actions";
@@ -13,7 +13,7 @@ import { ImageStage, DEFAULT_FILTERS, type ImageFilters } from "./ImageStage";
 import { SplitStage } from "./OtherFaces";
 import { OverlayLayer } from "./OverlayLayer";
 import type { ViewerPhoto } from "./photo-data";
-import { BottomRuler, Ruler, RULER_H, RULER_W } from "./Ruler";
+import { BottomRuler, Ruler } from "./Ruler";
 import { StageHud } from "./StageHud";
 import { ThermalCanvas, ThermalShapes } from "./ThermalCanvas";
 import { SpectrumSwitch, ThermalControls } from "./ThermalControls";
@@ -22,7 +22,8 @@ import { Toolbar, type Tool } from "./Toolbar";
 import { useAreaTool } from "./useAreaTool";
 import { useElementSize, useIsDesktop } from "./useElementSize";
 import { useFindingEditing } from "./useFindingEditing";
-import { useOriginalImage } from "./useOriginalImage";
+import { useOriginalImage, usePreloadImages } from "./useOriginalImage";
+import { useRulers } from "./useRulers";
 import { useStablePhotos } from "./useStablePhotos";
 import { useStageGestures } from "./useStageGestures";
 import { useThermal } from "./useThermal";
@@ -31,7 +32,7 @@ import { useViewerMutation } from "./useViewerMutation";
 import { useViewerSelection } from "./useViewerSelection";
 import { useViewState } from "./useViewState";
 import { ViewerSidePanel } from "./ViewerSidePanel";
-import { cancelApplies, crosshairText, frameFor, neighbors, rulerInsets, scaleStatus } from "./viewer-logic";
+import { cancelApplies, crosshairText, frameFor, neighbors, scaleStatus } from "./viewer-logic";
 
 export type PhotoViewerData = {
   photos: ViewerPhoto[];
@@ -72,10 +73,8 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const stageRef = useRef<HTMLDivElement>(null);
   const container = useElementSize(stageRef);
   const image = { w: photo.width_px, h: photo.height_px };
-  const [rulerOn, setRulerOn] = useState(true);
-  // Vista fija a la izquierda; la foto se ajusta a la zona que no ocupan las reglas.
-  const insetsFor = (rot: number) => rulerInsets(scaleStatus(photo, rot), rulerOn, RULER_W, RULER_H);
-  const { view, zoomBy, panBy, rotate, fit, reset } = useViewState(image, container, insetsFor);
+  const rulers = useRulers(photo);
+  const { view, zoomBy, panBy, rotate, fit, reset } = useViewState(image, container, rulers.insetsFor);
 
   const [filters, setFilters] = useState<ImageFilters>(DEFAULT_FILTERS);
   const [tool, setTool] = useState<Tool>("move");
@@ -83,7 +82,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const [message, setMessage] = useState<string | null>(null);
 
   const status = { ...scaleStatus(photo, view.rotationDeg), frame: frameFor(photo, tipAtTop) };
-  const insets = insetsFor(view.rotationDeg);
+  const { insets, left: rulerShown, bottom: bottomRulerShown } = rulers.layout(view.rotationDeg);
   const desktop = useIsDesktop();
   const canEditHere = capabilities.editFindings && desktop;
 
@@ -114,19 +113,14 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
   const goPrev = nav.prev ? () => sel.goTo(nav.prev!.id) : null;
   const goNext = nav.next ? () => sel.goTo(nav.next!.id) : null;
 
-  // Precarga de las vistas previas de las 2 vecinas.
-  useEffect(() => {
-    for (const n of [nav.prev, nav.next]) {
-      if (n?.previewUrl) new Image().src = n.previewUrl;
-    }
-  }, [nav.prev, nav.next]);
+  usePreloadImages(nav.prev?.previewUrl, nav.next?.previewUrl); // vistas previas de las 2 vecinas
 
   // --- Vista previa → original -----------------------------------------------------------------
   const original = useOriginalImage(photo, view.zoom, setMessage);
 
   // --- Herramientas ----------------------------------------------------------------------------
   const measuring = tool === "area" || tool === "distance";
-  const areaTool = useAreaTool({ mode: tool === "area" || tool === "distance" ? tool : null, view, gsd: photo.gsd_mm_px });
+  const areaTool = useAreaTool({ mode: measuring ? tool : null, view, gsd: photo.gsd_mm_px });
   const chooseTool = (t: Tool) => {
     setTool(t);
     if (t !== "move") thermal.chooseTool("off");
@@ -174,8 +168,6 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
 
   const crosshair = tool === "crosshair" && cursor ? { screen: cursor, text: crosshairText(screenToImage(cursor, view), status.frame) } : null;
   const measured = container.w > 0 && container.h > 0;
-  const rulerShown = rulerOn && status.ruler && status.frame != null;
-  const bottomRulerShown = rulerOn && status.bottomRuler && photo.gsd_mm_px != null;
   const drawing = measuring || ((tool === "newBox" || tool === "newPolygon") && !editing.draftRegion);
 
   return (
@@ -189,9 +181,9 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
         onRotate={rotate}
         onTool={chooseTool}
         canMeasure={status.canMeasure}
-        rulerOn={rulerOn}
+        rulerOn={rulers.on}
         rulerAvailable={status.ruler || status.bottomRuler}
-        onToggleRuler={() => setRulerOn((v) => !v)}
+        onToggleRuler={rulers.toggle}
         onDownload={() => void original.download(photo.file_name)}
         spectrumSwitch={pair ? <SpectrumSwitch thermalActive={photo.spectrum === "thermal"} rgbId={pair.rgbId} thermalId={pair.thermalId} onGo={sel.goTo} /> : undefined}
         editTools={canEditHere ? <NewFindingTools tool={tool} onTool={chooseTool} /> : undefined}
@@ -240,7 +232,7 @@ export function PhotoViewer({ data, mode, capabilities }: { data: PhotoViewerDat
                     </>
                   }
                 />
-                {rulerShown && <Ruler view={view} frame={status.frame!} estimated={status.estimated} bottom={insets.bottom} />}
+                {rulerShown && status.frame && <Ruler view={view} frame={status.frame} estimated={status.estimated} bottom={insets.bottom} />}
                 {bottomRulerShown && <BottomRuler view={view} gsd={photo.gsd_mm_px!} estimated={status.estimated} left={insets.left} />}
               </>
             )}

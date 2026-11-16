@@ -8,6 +8,8 @@ import {
   addDistancePoint,
   distanceReadout,
   rulerInsets,
+  nextViewMode,
+  sameTransform,
   MAX_ORIGINAL_ATTEMPTS,
   shouldRequestOriginal,
   crosshairText,
@@ -67,8 +69,9 @@ describe("fitTransform", () => {
   it("en un celular el ajuste puede quedar por debajo de MIN_ZOOM", () => {
     expect(fitTransform({ w: 360, h: 400 }, image, 0).zoom).toBeCloseTo(360 / 5280);
   });
-  it("contenedor sin medir: zoom 1", () => {
-    expect(fitTransform({ w: 0, h: 0 }, image, 0).zoom).toBe(1);
+  it("contenedor sin medir o más chico que las reglas: zoom 1 sin desplazamiento", () => {
+    expect(fitTransform({ w: 0, h: 0 }, image, 0)).toEqual({ zoom: 1, panX: 0, panY: 0, rotationDeg: 0 });
+    expect(fitTransform({ w: 50, h: 600 }, image, 90, { left: 64, bottom: 30 })).toEqual({ zoom: 1, panX: 0, panY: 0, rotationDeg: 90 });
   });
 });
 
@@ -112,6 +115,29 @@ describe("constrainTransform (vista fija)", () => {
   it("contenedor sin medir: no cambia nada", () => {
     const t = { zoom: 2, panX: 5, panY: 6, rotationDeg: 0 };
     expect(constrainTransform(t, { w: 0, h: 0 }, image)).toEqual(t);
+  });
+});
+
+describe("nextViewMode", () => {
+  const fit = fitTransform(container, image, 0);
+  it("un gesto que deja la vista igual que el ajuste vuelve al modo ajustado", () => {
+    const dragged = constrainTransform(panTransform(fit, 200, 150), container, image);
+    expect(nextViewMode(dragged, fit)).toEqual({ kind: "fit", rotationDeg: 0 });
+    const zoomedOut = constrainTransform(zoomAt(fit, container, 0.5, { x: 600, y: 400 }), container, image);
+    expect(nextViewMode(zoomedOut, fit)).toEqual({ kind: "fit", rotationDeg: 0 });
+    const r = fitTransform(container, image, 270);
+    expect(nextViewMode({ ...r, panX: r.panX + 1e-9, rotationDeg: -90 }, r)).toEqual({ kind: "fit", rotationDeg: 270 });
+  });
+  it("con zoom o desplazamiento real queda en manual", () => {
+    const z = constrainTransform(zoomAt(fit, container, 2), container, image);
+    expect(nextViewMode(z, fit)).toEqual({ kind: "manual", t: z });
+    const moved = constrainTransform(panTransform(z, -40, 0), container, image);
+    expect(nextViewMode(moved, fit).kind).toBe("manual");
+  });
+  it("sameTransform tolera el error numérico pero no un giro distinto", () => {
+    expect(sameTransform(fit, { ...fit, zoom: fit.zoom * (1 + 1e-9) })).toBe(true);
+    expect(sameTransform(fit, { ...fit, panX: fit.panX + 0.5 })).toBe(false);
+    expect(sameTransform(fit, { ...fit, rotationDeg: 90 })).toBe(false);
   });
 });
 
