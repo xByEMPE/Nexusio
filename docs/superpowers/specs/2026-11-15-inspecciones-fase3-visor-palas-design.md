@@ -315,7 +315,7 @@ Dependencias nuevas: `fast-png` (decodificar y generar PNG de 16 bits), `tsx` (e
 
 - **Fuente**: la foto de la carpeta con terminación `_ID` de la inspección (por ejemplo `WTG 25/DJI_202604291354_001_ID/DJI_…_V_P-….JPG`). Se toma a la altura de la base y el láser apunta a la torre.
 - **Regla**: si `LRFStatus = Normal`, `LRFTargetDistance > 0` y `LRFTargetLat/Lon` no son 0 → posición = punto del láser (`source = 'lrf_target'`). Si no → GPS del dron en esa foto (`source = 'gps'`). Sin foto `_ID` → sin posición.
-- WTG 25: láser a 8.244 m → **16.5636472, −94.7367278** (GPS del dron: 16.5636554, −94.7366548).
+- WTG 25: láser a 8.244 m → **coordenadas reales de la WTG 25 (no se versionan)** (el GPS del dron difiere unos metros).
 - **Dónde se guarda**: columnas nuevas en `inspections`: `asset_lat`, `asset_lon` (`double precision` con `check` de rango) y `asset_position_source` (`'lrf_target' | 'gps'`). El técnico puede escribirlas (RLS de inspecciones); `assets.lat/lon` siguen siendo del admin.
 - **Posición mostrada en el mapa**: `assets.lat/lon` si existen; si no, la de la inspección más reciente con posición. En la ficha del activo, el admin tiene «Usar posición de la última inspección» (rellena `assets.lat/lon` con la acción existente `upsertAsset`).
 - **Foto `_ID`**: se sube también como captura (sin datos de pala) y se registra en `inspections.id_capture_id`; aparece en la ventana de la turbina en el mapa.
@@ -357,3 +357,13 @@ Dependencias nuevas: `fast-png` (decodificar y generar PNG de 16 bits), `tsx` (e
 
 - **Fase 2 (app de PC en TypeScript)**: estimar el GSD de fotos sin láser (por ejemplo interpolando entre vecinas), calcular el radio desde las marcas de raíz y punta, unir las tiras y llamar a Hugging Face. Generará por el mismo contrato los datos que hoy salen de los manifiestos.
 - **Calibración de tiras**: no se necesita mientras sean solo visuales.
+
+## 10. Cambios durante la implementación
+
+- **Tiras**: solo se sube `strip.webp` (sin miniatura).
+- **Permisos**: `can_see_finding` incluye también las cuentas asignadas (`service`), para que la carga de hallazgos por RLS funcione.
+- **Navegación del visor**: las flechas recorren las fotos dentro de la pala actual; la URL se actualiza con `history.replaceState`, sin recargar datos del servidor.
+- **Térmico**: el selector RGB/Térmico navega entre fotos pareadas; el recuadro y la línea de medición térmicos se dibujan con dos clics.
+- **Foto `_ID`**: también se sube como captura (sin pala) y define `id_capture_id`.
+- **Mapa**: «Mapa» es una sección (no una pestaña) del detalle del sitio y solo aparece en parques eólicos. El worker de MapLibre se copia a `public/maplibre` con `postinstall`/`predev`/`prebuild`, con URL versionada. Esri (satélite) solo se activa con `NEXT_PUBLIC_ESRI_API_KEY` (llave pública, restringida por referer).
+- **Datos del cliente**: las coordenadas reales de la WTG 25 no se versionan en estos documentos.

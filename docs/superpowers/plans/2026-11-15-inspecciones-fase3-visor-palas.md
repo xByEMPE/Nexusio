@@ -314,7 +314,7 @@ expect(findingMeasurements({ type: "box", points: [[0,0],[0.1,0.1]] }, { ...cap,
 
 - [ ] **Step 1: Pruebas**: Vitest y pytest con los mismos tres casos (láser `Normal` 8.244 m → `lrf_target`; `LRFStatus: "Error"` → `gps`; sin GPS ni láser → `null`); pgTAP: `tech_a` actualiza `asset_lat/lon` de `inspection_a`; `mgr_a` no (0 filas); valores fuera de rango → `23514`.
 - [ ] **Step 2:** FAIL → **Step 3:** implementar → **Step 4:** `npx supabase db reset && npx supabase test db`, `npm run test`, `.venv/Scripts/pytest -q` PASS.
-- [ ] **Step 5: Corrida real** WTG 25: la inspección queda con `asset_lat ≈ 16.5636472`, `asset_lon ≈ -94.7367278`, `source = 'lrf_target'` e `id_capture_id` de la foto `_ID`.
+- [ ] **Step 5: Corrida real** WTG 25: la inspección queda con `asset_lat`/`asset_lon` ≈ coordenadas reales de la WTG 25 (no se versionan), `source = 'lrf_target'` e `id_capture_id` de la foto `_ID`.
 - [ ] **Step 6:** Commit.
 
 ---
@@ -338,7 +338,7 @@ expect(findingMeasurements({ type: "box", points: [[0,0],[0.1,0.1]] }, { ...cap,
 
 - [ ] **Step 1: Pruebas** de `turbineColor` (cada estado y severidad) y `boundsOf` (un punto → caja mínima con margen; varios puntos).
 - [ ] **Step 2:** FAIL → **Step 3:** `npm i maplibre-gl` e implementar → **Step 4:** `npm run test`, `npm run typecheck`, `npm run build` (confirmar en la salida que `maplibre-gl` no entra en el bundle de las demás páginas).
-- [ ] **Step 5: Verificación en navegador**: sitio del Cliente A → WTG-25 en 16.5636, −94.7367 con color «en revisión»; filtros; clic abre la ventana con la foto `_ID` y el enlace; sin `NEXT_PUBLIC_ESRI_API_KEY` no aparece Satélite; como `gerente@cliente-a.local` el mapa del proyecto se ve; como `gerente@cliente-b.local` el proyecto de A responde 404.
+- [ ] **Step 5: Verificación en navegador**: sitio del Cliente A → WTG-25 en ≈16.56, −94.74 con color «en revisión»; filtros; clic abre la ventana con la foto `_ID` y el enlace; sin `NEXT_PUBLIC_ESRI_API_KEY` no aparece Satélite; como `gerente@cliente-a.local` el mapa del proyecto se ve; como `gerente@cliente-b.local` el proyecto de A responde 404.
 - [ ] **Step 6:** Commit.
 
 ---
