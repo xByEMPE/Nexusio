@@ -25,7 +25,7 @@ dev = ["pytest", "onnx"]
 include = ["nexus_desktop*"]
 
 [tool.setuptools.package-data]
-nexus_desktop = ["schema/*.json"]
+nexus_desktop = ["schema/*.json", "ui/assets/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
