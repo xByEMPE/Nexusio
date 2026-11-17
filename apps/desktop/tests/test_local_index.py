@@ -140,3 +140,21 @@ def test_unmark_uploaded_persists(tmp_path):
     idx.save()
     again = LocalIndex(tmp_path)
     assert not again.is_uploaded("o/a.jpg") and again.is_uploaded("o/b.jpg")
+
+
+def test_uploaded_sha_round_trip_and_legacy_unknown(tmp_path):
+    idx = LocalIndex(tmp_path)
+    idx.mark_uploaded("o/strip.webp", "aaa")
+    idx.mark_uploaded("o/foto.jpg")
+    idx.save()
+    again = LocalIndex(tmp_path)
+    assert again.is_uploaded("o/strip.webp", "aaa") and not again.is_uploaded("o/strip.webp", "bbb")
+    assert again.is_uploaded("o/foto.jpg") and not again.is_uploaded("o/foto.jpg", "aaa")
+    again.unmark_uploaded("o/strip.webp")
+    assert not again.is_uploaded("o/strip.webp", "aaa")
+
+
+def test_wrong_typed_uploaded_sha_is_corrupt(tmp_path):
+    (tmp_path / INDEX_NAME).write_text(json.dumps({"uploaded_sha256": ["x"]}), encoding="utf-8")
+    idx = LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).exists() and idx.load_warning

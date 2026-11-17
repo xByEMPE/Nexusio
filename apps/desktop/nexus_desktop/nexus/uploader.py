@@ -227,11 +227,11 @@ class _Run:
         if self.cancel.is_set():
             raise _Cancelled
 
-    def send(self, src: Path, name: str, content_type: str) -> None:
+    def send(self, src: Path, name: str, content_type: str, sha256: str | None = None) -> None:
         # El token se pide antes de cada subida (corridas largas); nunca se muestra.
         self.send_fn(src, name, content_type, supabase_url=self.url, access_token=self.session.access_token(),
                      publishable_key=self.key)
-        self.index.mark_uploaded(name)
+        self.index.mark_uploaded(name, sha256)
 
     # --- pasos --------------------------------------------------------------------------------
     def hash_photos(self, candidates: list[tuple[Path, str | None, str | None]]) -> list[_Photo]:
@@ -311,6 +311,9 @@ class _Run:
             with Image.open(strip.path) as im:
                 im.load()  # la tira de origen se lee entera; un fallo aquí es de este archivo
                 original_h = im.size[1]
+            # Reprocesar reescribe la tira con el MISMO nombre (mismo id y misma ruta en Storage): la
+            # huella decide si el objeto subido sigue siendo esta tira o hay que reenviarla.
+            sha = sha256_file(strip.path)
         except _SOURCE_ERRORS:
             self.skip_file(strip.path.name, f"Tira omitida (dañada o ilegible): {strip.path.name}")
             return None
@@ -323,10 +326,10 @@ class _Run:
             self.strip_names[mosaic["path"]] = strip.path.name
             if strip.calibration is not None:
                 mosaic["calibration"] = _scaled_calibration(strip.calibration, original_h, h)
-            uploaded = self.index.is_uploaded(mosaic["path"])
+            uploaded = self.index.is_uploaded(mosaic["path"], sha)
             if not uploaded:
                 self.index.save()
-                self.send(out, mosaic["path"], "image/webp")
+                self.send(out, mosaic["path"], "image/webp", sha)  # x-upsert: reemplaza la anterior
                 self.index.save()
         finally:
             out.unlink(missing_ok=True)

@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 INDEX_NAME = ".ingest_index.json"
+SHA_KEY = "uploaded_sha256"
 
 
 class LocalIndex:
@@ -16,6 +17,7 @@ class LocalIndex:
         self.path = self.folder / INDEX_NAME
         self.load_warning: str | None = None
         self._uploaded: set[str] = set()
+        self._sha: dict[str, str] = {}  # objeto subido -> sha256 del archivo de origen (tiras)
         self._data: dict = {"inspections": {}, "captures": {}, "mosaics": {}}
         self._load()
 
@@ -74,11 +76,13 @@ class LocalIndex:
             if not isinstance(up, list) or not all(isinstance(x, str) for x in up):
                 raise ValueError("uploaded inválido")
             uploaded = set(up)
+            shas = self._str_map(raw.get(SHA_KEY, {}))  # índices anteriores no lo tienen
         except (ValueError, TypeError):
             self._quarantine()
             return
         self._data = data
         self._uploaded = uploaded
+        self._sha = shas
 
     def capture_id(self, sha: str) -> str:
         return self._data["captures"].setdefault(sha, str(uuid.uuid4()))
@@ -92,15 +96,26 @@ class LocalIndex:
     def set_inspection(self, asset_id: str, inspection_id: str) -> None:
         self._data["inspections"][asset_id] = inspection_id
 
-    def mark_uploaded(self, object_path: str) -> None:
+    def mark_uploaded(self, object_path: str, sha256: str | None = None) -> None:
+        """Marca `object_path` como subido. Con `sha256` (huella del archivo de origen) se recuerda
+        también QUÉ contenido se subió, para reenviarlo si el archivo cambia con el mismo nombre."""
         self._uploaded.add(object_path)
+        if sha256 is None:
+            self._sha.pop(object_path, None)
+        else:
+            self._sha[object_path] = sha256
 
     def unmark_uploaded(self, object_path: str) -> None:
         """Olvida que `object_path` se subió (el servidor dijo que no está: `missing_object`)."""
         self._uploaded.discard(object_path)
+        self._sha.pop(object_path, None)
 
-    def is_uploaded(self, object_path: str) -> bool:
-        return object_path in self._uploaded
+    def is_uploaded(self, object_path: str, sha256: str | None = None) -> bool:
+        """Con `sha256`, solo cuenta como subido si se subió ESE contenido (un índice anterior sin
+        huella cuenta como desconocido: el objeto se reenvía una vez)."""
+        if object_path not in self._uploaded:
+            return False
+        return sha256 is None or self._sha.get(object_path) == sha256
 
     def save(self) -> None:
         """Escritura atómica (temporal + replace). Propaga OSError tras limpiar el temporal.
@@ -108,7 +123,7 @@ class LocalIndex:
         Contrato: llamar a save() justo después de crear ids y antes de subir; agrupar
         los guardados (no uno por objeto) cuando se marquen miles de objetos.
         """
-        payload = {**self._data, "uploaded": sorted(self._uploaded)}
+        payload = {**self._data, "uploaded": sorted(self._uploaded), SHA_KEY: dict(sorted(self._sha.items()))}
         fd, tmp = tempfile.mkstemp(dir=self.folder, prefix=INDEX_NAME + ".", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as fh:

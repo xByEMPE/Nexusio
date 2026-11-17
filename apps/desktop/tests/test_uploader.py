@@ -498,3 +498,42 @@ def test_position_not_saved_is_reported_as_warning(tmp_path, monkeypatch, case):
 def test_position_saved_has_no_warning(tmp_path):
     root, plan, client, tus = setup(tmp_path)
     assert run(plan, client, tus).warnings == []
+
+
+# --- revisión final: tira cambiada -------------------------------------------------------------
+
+def test_changed_strip_is_resent_and_unchanged_is_not(tmp_path):
+    """Reprocesar (invertir un tramo, quitar una foto borrosa…) reescribe la tira con el MISMO nombre:
+    el reintento debe volver a subir exactamente esa tira; una tira sin cambios no se reenvía."""
+    strip_a = make_strip(tmp_path)
+    strip_b = make_strip(tmp_path, "25_B_LeadingEdge.jpg")
+    root, plan, client, tus = setup(tmp_path, strips=[StripInput("A", "LE", strip_a, None),
+                                                      StripInput("B", "LE", strip_b, None)])
+    run(plan, client, tus)
+    first = len(tus.calls)
+    path_a = manifests(client)[0]["mosaics"][0]["path"]
+
+    Image.new("RGB", (20, 300), (200, 10, 10)).save(strip_a, "JPEG")  # tira A reprocesada
+    report = run(plan, client, tus, index=LocalIndex(root))
+    assert [c["object"] for c in tus.calls[first:]] == [path_a]
+    assert manifests(client)[-2]["mosaics"][0]["height_px"] == 300 and report.errors == []
+
+    again = len(tus.calls)
+    run(plan, client, tus, index=LocalIndex(root))  # sin cambios: nada se reenvía
+    assert len(tus.calls) == again
+
+
+def test_strip_marked_uploaded_by_old_index_is_resent_once(tmp_path):
+    """Índice de una versión anterior (sin huella de la tira): se reenvía una vez y después no."""
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    path = manifests(client)[0]["mosaics"][0]["path"]
+    data = json.loads((root / INDEX_NAME).read_text(encoding="utf-8"))
+    data.pop("uploaded_sha256", None)
+    (root / INDEX_NAME).write_text(json.dumps(data), encoding="utf-8")
+    first = len(tus.calls)
+
+    run(plan, client, tus, index=LocalIndex(root))
+    assert [c["object"] for c in tus.calls[first:]] == [path]
+    run(plan, client, tus, index=LocalIndex(root))
+    assert len(tus.calls) == first + 1
