@@ -70,14 +70,18 @@ class UploadReport:
     """Suma de las respuestas de `ingest_manifest` de cada pala.
 
     `skipped["local_files"]`: nombres de fotos y tiras omitidas por estar dañadas o ilegibles.
-    `errors`: `{"path", "code"}`, más `"blade"` si viene del manifiesto de una pala. Códigos
-    locales además de los del servidor: `unknown`, `schema_invalid`, `no_valid_photos`,
-    `nothing_to_upload`. Con errores, la subida NO debe presentarse como correcta."""
+    `errors`: `{"path", "code"}`, más `"blade"` si viene del manifiesto de una pala y `"file"`
+    (nombre de la foto o tira local) si el puntero `path` señala una captura o un mosaico del
+    manifiesto. Códigos locales además de los del servidor: `unknown`, `schema_invalid`,
+    `no_valid_photos`, `nothing_to_upload`. Con errores, la subida NO debe presentarse como correcta.
+    `warnings`: avisos que no son errores del manifiesto (p. ej. la posición de la turbina no se
+    guardó); tampoco deben presentarse como una subida completa sin más."""
     inserted: dict
     updated: dict
     skipped: dict
     errors: list[dict]
     cancelled: bool = False
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -135,6 +139,28 @@ def ingest_errors(exc: Exception) -> list[dict]:
     return [{"path": "", "code": "unknown"}]
 
 
+def resolve_pointer(doc, pointer: str):
+    """Valor del puntero JSON (RFC 6901) `pointer` en `doc`, o None si no existe. Los punteros de
+    `ingest_manifest` se arman con las posiciones del manifiesto enviado (/captures/N/paths/original,
+    /captures/N/thermal/matrix_path, /mosaics/N/path…)."""
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        return None
+    node = doc
+    for token in pointer[1:].split("/"):
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, dict):
+            if token not in node:
+                return None
+            node = node[token]
+        elif isinstance(node, list):
+            if not token.isdigit() or int(token) >= len(node):
+                return None
+            node = node[int(token)]
+        else:
+            return None
+    return node
+
+
 def _scaled_calibration(cal: dict, original_h: int, uploaded_h: int) -> dict:
     def row(v):
         return None if v is None else scale_row(v, original_h, uploaded_h)
@@ -177,6 +203,7 @@ class _Run:
         self.id_read = False  # se leyó el EXIF de la foto _ID
         self.id_pos: tuple[float, float, str] | None = None
         self.n_captures = 0
+        self.strip_names: dict[str, str] = {}  # ruta del mosaico en Storage -> nombre de la tira local
         self.insp_id = ""
         self.prefix = ""
         self.tmp = Path()
@@ -293,6 +320,7 @@ class _Run:
             w, h = mosaics.make_strip(strip.path, out)  # fallos al escribir el temporal se propagan
             mosaic = mosaics.build_mosaic(mosaics.StripFile(strip.path, strip.blade, strip.face), mid, self.prefix,
                                           w, h)
+            self.strip_names[mosaic["path"]] = strip.path.name
             if strip.calibration is not None:
                 mosaic["calibration"] = _scaled_calibration(strip.calibration, original_h, h)
             uploaded = self.index.is_uploaded(mosaic["path"])
@@ -336,12 +364,35 @@ class _Run:
         try:
             res = self.session.client.rpc("ingest_manifest", {"p_manifest": manifest}).execute()
         except Exception as e:  # postgrest.APIError u otro fallo del servidor
-            errs = [err | tag for err in ingest_errors(e)]
+            errs = [self.describe_error(err, manifest) | tag for err in ingest_errors(e)]
             report.errors.extend(errs)
+            self.forget_missing(errs, manifest)
             self.say(f"El servidor rechazó {label} ({len(errs)} error(es)).")
             return
         _merge(report, res.data)
         self.say(f"Registrada {label}.")
+
+    def describe_error(self, err: dict, manifest: dict) -> dict:
+        """Añade `file` (foto o tira local) si el puntero del error señala una captura o un mosaico."""
+        parts = err.get("path", "").split("/")
+        if len(parts) < 3 or parts[1] not in ("captures", "mosaics"):
+            return err
+        item = resolve_pointer(manifest, f"/{parts[1]}/{parts[2]}")
+        if not isinstance(item, dict):
+            return err
+        name = item.get("file_name") if parts[1] == "captures" else self.strip_names.get(item.get("path"))
+        return err | {"file": name} if isinstance(name, str) and name else err
+
+    def forget_missing(self, errs: list[dict], manifest: dict) -> None:
+        """`missing_object`: el objeto no está en Storage aunque el índice lo diera por subido (p. ej. lo
+        borró un administrador). Se quita del índice para que el próximo intento lo vuelva a enviar."""
+        lost = [resolve_pointer(manifest, e["path"]) for e in errs if e.get("code") == "missing_object"]
+        lost = [p for p in lost if isinstance(p, str) and p]
+        for path in lost:
+            self.index.unmark_uploaded(path)
+        if lost:
+            self.index.save()
+            self.say(f"{len(lost)} archivo(s) no estaban en NEXUS: se volverán a enviar al reintentar.")
 
     def save_position(self) -> None:
         """Posición de la turbina (foto `_ID`) en `inspections`, tras los manifiestos."""
@@ -354,13 +405,17 @@ class _Run:
                  .eq("id", self.insp_id).execute())
                 self.say(f"Posición de la turbina: {lat}, {lon} ({source}).")
             except Exception:
-                self.say("No se pudo guardar la posición de la turbina.")
+                self.warn("No se pudo guardar la posición de la turbina; reintenta la subida.")
         elif self.id_read:
-            self.say("La foto _ID no tiene láser ni GPS válidos: sin posición.")
+            self.warn("La foto _ID no tiene láser ni GPS válidos: sin posición de la turbina.")
         elif self.id_photo is not None:
-            self.say("La foto _ID no se pudo leer: sin posición de la turbina.")
+            self.warn("La foto _ID no se pudo leer: sin posición de la turbina.")
         else:
-            self.say("Sin foto _ID: sin posición de la turbina.")
+            self.warn("Sin foto _ID: sin posición de la turbina.")
+
+    def warn(self, msg: str) -> None:
+        self.report.warnings.append(msg)
+        self.say(msg)
 
     def upload_all(self) -> None:
         plan = self.plan

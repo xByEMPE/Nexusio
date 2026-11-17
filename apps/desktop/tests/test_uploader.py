@@ -211,7 +211,8 @@ def test_manifest_invalid_returns_path_and_code(tmp_path):
     client.rpc_handler = handler
     msgs = []
     report = run(plan, client, tus, msgs=msgs)
-    assert report.errors == [{"path": "/captures/0/paths/original", "code": "missing_object", "blade": "A"},
+    assert report.errors == [{"path": "/captures/0/paths/original", "code": "missing_object", "blade": "A",
+                              "file": "id.jpg"},  # la _ID va primero en el manifiesto de la pala A
                              {"path": "/inspection/id", "code": "inspection_locked", "blade": "A"}]
     assert report.inserted == {"captures": 1, "mosaics": 0}  # la pala B sí entró
     assert any("A" in m and "rechaz" in m for m, _ in msgs)
@@ -243,7 +244,8 @@ def test_manifest_invalid_details_already_parsed(tmp_path):
         raise APIError({"code": "22023", "message": "manifest_invalid", "details": err})
 
     client.rpc_handler = handler
-    assert run(plan, client, tus).errors == [err[0] | {"blade": "A"}, err[0] | {"blade": "B"}]
+    # pala A: la captura 1 existe (lleva "file"); pala B: solo tiene una captura (sin "file")
+    assert run(plan, client, tus).errors == [err[0] | {"blade": "A", "file": "a1.jpg"}, err[0] | {"blade": "B"}]
 
 
 def test_refreshes_token_before_each_upload(tmp_path):
@@ -419,3 +421,80 @@ def test_index_is_on_disk_when_first_upload_happens(tmp_path):
     tus.hook = hook
     run(plan, client, tus)
     assert seen == [(True, INSP)]
+
+
+def test_missing_object_is_unmarked_and_retry_resends_it(tmp_path):
+    """El servidor dice missing_object (el objeto se borró de Storage pero el índice lo da por subido):
+    se quita del índice, y el reintento vuelve a subir exactamente ese archivo y registra la pala."""
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    ma = manifests(client)[0]
+    a2 = next(c for c in ma["captures"] if c.get("file_name") == "a2.jpg")
+    lost_photo = a2["paths"]["original"]
+    lost_strip = ma["mosaics"][0]["path"]
+    tus.objects -= {lost_photo, lost_strip}  # borrados en Storage por un administrador
+    first = len(tus.calls)
+
+    report = run(plan, client, tus, index=LocalIndex(root))
+    assert len(tus.calls) == first  # el índice los daba por subidos
+    codes = {(e["code"], e.get("file")) for e in report.errors}
+    assert codes == {("missing_object", "a2.jpg"), ("missing_object", "25_A_LeadingEdge.jpg")}
+    assert all(e["blade"] == "A" for e in report.errors)
+    index = LocalIndex(root)  # ya guardado en disco
+    assert not index.is_uploaded(lost_photo) and not index.is_uploaded(lost_strip)
+
+    report = run(plan, client, tus, index=index)
+    assert sorted(c["object"] for c in tus.calls[first:]) == sorted([lost_photo, lost_strip])
+    assert report.errors == []
+
+
+def test_error_file_names_resolved_from_manifest(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+
+    def handler(name, params):
+        m = params["p_manifest"]
+        if m["mosaics"]:
+            raise APIError({"code": "22023", "message": "manifest_invalid", "details": json.dumps(
+                [{"path": "/captures/1/sha256", "code": "duplicate_sha256"},
+                 {"path": "/mosaics/0/id", "code": "duplicate_id"},
+                 {"path": "/inspection/id", "code": "inspection_locked"},
+                 {"path": "/captures/99/id", "code": "duplicate_id"}])})
+        return FakeIngest(tus)(name, params)
+
+    client.rpc_handler = handler
+    report = run(plan, client, tus)
+    ma = manifests(client)[0]
+    errs = report.errors
+    assert errs[0] == {"path": "/captures/1/sha256", "code": "duplicate_sha256", "blade": "A",
+                       "file": ma["captures"][1]["file_name"]}
+    assert errs[1]["file"] == "25_A_LeadingEdge.jpg"
+    assert "file" not in errs[2] and "file" not in errs[3]  # sin archivo o fuera de rango
+
+
+@pytest.mark.parametrize("case", ["update_fails", "no_position", "no_id"])
+def test_position_not_saved_is_reported_as_warning(tmp_path, monkeypatch, case):
+    photos = {k: v for k, v in PHOTOS.items() if case != "no_id" or "_ID" not in k}
+    root, plan, client, tus = setup(tmp_path, photos=photos)
+    if case == "no_position":
+        monkeypatch.setattr(uploader, "read_exif", lambda path, exiftool: {})
+    if case == "update_fails":
+        original_table = client.table
+
+        def failing_update(row):
+            raise RuntimeError("red")
+
+        def table(name):
+            q = original_table(name)
+            if name == "inspections":
+                q.update = failing_update
+            return q
+
+        client.table = table
+    report = run(plan, client, tus)
+    assert report.errors == []
+    assert len(report.warnings) == 1 and "posición" in report.warnings[0]
+
+
+def test_position_saved_has_no_warning(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    assert run(plan, client, tus).warnings == []

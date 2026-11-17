@@ -129,3 +129,14 @@ def test_read_oserror_leaves_usable_empty_index(tmp_path, monkeypatch):
     idx = LocalIndex(tmp_path)
     assert idx.load_warning
     assert idx.capture_id("x")
+
+
+def test_unmark_uploaded_persists(tmp_path):
+    idx = LocalIndex(tmp_path)
+    idx.mark_uploaded("o/a.jpg")
+    idx.mark_uploaded("o/b.jpg")
+    idx.unmark_uploaded("o/a.jpg")
+    idx.unmark_uploaded("o/no-estaba.jpg")  # quitar algo ausente no falla
+    idx.save()
+    again = LocalIndex(tmp_path)
+    assert not again.is_uploaded("o/a.jpg") and again.is_uploaded("o/b.jpg")

@@ -95,6 +95,10 @@ class LocalIndex:
     def mark_uploaded(self, object_path: str) -> None:
         self._uploaded.add(object_path)
 
+    def unmark_uploaded(self, object_path: str) -> None:
+        """Olvida que `object_path` se subió (el servidor dijo que no está: `missing_object`)."""
+        self._uploaded.discard(object_path)
+
     def is_uploaded(self, object_path: str) -> bool:
         return object_path in self._uploaded
 
