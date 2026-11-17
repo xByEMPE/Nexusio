@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import json
 import os
-import tempfile
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
+
+from nexus_desktop.storage import jsonio
 
 FILE_NAME = "pending.json"
 STATUS_TEXT = {
@@ -52,7 +53,7 @@ def _path(base_dir: Path | None) -> Path:
     return Path(base_dir) / FILE_NAME
 
 
-def _key(folder: str | Path) -> str:
+def key(folder: str | Path) -> str:
     return os.path.normcase(os.path.normpath(str(folder)))
 
 
@@ -70,18 +71,6 @@ def _read(path: Path) -> list[PendingUpload]:
     return out
 
 
-def _write(path: Path, items: list[PendingUpload]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(prefix=".pending_", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump([asdict(i) for i in items], f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-
-
 def load(base_dir: Path | None = None) -> list[PendingUpload]:
     with _lock:
         return _read(_path(base_dir))
@@ -94,18 +83,18 @@ def save_status(folder: Path, project: str, asset: str, status: str, base_dir: P
     with _lock:
         items = _read(path)
         for n, item in enumerate(items):
-            if _key(item.folder) == _key(folder):
+            if key(item.folder) == key(folder):
                 items[n] = entry
                 break
         else:
             items.append(entry)
-        _write(path, items)
+        jsonio.write_json_atomic(path, [asdict(i) for i in items])
 
 
 def remove(folder: str | Path, base_dir: Path | None = None) -> None:
     path = _path(base_dir)
     with _lock:
         items = _read(path)
-        kept = [i for i in items if _key(i.folder) != _key(folder)]
+        kept = [i for i in items if key(i.folder) != key(folder)]
         if len(kept) != len(items):
-            _write(path, kept)
+            jsonio.write_json_atomic(path, [asdict(i) for i in kept])

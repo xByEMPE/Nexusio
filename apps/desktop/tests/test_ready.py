@@ -230,3 +230,93 @@ def test_inverted_photo_order_survives_the_round_trip(tmp_path):
     loaded = load_state(state.wtg.path)
     assert loaded.wtg.blades["A"]["LE"] == le[::-1]
     assert plan_of(loaded) == plan_of(state)
+
+
+# --- Ronda de arreglos: numpy, errores de escritura y utilidades compartidas -----------------------
+
+def numpyfy(state: AppState) -> None:
+    """Como deja los valores la reconstrucción real (cv2/numpy): np.float64, np.int64, np.bool_."""
+    import numpy as np
+
+    for s in state.sections:
+        s.width_px, s.height_px = np.int64(s.width_px), np.int64(s.height_px)
+        s.calibration = {k: (np.bool_(v) if isinstance(v, bool) else np.float64(v)) for k, v in s.calibration.items()}
+        s.calibration["tip_row_px"] = np.int64(s.calibration["tip_row_px"])
+        for p in s.photos:
+            p.radius_m, p.gsd_mm_px = np.float64(p.radius_m), np.float32(p.gsd_mm_px)
+    state.blade_length_m = np.float64(state.blade_length_m)
+
+
+def test_numpy_values_are_saved_and_round_trip(tmp_path):
+    state = make_state(tmp_path)
+    expected = plan_of(make_state(tmp_path / "otra"))  # mismas cifras con tipos de Python
+    numpyfy(state)
+    path = ready.save_ready(state)  # no debe lanzar TypeError
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["sections"][0]["calibration"]["tip_row_px"] == 100
+    assert isinstance(data["sections"][0]["width_px"], int)
+    loaded = load_state(state.wtg.path)
+    got = plan_of(loaded)
+    assert [s.calibration for s in got.strips] == [s.calibration for s in expected.strips]
+    assert [i.radius_m for i in got.photo_info.values()] == pytest.approx(
+        [i.radius_m for i in expected.photo_info.values()])
+    assert got.blade_length_m == 61.5
+
+
+def test_unserializable_value_is_not_written_and_leaves_no_temporary(tmp_path):
+    state = make_state(tmp_path)
+    state.sections[0].calibration["raro"] = object()
+    with pytest.raises((TypeError, ValueError)):
+        ready.save_ready(state)
+    assert ready.find_file(state.wtg.path) is None
+    assert [p.name for p in state.wtg.path.glob(".*tmp*")] == []
+
+
+def test_write_failure_keeps_previous_file_intact(tmp_path, monkeypatch):
+    import os
+
+    state = make_state(tmp_path)
+    path = ready.save_ready(state)
+    before = path.read_text(encoding="utf-8")
+
+    def boom(*_a, **_k):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(os, "replace", boom)
+    with pytest.raises(OSError):
+        ready.save_ready(state)
+    monkeypatch.undo()
+    assert path.read_text(encoding="utf-8") == before
+    assert [p.name for p in state.wtg.path.glob(".*tmp*")] == []
+
+
+def test_save_error_text_distinguishes_causes_without_paths(tmp_path):
+    folder = tmp_path / "Carpeta Privada"
+    disk = ready.save_error_text(OSError(28, "sin espacio", str(folder / "x.json")))
+    assert "escribir" in disk and "espacio" in disk and "permisos" in disk
+    assert str(tmp_path) not in disk and "Carpeta Privada" not in disk
+    invalid = ready.save_error_text(ReadyError("La inspección apunta fuera de la carpeta (a.jpg)."))
+    assert "no son válidos" in invalid and "a.jpg" in invalid
+    internal = ready.save_error_text(TypeError("Object of type X is not JSON serializable " + str(tmp_path)))
+    assert "no son válidos" in internal and str(tmp_path) not in internal
+    assert ready.SAVE_ERRORS == (OSError, ReadyError, TypeError, ValueError)
+
+
+def test_pending_key_is_public_and_json_writer_shared():
+    from nexus_desktop.storage import jsonio
+
+    assert callable(pending.key) and not hasattr(pending, "_key")
+    assert not hasattr(ready, "_write_atomic") and not hasattr(pending, "_write")
+    assert callable(jsonio.write_json_atomic)
+
+
+def test_mark_uploaded_logs_a_warning_when_it_cannot_write(tmp_path, monkeypatch, caplog):
+    import os
+
+    state = make_state(tmp_path)
+    ready.save_ready(state)
+    monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError(13, "denegado")))
+    with caplog.at_level("WARNING"):
+        ready.mark_uploaded(state.wtg.path)
+    assert any("subida" in r.getMessage() for r in caplog.records)
+    assert str(tmp_path) not in caplog.text

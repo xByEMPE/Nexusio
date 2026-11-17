@@ -21,6 +21,7 @@ el panel «Inspecciones locales pendientes», y al empezar se guarda `{wtg}_insp
 from __future__ import annotations
 
 import errno
+import logging
 import queue
 import threading
 import tkinter as tk
@@ -37,6 +38,7 @@ from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
 
 POLL_MS = 100
+log = logging.getLogger(__name__)
 
 ACTION = "Qué hacer:"
 # Un texto por código de error: explicación y, tras «Qué hacer:», la acción sugerida.
@@ -313,8 +315,10 @@ class UploadScreen(Screen):
         folder, names = plan.folder.path, (plan.project.name, plan.asset.name)
         try:  # lo procesado queda en la carpeta: si la subida se interrumpe se puede retomar desde el Inicio
             ready.save_ready(state)
-        except (OSError, ready.ReadyError):
-            pass
+        except ready.SAVE_ERRORS as exc:
+            log.warning("No se pudo guardar la inspección antes de subir (%s)", type(exc).__name__)
+            self._add_warning(f"No se pudo guardar la inspección en la carpeta. {ready.save_error_text(exc)} "
+                              "La subida sigue, pero si se interrumpe no podrás retomarla desde el Inicio.")
         self._mark_pending(folder, names, "in_progress")
         self.running = True
         self.completed = False

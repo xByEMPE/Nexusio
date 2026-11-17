@@ -14,16 +14,18 @@ Al cargar se valida versión, tipos y que existan las tiras y las fotos; cualqui
 from __future__ import annotations
 
 import json
+import logging
 import math
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from nexus_desktop import config
-from nexus_desktop.storage import pending
+from nexus_desktop.storage import jsonio, pending
 from nexus_desktop.domain.reconstruction import PhotoResult, SectionResult
 from nexus_desktop.domain.wtg_folder import BLADES, FACES, scan_wtg
+
+log = logging.getLogger(__name__)
 
 VERSION = 1
 FILE_SUFFIX = "_inspeccion_lista.json"
@@ -49,6 +51,22 @@ MISSING_PHOTOS = ("Faltan fotos de la inspección guardada: {names}{more}. Compr
 class ReadyError(Exception):
     """El archivo de la inspección lista no existe, está dañado o no coincide con la carpeta
     (mensaje legible en español, sin trazas)."""
+
+
+# Fallos al guardar que la interfaz debe explicar (disco/permisos o datos no válidos).
+SAVE_ERRORS = (OSError, ReadyError, TypeError, ValueError)
+
+
+def save_error_text(exc: Exception) -> str:
+    """Causa de un fallo al guardar, en español y sin rutas del usuario ni texto crudo de la excepción:
+    distingue «no se pudo escribir» (espacio/permisos) de «los datos no son válidos»."""
+    if isinstance(exc, ReadyError):
+        return f"Los datos de la inspección no son válidos: {exc}"
+    if isinstance(exc, OSError):
+        return ("No se pudo escribir en la carpeta de la inspección: revisa que haya espacio en el "
+                "disco o la tarjeta y que tengas permisos de escritura.")
+    return ("Los datos de la inspección no son válidos y no se pudieron guardar "
+            f"(error interno: {type(exc).__name__}).")
 
 
 @dataclass
@@ -105,14 +123,19 @@ def _rel(folder: Path, path: Path) -> str:
         raise ReadyError(OUTSIDE.format(name=Path(path).name)) from None
 
 
-def _write_atomic(path: Path, data: dict) -> None:
-    tmp = path.with_name(f".{path.name}.tmp")
-    try:
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
+def _plain(value):
+    """Tipos de Python puros para el JSON: la reconstrucción real deja np.float64/np.int64/np.bool_
+    (cv2, numpy), que `json` no sabe escribir."""
+    if isinstance(value, dict):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    item = getattr(value, "item", None)  # escalares de numpy
+    if callable(item) and not isinstance(value, (str, bytes)) and getattr(value, "shape", None) == ():
+        value = item()
+    if isinstance(value, float) and not math.isfinite(value):
+        return None  # NaN/inf no son JSON válido
+    return value
 
 
 def save_ready(state) -> Path:
@@ -136,7 +159,7 @@ def save_ready(state) -> Path:
         } for s in state.sections],
     }
     path = ready_path(folder)
-    _write_atomic(path, data)
+    jsonio.write_json_atomic(path, _plain(data))
     return path
 
 
@@ -146,7 +169,7 @@ def register_ready(state, keep_existing: bool = False) -> Path:
     (p. ej. con una subida interrumpida) se deja su estado. Puede lanzar ReadyError u OSError."""
     path = save_ready(state)
     folder = Path(state.wtg.path)
-    if keep_existing and any(pending._key(e.folder) == pending._key(folder) for e in pending.load()):
+    if keep_existing and any(pending.key(e.folder) == pending.key(folder) for e in pending.load()):
         return path
     pending.save_status(folder, "", state.turbine_name or folder.name, STATUS_READY)
     return path
@@ -160,11 +183,11 @@ def mark_uploaded(folder: Path) -> None:
         return
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return
-    if isinstance(data, dict):
-        data["status"] = STATUS_UPLOADED
-        _write_atomic(path, data)
+        if isinstance(data, dict):
+            data["status"] = STATUS_UPLOADED
+            jsonio.write_json_atomic(path, _plain(data))
+    except (OSError, ValueError) as exc:  # la subida ya terminó: no se hace fallar por esto
+        log.warning("No se pudo marcar como subida la inspección guardada (%s)", type(exc).__name__)
 
 
 # --- lectura y validación -------------------------------------------------------------------

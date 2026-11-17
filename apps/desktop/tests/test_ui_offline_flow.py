@@ -21,7 +21,7 @@ from nexus_desktop.ui.screens.login import LoginScreen
 from nexus_desktop.ui.screens.marking import MarkingScreen
 from nexus_desktop.ui.screens.processing import ProcessingScreen
 from nexus_desktop.ui.screens.results import ResultsScreen
-from nexus_desktop.ui.screens.start import PATH_LIMIT, StartScreen
+from nexus_desktop.ui.screens.start import NO_DATA, PATH_LIMIT, StartScreen
 from nexus_desktop.ui.screens.upload import UploadScreen, build_upload_plan, short_path
 from nexus_desktop.ui.screens.verification import VerificationScreen
 from tests.conftest import FakeClient
@@ -428,11 +428,13 @@ def test_start_lists_ready_and_old_partial_entries(app, tmp_path):
     app.show_initial()
     assert pending_rows(app.current) == [
         (shown(folder), "WTG 25", "Lista para subir"),
-        (shown(tmp_path / "vieja"), "Parque Norte · WTG-01", "Subida interrumpida")]
+        (shown(tmp_path / "vieja"), "Parque Norte · WTG-01", NO_DATA)]  # sin JSON: no se puede subir
     assert app.current.upload_pending_button.instate(["disabled"])
-    select_pending(app, app.current)
+    select_pending(app, app.current)  # «Lista para subir»
     assert app.current.upload_pending_button.instate(["!disabled"])
     assert app.current.upload_pending_button.cget("text") == "Subir"
+    select_pending(app, app.current, 1)  # sin datos guardados: no se puede subir
+    assert app.current.upload_pending_button.instate(["disabled"])
 
 
 def test_reopen_and_upload_from_list_rebuilds_identical_plan(app, tmp_path, monkeypatch):
@@ -497,17 +499,6 @@ def test_corrupt_json_gives_clear_message(app, tmp_path):
     app.tasks.pump()
     assert isinstance(app.current, StartScreen)
     assert "dañado" in app.current.status_label.cget("text")
-
-
-def test_entry_without_saved_data_explains(app, tmp_path):
-    folder = tmp_path / "WTG vieja"
-    folder.mkdir()
-    pending.save_status(folder, "Parque Norte", "WTG-01", "errors")
-    app.show_initial()
-    select_pending(app, app.current)
-    app.current.upload_pending_button.invoke()
-    app.tasks.pump()
-    assert "No hay datos guardados" in app.current.status_label.cget("text")
 
 
 def test_remove_from_list_keeps_the_technician_data(app, tmp_path):
@@ -597,3 +588,219 @@ def test_pending_json_has_no_credentials(app, tmp_path):
     for word in ("token", "password", "contraseña", "key"):
         assert word not in raw
     assert json.loads(raw)[0]["status"] == "ready"
+
+
+# --- Ronda de arreglos -------------------------------------------------------------------------
+
+def fail_writes(monkeypatch, exc):
+    """Simula carpeta de solo lectura / tarjeta llena: `register_ready` no puede guardar."""
+    def boom(*_a, **_k):
+        raise exc
+
+    monkeypatch.setattr(ready, "save_ready", boom)
+
+
+def test_import_with_unsaveable_work_asks_before_discarding(app, tmp_path, monkeypatch):
+    state = processed(app, tmp_path)
+    fail_writes(monkeypatch, OSError(28, "No space left on device", str(tmp_path / "x")))
+    app.show_initial()
+    start = app.current
+    start.import_button.invoke()
+    assert app.current is start and app.state is state and state.sections  # no se pierde nada
+    message = start.status_label.cget("text")
+    assert "No se pudo guardar" in message and "escribir" in message and str(tmp_path) not in message
+    assert start.confirm_row.winfo_manager() != ""
+    assert start.discard_button.cget("text") == "Descartar y continuar"
+    assert start.import_button.instate(["disabled"])
+    start.cancel_button.invoke()
+    assert app.current is start and state.sections and start.import_button.instate(["!disabled"])
+    assert start.confirm_row.winfo_manager() == ""
+    start.import_button.invoke()
+    start.discard_button.invoke()
+    assert isinstance(app.current, ImportScreen) and app.state.wtg is None
+
+
+def test_import_save_failure_with_os_replace_blocked(app, tmp_path, monkeypatch):
+    import os
+
+    processed(app, tmp_path)
+    app.show_initial()
+    monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(PermissionError(13, "denegado")))
+    app.current.import_button.invoke()
+    assert isinstance(app.current, StartScreen) and app.current.confirm_row.winfo_manager() != ""
+    assert app.state.sections
+
+
+@pytest.mark.parametrize("exc", [
+    ready.ReadyError("apunta fuera de la carpeta (a.jpg)"),
+    TypeError("not JSON serializable"),
+    ValueError("Circular reference"),
+])
+def test_invalid_data_message_differs_from_disk_message(app, tmp_path, monkeypatch, exc):
+    processed(app, tmp_path)
+    fail_writes(monkeypatch, exc)
+    app.show_initial()
+    app.current.import_button.invoke()
+    message = app.current.status_label.cget("text")
+    assert "no son válidos" in message and "escribir" not in message
+    assert "Traceback" not in message and str(tmp_path) not in message
+
+
+def test_upload_from_list_with_unsaveable_current_work_can_cancel_or_discard(app, tmp_path, monkeypatch):
+    folder, _ = save_for_later(app, tmp_path / "guardada")
+    other = processed(app, tmp_path / "otra", name="WTG 77")
+    app.session.login("tec@nexus.test", "x")
+    app.show_initial()
+    start = app.current
+    fail_writes(monkeypatch, OSError(28, "sin espacio"))
+    select_pending(app, start)
+    start.upload_pending_button.invoke()
+    app.tasks.pump()
+    assert app.current is start and app.state is other  # sigue lo de memoria
+    assert start.confirm_row.winfo_manager() != ""
+    assert "Preparando" not in start.status_label.cget("text")
+    start.cancel_button.invoke()
+    assert start.upload_pending_button.instate(["!disabled"])  # el botón no queda bloqueado
+    assert app.state is other and start.confirm_row.winfo_manager() == ""
+    start.upload_pending_button.invoke()
+    app.tasks.pump()
+    start.discard_button.invoke()
+    assert isinstance(app.current, DestinationScreen) and app.state.wtg.path == folder
+
+
+def test_old_entries_without_saved_data_are_marked_and_offer_reimport(app, tmp_path):
+    folder = make_wtg(tmp_path / "WTG vieja", {"A": {"LE": 2}})
+    pending.save_status(folder, "Parque Norte", "WTG-01", "errors")
+    app.show_initial()
+    start = app.current
+    assert pending_rows(start) == [(shown(folder), "Parque Norte · WTG-01", NO_DATA)]
+    assert "Sin datos guardados" in NO_DATA and "vuelve a importar la carpeta" in NO_DATA
+    select_pending(app, start)
+    assert start.upload_pending_button.instate(["disabled"])
+    assert start.reimport_button.cget("text") == "Abrir carpeta para reimportar"
+    assert start.reimport_button.instate(["!disabled"])
+    start.reimport_button.invoke()
+    app.tasks.pump()
+    assert isinstance(app.current, ImportScreen) and app.current.wtg.path == folder
+    assert app.current.name_entry.get() == "WTG vieja"
+
+
+def test_reimport_of_missing_folder_explains(app, tmp_path):
+    pending.save_status(tmp_path / "ya no existe", "P", "A", "interrupted")
+    app.show_initial()
+    select_pending(app, app.current)
+    app.current.reimport_button.invoke()
+    assert isinstance(app.current, StartScreen)
+    assert "ya no existe" in app.current.status_label.cget("text")
+
+
+def test_ready_entries_keep_subir_enabled(app, tmp_path):
+    save_for_later(app, tmp_path)
+    app.show_initial()
+    select_pending(app, app.current)
+    assert app.current.upload_pending_button.instate(["!disabled"])
+    assert app.current.reimport_button.instate(["disabled"])
+
+
+def test_upload_warns_when_it_cannot_save_the_resume_file(app, tmp_path, monkeypatch, caplog):
+    app.session.login("tec@nexus.test", "x")
+    state = processed(app, tmp_path)
+    state.project, state.asset = Project("p1", "Parque Norte", "o1"), Asset("a1", "WTG-01", None)
+    fail_writes(monkeypatch, OSError(13, "denegado", str(tmp_path / "x")))
+    fake = FakeUpload()
+    monkeypatch.setattr(upload_module, "upload_inspection", fake)
+    up = app.show(UploadScreen)
+    with caplog.at_level("WARNING"):
+        up.upload_button.invoke()
+        app.tasks.pump()
+        up._poll()
+    assert len(fake.calls) == 1  # la subida sigue
+    warning = up.warning_label.cget("text")
+    assert "No se pudo guardar" in warning and "retomarla" in warning and str(tmp_path) not in warning
+    assert caplog.records and str(tmp_path) not in caplog.text
+
+
+# --- modal de teclado del panel final ---------------------------------------------------------
+
+def key(app, widget, sequence):
+    app.deiconify()
+    try:
+        app.update()
+        widget.focus_force()
+        app.update()
+        widget.event_generate(sequence)
+        app.update()
+    finally:
+        app.withdraw()
+
+
+def finish_panel(app, tmp_path) -> VerificationScreen:
+    screen = show_verification(app, tmp_path)
+    screen.continue_button.invoke()
+    return screen
+
+
+def test_escape_closes_the_panel_like_keep_reviewing(app, tmp_path):
+    screen = finish_panel(app, tmp_path)
+    key(app, screen.upload_now_button, "<Escape>")
+    assert screen.finish_frame.winfo_manager() == "" and screen.continue_button.instate(["!disabled"])
+    assert isinstance(app.current, VerificationScreen)
+
+
+def test_escape_works_from_any_focus_while_panel_is_open(app, tmp_path):
+    screen = finish_panel(app, tmp_path)
+    key(app, screen.trees["LE"], "<Escape>")
+    assert screen.finish_frame.winfo_manager() == ""
+
+
+def test_kp_enter_is_bound_on_every_panel_button(app, tmp_path):
+    # Tk en Windows no genera KP_Enter con event_generate: se comprueba que el enlace existe.
+    screen = finish_panel(app, tmp_path)
+    for button in (screen.upload_now_button, screen.save_later_button, screen.keep_reviewing_button):
+        assert button.bind("<KP_Enter>") and button.bind("<Return>")
+
+
+def test_enter_activates_the_focused_button_not_always_the_first(app, tmp_path):
+    screen = finish_panel(app, tmp_path)
+    folder = app.state.wtg.path
+    key(app, screen.save_later_button, "<Return>")
+    app.tasks.pump()
+    assert isinstance(app.current, StartScreen)  # «Guardar», no «Subir ahora»
+    assert ready.find_file(folder) is not None
+
+
+def test_enter_on_upload_now_goes_to_login(app, tmp_path):
+    screen = finish_panel(app, tmp_path)
+    key(app, screen.upload_now_button, "<Return>")
+    app.tasks.pump()
+    assert isinstance(app.current, LoginScreen)
+
+
+def test_widgets_behind_the_panel_cannot_take_focus_and_are_restored(app, tmp_path):
+    screen = show_verification(app, tmp_path)
+    tree, canvas = screen.trees["LE"], screen.canvases["LE"]
+    before = (str(tree.cget("takefocus")), str(canvas.cget("takefocus")))
+    screen.continue_button.invoke()
+    assert str(tree.cget("takefocus")) == "0" and str(canvas.cget("takefocus")) == "0"
+    for button in (screen.upload_now_button, screen.save_later_button, screen.keep_reviewing_button):
+        assert str(button.cget("takefocus")) != "0"
+    screen._hide_finish()
+    assert (str(tree.cget("takefocus")), str(canvas.cget("takefocus"))) == before
+
+
+def test_tab_stays_inside_the_panel(app, tmp_path):
+    screen = finish_panel(app, tmp_path)
+    inside = {screen.upload_now_button, screen.save_later_button, screen.keep_reviewing_button}
+    app.deiconify()
+    try:
+        app.update()
+        screen.upload_now_button.focus_force()
+        app.update()
+        seen = []
+        for _ in range(5):
+            app.focus_get().event_generate("<Tab>")
+            app.update()
+            seen.append(app.focus_get())
+    finally:
+        app.withdraw()
+    assert all(w in inside for w in seen), seen

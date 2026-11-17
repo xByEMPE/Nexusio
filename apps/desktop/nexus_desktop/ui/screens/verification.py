@@ -12,7 +12,9 @@ local, y vuelta al Inicio para procesar otra carpeta).
 """
 from __future__ import annotations
 
+import logging
 import re
+import tkinter as tk
 from tkinter import ttk
 
 from nexus_desktop.domain.reconstruction import SectionResult, stitch_order
@@ -26,12 +28,12 @@ TIP_COLOR = TOKENS["caution"]
 ROOT_COLOR = TOKENS["telemetry"]
 PHOTO_COLOR = TOKENS["critical"]
 SHADOW = "#000000"
+log = logging.getLogger(__name__)
 FINISH_QUESTION = "¿Qué quieres hacer con esta inspección?"
 FINISH_HELP = ("«Subir ahora» pide iniciar sesión (si no la tienes) y elegir proyecto y turbina. «Guardar» "
                "deja la inspección en el Inicio como «Lista para subir»: la subes cuando tengas "
                "conexión, aunque cierres la app, y mientras tanto puedes procesar otra carpeta.")
-SAVE_ERROR = ("No se pudo guardar la inspección en la carpeta WTG (revisa el espacio en disco y que "
-              "tengas permiso de escritura). Puedes reintentar o subirla ahora.")
+SAVE_ERROR = "No se pudo guardar la inspección. {cause} Puedes reintentar o subirla ahora."
 _DJI_NAME = re.compile(r"^DJI_\d+_(.+)$", re.IGNORECASE)
 
 
@@ -48,6 +50,8 @@ class VerificationScreen(StripGridScreen):
 
     def __init__(self, master, app, blade: str | None = None) -> None:
         self.trees: dict[str, ttk.Treeview] = {}
+        self._takefocus: dict = {}
+        self._escape_id: str | None = None
         self._rows: dict[str, dict[str, str]] = {}  # cara -> {item: nombre de la foto}
         super().__init__(master, app, blade)
 
@@ -84,6 +88,10 @@ class VerificationScreen(StripGridScreen):
         self.keep_reviewing_button = ttk.Button(self.finish_frame, text="Seguir revisando",
                                                 command=self._hide_finish)
         self.keep_reviewing_button.pack(anchor="e", pady=(12, 0))
+        # Teclado: Enter activa el botón enfocado (no siempre el primero) y Escape es «Seguir revisando».
+        for button in (self.upload_now_button, self.save_later_button, self.keep_reviewing_button):
+            for sequence in ("<Return>", "<KP_Enter>"):
+                button.bind(sequence, self._press)
 
     def _build_column(self, grid: ttk.Frame, col: int, face: str) -> None:
         frame = ttk.Frame(grid, style="Panel.TFrame", borderwidth=0, relief="flat")
@@ -193,9 +201,54 @@ class VerificationScreen(StripGridScreen):
         self.finish_frame.lift()
         for button in (self.continue_button, self.back_button):
             button.state(["disabled"])
+        self._lock_background()
+        if self._escape_id is None:
+            self._escape_id = self.winfo_toplevel().bind("<Escape>", self._escape, add="+")
         self.upload_now_button.focus_set()
 
+    def _lock_background(self) -> None:
+        """Modal para el teclado: mientras el panel está abierto, nada de lo de detrás recibe foco con
+        Tab (Tk no tiene grab para un Frame). Se restauran al cerrar el panel."""
+        inside = str(self.finish_frame)
+        stack = list(self.winfo_children())
+        while stack:
+            widget = stack.pop()
+            if str(widget).startswith(inside):
+                continue
+            stack.extend(widget.winfo_children())
+            try:
+                self._takefocus[widget] = widget.cget("takefocus")
+                widget.configure(takefocus=0)
+            except tk.TclError:
+                self._takefocus.pop(widget, None)
+
+    def _unlock_background(self) -> None:
+        for widget, value in self._takefocus.items():
+            try:
+                widget.configure(takefocus=value)
+            except tk.TclError:
+                pass
+        self._takefocus.clear()
+        if self._escape_id is not None:
+            self.winfo_toplevel().unbind("<Escape>", self._escape_id)
+            self._escape_id = None
+
+    def _press(self, event) -> str:
+        event.widget.invoke()
+        return "break"
+
+    def _escape(self, _event=None) -> str | None:
+        if self.finish_frame.winfo_manager() == "":
+            return None
+        self._hide_finish()
+        return "break"
+
+    def on_hide(self) -> None:
+        self._unlock_background()
+        super().on_hide()
+
     def _hide_finish(self) -> None:
+        self._unlock_background()
         self.finish_frame.place_forget()
         self.continue_button.state(["!disabled"])
         self.back_button.state(["!disabled"])
@@ -205,8 +258,8 @@ class VerificationScreen(StripGridScreen):
         la app a medias, lo procesado queda guardado en la carpeta y en la lista local."""
         try:
             ready.register_ready(self.app.state, keep_existing=True)
-        except (OSError, ready.ReadyError):
-            pass  # la lista es una ayuda: subir ahora no depende de ella
+        except ready.SAVE_ERRORS as exc:  # la lista es una ayuda: subir ahora no depende de ella
+            log.warning("No se pudo guardar la inspección antes de subir (%s)", type(exc).__name__)
         self.app.show_destination()
 
     def _save_later(self) -> None:
@@ -215,8 +268,9 @@ class VerificationScreen(StripGridScreen):
 
         try:
             ready.register_ready(self.app.state)
-        except (OSError, ready.ReadyError):
-            self.finish_error_label.configure(text=SAVE_ERROR)
+        except ready.SAVE_ERRORS as exc:
+            log.warning("No se pudo guardar la inspección para subirla después (%s)", type(exc).__name__)
+            self.finish_error_label.configure(text=SAVE_ERROR.format(cause=ready.save_error_text(exc)))
             return
         self.app.state.forget_folder()  # lista para procesar otra carpeta; lo guardado no se toca
         self.app.show(StartScreen)

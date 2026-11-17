@@ -20,7 +20,7 @@ from nexus_desktop.storage import pending
 from nexus_desktop.ui.app import AppState
 from nexus_desktop.ui.screens import upload as upload_module
 from nexus_desktop.ui.screens.login import LoginScreen
-from nexus_desktop.ui.screens.start import StartScreen
+from nexus_desktop.ui.screens.start import NO_DATA, StartScreen
 from nexus_desktop.ui.screens.upload import ERROR_TEXT, UploadScreen, build_upload_plan
 from nexus_desktop.ui.screens.verification import VerificationScreen
 from nexus_desktop.ui.theme import TOKENS
@@ -459,7 +459,8 @@ def test_start_screen_lists_pending_uploads_and_removes(app):
     start = app.show(StartScreen)
     app.tasks.pump()
     rows = tree_rows(start.pending_tree)
-    assert rows == [(str(folder), "Parque Norte · WTG-01", "Subida cancelada")]
+    # sin JSON guardado (entrada anterior a «Guardar y subir después»): no se puede subir, se explica
+    assert rows == [(str(folder), "Parque Norte · WTG-01", NO_DATA)]
     start.pending_tree.selection_set(start.pending_tree.get_children()[0])
     app.update()
     start.remove_pending_button.invoke()
