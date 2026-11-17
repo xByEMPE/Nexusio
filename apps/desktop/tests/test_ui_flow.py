@@ -1,4 +1,4 @@
-"""Ventana principal: login, inicio (proyectos y turbinas) y tareas en segundo plano."""
+"""Ventana principal: login, destino de la subida (proyectos y turbinas) y tareas en segundo plano."""
 import importlib
 import threading
 
@@ -6,8 +6,9 @@ import pytest
 
 from nexus_desktop.nexus.session import Session, SessionLost
 from nexus_desktop.ui import app as app_module
-from nexus_desktop.ui.app import WINDOW_TITLE, AppState
-from nexus_desktop.ui.screens.import_ import ImportScreen
+from nexus_desktop.ui.app import WINDOW_TITLE
+from nexus_desktop.ui.screens.destination import DestinationScreen
+from nexus_desktop.ui.screens.upload import UploadScreen
 from nexus_desktop.ui.screens.login import LoginScreen
 from nexus_desktop.ui.screens.start import StartScreen
 from nexus_desktop.ui.threading import TaskRunner
@@ -34,9 +35,9 @@ def logged_in(app, tables=TABLES):
     return client
 
 
-def show_start(app, tables=TABLES):
+def show_destination(app, tables=TABLES):
     client = logged_in(app, tables)
-    screen = app.show(StartScreen)
+    screen = app.show(DestinationScreen)
     app.tasks.pump()
     return client, screen
 
@@ -179,21 +180,21 @@ def test_missing_publishable_key_shows_clear_message(ui_app, monkeypatch):
     assert screen.submit_button.instate(["disabled"])
 
 
-# --- Inicio ----------------------------------------------------------------------------------
+# --- Destino de la subida --------------------------------------------------------------------
 
-def test_start_lists_projects_and_handles_empty(ui_app):
-    _, screen = show_start(ui_app)
+def test_destination_lists_projects_and_handles_empty(ui_app):
+    _, screen = show_destination(ui_app)
     assert list(screen.project_combo.cget("values")) == ["Parque Norte", "Parque Sur"]
-    assert "tec@nexus.test" in screen.user_label.cget("text")
+    assert "tec@nexus.test" in ui_app.connection_label.cget("text")
 
     ui_app.reset()
-    _, screen = show_start(ui_app, tables={})
+    _, screen = show_destination(ui_app, tables={})
     assert screen.status_label.cget("text") == "No tienes proyectos asignados."
     assert screen.project_combo.instate(["disabled"])
 
 
-def test_start_lists_turbines_with_status(ui_app):
-    _, screen = show_start(ui_app)
+def test_destination_lists_turbines_with_status(ui_app):
+    _, screen = show_destination(ui_app)
     select_project(ui_app, screen, 0)
     rows = [screen.asset_tree.item(i, "values") for i in screen.asset_tree.get_children()]
     assert [tuple(r) for r in rows] == [("WTG-01", "Capturada"), ("WTG-02", "Sin inspección")]
@@ -203,22 +204,22 @@ def test_start_lists_turbines_with_status(ui_app):
     assert screen.status_label.cget("text") == "Este proyecto no tiene turbinas."
 
 
-def test_import_button_enabled_only_with_project_and_turbine(ui_app):
-    _, screen = show_start(ui_app)
-    assert screen.import_button.instate(["disabled"])
+def test_upload_button_enabled_only_with_project_and_turbine(ui_app):
+    _, screen = show_destination(ui_app)
+    assert screen.upload_button.instate(["disabled"])
     select_project(ui_app, screen, 0)
-    assert screen.import_button.instate(["disabled"])
+    assert screen.upload_button.instate(["disabled"])
     select_asset(ui_app, screen, "a1")
-    assert screen.import_button.instate(["!disabled"])
-    assert screen.import_button.cget("text") == "Importar carpeta WTG"
+    assert screen.upload_button.instate(["!disabled"])
+    assert screen.upload_button.cget("text") == "Subir"
 
     select_project(ui_app, screen, 1)  # cambiar de proyecto borra la turbina elegida
-    assert screen.import_button.instate(["disabled"])
+    assert screen.upload_button.instate(["disabled"])
 
     select_project(ui_app, screen, 0)
     select_asset(ui_app, screen, "a1")
-    screen.import_button.invoke()
-    assert isinstance(ui_app.current, ImportScreen)
+    screen.upload_button.invoke()
+    assert isinstance(ui_app.current, UploadScreen)
     assert ui_app.state.project.id == "p1"
     assert ui_app.state.asset.id == "a1"
 
@@ -230,17 +231,18 @@ def test_session_lost_returns_to_login(ui_app, how):
         client.auth.session = None  # access_token() lanza SessionLost
     else:
         client.table_error = SessionLost("x")
-    ui_app.show(StartScreen)
+    ui_app.show(DestinationScreen)
     ui_app.tasks.pump()
     assert isinstance(ui_app.current, LoginScreen)
     assert ui_app.current.error_label.cget("text") == "La sesión caducó; inicia sesión de nuevo."
     assert ui_app.current.email_entry.get() == "tec@nexus.test"
+    assert ui_app.current.next_screen is DestinationScreen  # tras entrar vuelve al destino
 
 
 def test_network_error_shows_retry(ui_app):
     client = logged_in(ui_app)
     client.table_error = RuntimeError("timeout hacia 10.0.0.1")
-    screen = ui_app.show(StartScreen)
+    screen = ui_app.show(DestinationScreen)
     ui_app.tasks.pump()
     message = screen.status_label.cget("text")
     assert message.startswith("No se pudieron cargar los proyectos")
@@ -256,7 +258,7 @@ def test_network_error_shows_retry(ui_app):
 
 
 def test_network_error_loading_turbines_shows_retry(ui_app):
-    client, screen = show_start(ui_app)
+    client, screen = show_destination(ui_app)
     client.table_error = RuntimeError("caída")
     select_project(ui_app, screen, 0)
     assert screen.status_label.cget("text").startswith("No se pudieron cargar las turbinas")
@@ -266,18 +268,18 @@ def test_network_error_loading_turbines_shows_retry(ui_app):
     assert len(screen.asset_tree.get_children()) == 2
 
 
-def test_logout_returns_to_login(ui_app):
-    client, screen = show_start(ui_app)
-    screen.logout_button.invoke()
+def test_logout_from_destination_returns_to_login_for_destination(ui_app):
+    client, screen = show_destination(ui_app)
+    ui_app.session_button.invoke()
     ui_app.tasks.pump()
-    assert client.auth.signed_out
-    assert isinstance(ui_app.current, LoginScreen)
-    assert ui_app.state == AppState()
+    assert client.auth.signed_out and not ui_app.logged_in
+    assert isinstance(ui_app.current, LoginScreen) and ui_app.current.next_screen is DestinationScreen
+    assert ui_app.state.project is None and ui_app.state.asset is None
 
 
 def test_window_title_and_no_vnd_text(ui_app):
     assert ui_app.title() == WINDOW_TITLE == "NEXUS · Importador de palas"
-    _, screen = show_start(ui_app)
+    _, screen = show_destination(ui_app)
     texts = " ".join(all_texts(ui_app))
     for banned in ("VND", "VIND", "Hermes"):
         assert banned not in texts
@@ -285,7 +287,7 @@ def test_window_title_and_no_vnd_text(ui_app):
 
 def test_stale_results_do_not_touch_new_screen(ui_app):
     logged_in(ui_app)
-    ui_app.show(StartScreen)
+    ui_app.show(DestinationScreen)
     ui_app.show(LoginScreen)  # se cambia de pantalla antes de que llegue la respuesta
     ui_app.tasks.pump()
     assert isinstance(ui_app.current, LoginScreen)

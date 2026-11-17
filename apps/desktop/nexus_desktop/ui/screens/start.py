@@ -1,263 +1,184 @@
-"""Inicio: proyectos asignados → turbinas del proyecto → "Importar carpeta WTG"."""
+"""Inicio (sin sesión): «Importar carpeta WTG» y la lista de inspecciones locales.
+
+El técnico trabaja sin conexión: importa, marca, procesa y verifica sin iniciar sesión. La sesión,
+el proyecto y la turbina de NEXUS solo hacen falta al subir (pantalla «Destino de la subida»).
+La lista muestra las inspecciones «Listas para subir» (guardadas al terminar el procesado) y las
+subidas a medias; «Subir» las reconstruye desde el archivo de su carpeta y sigue por el destino.
+«Quitar de la lista» solo borra la entrada: nunca toca las fotos, las tiras ni el JSON del técnico.
+"""
 from __future__ import annotations
 
 from pathlib import Path
 from tkinter import ttk
 
-from nexus_desktop.nexus.projects import Asset, Project, list_assets, list_projects
-from nexus_desktop.storage import pending
+from nexus_desktop.storage import pending, ready
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.screens.upload import short_path
 from nexus_desktop.ui.theme import TOKENS
 
-STATUS_TEXT = {
-    None: "Sin inspección",
-    "pending": "Pendiente",
-    "captured": "Capturada",
-    "processing": "En proceso",
-    "in_review": "En revisión",
-    "approved": "Aprobada",
-}
-NO_PROJECTS = "No tienes proyectos asignados."
-NO_ASSETS = "Este proyecto no tiene turbinas."
-PROJECTS_ERROR = "No se pudieron cargar los proyectos. Revisa la conexión e inténtalo de nuevo."
-ASSETS_ERROR = "No se pudieron cargar las turbinas. Revisa la conexión e inténtalo de nuevo."
 NO_PENDING = "No hay inspecciones locales pendientes."
+INTRO = ("Trabaja sin conexión: importa la carpeta de una turbina, márcala y procésala. "
+         "Iniciar sesión solo hace falta para subir los resultados a NEXUS.")
+LOADING = "Preparando la inspección guardada…"
+LOAD_ERROR = "No se pudo leer la inspección guardada. Abre la carpeta de nuevo con «Importar carpeta WTG»."
+LIST_ERROR = "No se pudo actualizar la lista de inspecciones pendientes."
+PATH_LIMIT = 44  # caracteres de la ruta que caben en la columna «Carpeta»
 
 
 class StartScreen(Screen):
     def __init__(self, master, app) -> None:
         super().__init__(master, app)
-        self.projects: list[Project] = []
-        self.assets: dict[str, Asset] = {}
-        self._retry = None
+        self._pending_rows: dict[str, str] = {}
+        self._gen = 0  # descarta lecturas de una inspección elegida antes
 
-        top = ttk.Frame(self)
-        top.pack(fill="x", pady=(0, 16))
-        ttk.Label(top, text="Proyecto y turbina", style="Title.TLabel").pack(side="left")
-        self.logout_button = ttk.Button(top, text="Cerrar sesión", command=self._logout)
-        self.logout_button.pack(side="right")
-        self.user_label = ttk.Label(top, text=f"Sesión: {app.session.email or ''}", style="Muted.TLabel")
-        self.user_label.pack(side="right", padx=(0, 12))
+        ttk.Label(self, text="Inicio", style="Title.TLabel").pack(anchor="w")
 
         panel = ttk.Frame(self, style="Panel.TFrame", padding=20)
-        panel.pack(fill="both", expand=True)
-        panel.columnconfigure(0, weight=1)
-        panel.rowconfigure(3, weight=1)
-
-        ttk.Label(panel, text="Proyecto", style="Panel.TLabel").grid(row=0, column=0, sticky="w")
-        self.project_combo = ttk.Combobox(panel, state="readonly", width=48)
-        self.project_combo.grid(row=1, column=0, sticky="w", pady=(4, 16))
-        self.project_combo.bind("<<ComboboxSelected>>", lambda _e: self._project_selected())
-
-        ttk.Label(panel, text="Turbinas", style="Panel.TLabel").grid(row=2, column=0, sticky="w")
-        self.asset_tree = ttk.Treeview(panel, columns=("name", "status"), show="headings",
-                                       selectmode="browse", height=8)
-        self.asset_tree.heading("name", text="Turbina")
-        self.asset_tree.heading("status", text="Estado de la inspección")
-        self.asset_tree.column("name", width=260)
-        self.asset_tree.column("status", width=200)
-        self.asset_tree.grid(row=3, column=0, sticky="nsew", pady=(4, 8))
-        self.asset_tree.bind("<<TreeviewSelect>>", lambda _e: self._update_import_button())
-
-        status_row = ttk.Frame(panel, style="Panel.TFrame", borderwidth=0, relief="flat")
-        status_row.grid(row=4, column=0, sticky="ew")
-        self.status_label = ttk.Label(status_row, text="", style="Panel.Muted.TLabel",
-                                      wraplength=560, justify="left")
-        self.status_label.pack(side="left")
-        self.retry_button = ttk.Button(status_row, text="Reintentar", command=self._do_retry)
-
+        panel.pack(fill="x", pady=(16, 0))
+        ttk.Label(panel, text=INTRO, style="Panel.Muted.TLabel", wraplength=720, justify="left").pack(
+            anchor="w")
         self.import_button = ttk.Button(panel, text="Importar carpeta WTG", style="Accent.TButton",
                                         command=self._import)
-        self.import_button.grid(row=5, column=0, sticky="e", pady=(12, 0))
-        self.import_button.state(["disabled"])
+        self.import_button.pack(anchor="w", pady=(16, 0))
 
         box = ttk.Frame(self, style="Panel.TFrame", padding=16)
-        # Abajo y antes que el panel principal en el orden de pack: así nunca queda recortado.
-        box.pack(side="bottom", fill="x", pady=(16, 0), before=panel)
+        box.pack(fill="both", expand=True, pady=(16, 0))
         head = ttk.Frame(box, style="Panel.TFrame", borderwidth=0, relief="flat")
         head.pack(fill="x")
         ttk.Label(head, text="Inspecciones locales pendientes", style="Panel.TLabel").pack(side="left")
+        self.upload_pending_button = ttk.Button(head, text="Subir", style="Accent.TButton",
+                                                command=self._upload_pending)
         self.remove_pending_button = ttk.Button(head, text="Quitar de la lista", command=self._remove_pending)
-        # Subida a medias en esta sesión de la app (p. ej. tras caducar la sesión): se retoma tal cual.
-        self.resume_button = ttk.Button(head, text="Continuar la subida", style="Accent.TButton",
-                                        command=self._resume_upload)
+        # Inspección procesada en esta sesión que aún no se subió (p. ej. se volvió desde el destino).
+        self.resume_button = ttk.Button(head, text="Continuar la subida", command=self._resume_upload)
         if self._can_resume():
-            self.resume_button.configure(text=f"Continuar la subida de {app.state.wtg.path.name}")
-            self.resume_button.pack(side="right")
-            self.resume_button.state(["disabled"])  # hasta confirmar que el proyecto sigue asignado
+            self.resume_button.configure(text=f"Continuar la subida de {self._resume_name()}")
+            self.resume_button.pack(side="right", padx=(8, 0))
         self.no_pending_label = ttk.Label(box, text=NO_PENDING, style="Panel.Muted.TLabel")
         self.pending_tree = ttk.Treeview(box, columns=("folder", "inspection", "status"), show="headings",
-                                         selectmode="browse", height=3)
-        for key, title, width in (("folder", "Carpeta", 380), ("inspection", "Proyecto · turbina", 240),
+                                         selectmode="browse", height=5)
+        for key, title, width in (("folder", "Carpeta", 380), ("inspection", "Turbina / destino", 240),
                                   ("status", "Estado", 200)):
             self.pending_tree.heading(key, text=title)
             self.pending_tree.column(key, width=width, anchor="w", stretch=key == "folder")
-        self.pending_tree.bind("<<TreeviewSelect>>", lambda _e: self._update_remove_button())
+        self.pending_tree.bind("<<TreeviewSelect>>", lambda _e: self._update_buttons())
+        self.status_label = ttk.Label(box, text="", style="Panel.Muted.TLabel", wraplength=720, justify="left")
+        self.status_label.pack(side="bottom", anchor="w", pady=(8, 0))
         self._fill_pending()
 
-    def on_show(self) -> None:
-        self._load_projects()
-
-    # --- subidas pendientes ---
+    # --- inspección procesada en memoria ---
 
     def _can_resume(self) -> bool:
         s = self.app.state
-        return bool(s.wtg is not None and s.sections and s.project is not None and s.asset is not None)
+        return bool(s.wtg is not None and s.sections)
+
+    def _resume_name(self) -> str:
+        s = self.app.state
+        return s.turbine_name or s.wtg.path.name
+
+    def _resume_upload(self) -> None:
+        if self._can_resume():
+            self.app.show_destination()
+
+    # --- lista de pendientes ---
 
     def _fill_pending(self) -> None:
         tree = self.pending_tree
         tree.delete(*tree.get_children())
-        self._pending_rows: dict[str, str] = {}
+        self._pending_rows = {}
         items = pending.load()
         for entry in items:
-            item = tree.insert("", "end", values=(short_path(Path(entry.folder), 60),
-                                                  f"{entry.project} · {entry.asset}",
+            label = " · ".join(x for x in (entry.project, entry.asset) if x)
+            item = tree.insert("", "end", values=(short_path(Path(entry.folder), PATH_LIMIT), label,
                                                   pending.status_text(entry.status)))
             self._pending_rows[item] = entry.folder
         if items:
             self.no_pending_label.pack_forget()
             tree.pack(fill="x", pady=(6, 0))
             self.remove_pending_button.pack(side="right", padx=(8, 0))
+            self.upload_pending_button.pack(side="right", padx=(8, 0))
         else:
             tree.pack_forget()
             self.remove_pending_button.pack_forget()
+            self.upload_pending_button.pack_forget()
             self.no_pending_label.pack(anchor="w", pady=(4, 0))
-        self._update_remove_button()
+        self._update_buttons()
 
-    def _update_remove_button(self) -> None:
-        self.remove_pending_button.state(["!disabled"] if self.pending_tree.selection() else ["disabled"])
+    def _selected_folder(self) -> str | None:
+        sel = self.pending_tree.selection()
+        return self._pending_rows.get(sel[0]) if sel else None
+
+    def _update_buttons(self) -> None:
+        flag = ["!disabled"] if self.pending_tree.selection() else ["disabled"]
+        self.remove_pending_button.state(flag)
+        self.upload_pending_button.state(flag)
+
+    def _set_status(self, text: str, error: bool = False) -> None:
+        self.status_label.configure(text=text,
+                                    foreground=TOKENS["critical"] if error else TOKENS["text_muted"])
 
     def _remove_pending(self) -> None:
-        sel = self.pending_tree.selection()
-        folder = self._pending_rows.get(sel[0]) if sel else None
+        folder = self._selected_folder()
         if folder is None:
             return
         try:
             pending.remove(folder)
         except OSError:
-            self._set_status("No se pudo actualizar la lista de inspecciones pendientes.", error=True)
+            self._set_status(LIST_ERROR, error=True)
             return
+        self._set_status("")
         self._fill_pending()
 
-    def _resume_upload(self) -> None:
-        from nexus_desktop.ui.screens.upload import UploadScreen
-
-        if self._can_resume():
-            self.app.show(UploadScreen)
-
-    # --- estado y mensajes ---
-
-    def _set_status(self, text: str, error: bool = False, retry=None) -> None:
-        self.status_label.configure(text=text,
-                                    foreground=TOKENS["critical"] if error else TOKENS["text_muted"])
-        self._retry = retry
-        if retry is not None:
-            self.retry_button.pack(side="left", padx=(12, 0))
-        else:
-            self.retry_button.pack_forget()
-
-    def _do_retry(self) -> None:
-        if self._retry is not None:
-            self._retry()
-
-    def _selected_project(self) -> Project | None:
-        index = self.project_combo.current()
-        return self.projects[index] if 0 <= index < len(self.projects) else None
-
-    def _selected_asset(self) -> Asset | None:
-        sel = self.asset_tree.selection()
-        return self.assets.get(sel[0]) if sel else None
-
-    def _update_import_button(self) -> None:
-        ready = self._selected_project() is not None and self._selected_asset() is not None
-        self.import_button.state(["!disabled"] if ready else ["disabled"])
-
-    # --- proyectos ---
-
-    def _load_projects(self) -> None:
-        self._set_status("Cargando proyectos…")
-        self.project_combo.state(["disabled"])
-        session = self.app.session
-
-        def fetch() -> list[Project]:
-            session.access_token()  # renueva o lanza SessionLost antes de consultar
-            return list_projects(session.client)
-
-        self.run_async(fetch, self._projects_loaded,
-                       lambda _e: self._set_status(PROJECTS_ERROR, error=True, retry=self._load_projects))
-
-    def _projects_loaded(self, projects: list[Project]) -> None:
-        self.projects = projects
-        self.project_combo.configure(values=[p.name for p in projects])
-        if not projects:
-            self._set_status(NO_PROJECTS)
+    def _upload_pending(self) -> None:
+        """«Subir» una entrada de la lista: se reconstruye el estado desde el JSON de su carpeta
+        (validado) y se sigue por el destino; sin sesión, antes el login."""
+        folder = self._selected_folder()
+        if folder is None:
             return
-        self.project_combo.state(["!disabled", "readonly"])
-        self._set_status("Elige un proyecto.")
-        previous = self.app.state.project
-        ids = [p.id for p in projects]
-        if self._can_resume() and previous is not None and previous.id in ids:
-            self.resume_button.state(["!disabled"])
-        if previous is not None and previous.id in ids:
-            self.project_combo.current(ids.index(previous.id))
-            self._project_selected()
+        state = self.app.state
+        if state.wtg is not None and state.sections and _same(state.wtg.path, folder):
+            self.app.show_destination()  # es la que está en memoria: se conserva tal cual
+            return
+        self._gen += 1
+        gen = self._gen
+        self.upload_pending_button.state(["disabled"])
+        self._set_status(LOADING)
 
-    # --- turbinas ---
+        def done(loaded: ready.ReadyInspection) -> None:
+            if gen != self._gen:
+                return
+            self._guard_current()
+            new = loaded.to_state()
+            new.project = self.app.state.project  # el proyecto elegido antes se ofrece de nuevo
+            self.app.state = new
+            self.app.show_destination()
 
-    def _project_selected(self) -> None:
-        self.asset_tree.delete(*self.asset_tree.get_children())
-        self.assets = {}
-        self._update_import_button()
-        project = self._selected_project()
-        if project is not None:
-            self._load_assets(project)
+        def failed(exc: Exception) -> None:
+            if gen != self._gen:
+                return
+            self._update_buttons()
+            self._set_status(str(exc) if isinstance(exc, ready.ReadyError) else LOAD_ERROR, error=True)
 
-    def _load_assets(self, project: Project) -> None:
-        self._set_status("Cargando turbinas…")
-        session = self.app.session
-
-        def fetch() -> list[Asset]:
-            session.access_token()
-            return list_assets(session.client, project.id)
-
-        def done(assets: list[Asset]) -> None:
-            if self._selected_project() is project:  # descarta respuestas de otro proyecto
-                self._assets_loaded(assets)
-
-        def failed(_exc: Exception) -> None:
-            if self._selected_project() is project:
-                self._set_status(ASSETS_ERROR, error=True, retry=lambda: self._load_assets(project))
-
-        self.run_async(fetch, done, failed)
-
-    def _assets_loaded(self, assets: list[Asset]) -> None:
-        self.assets = {a.id: a for a in assets}
-        for a in assets:
-            status = STATUS_TEXT.get(a.status_hint, "Estado desconocido")
-            self.asset_tree.insert("", "end", iid=a.id, values=(a.name, status))
-        self._set_status("Elige una turbina." if assets else NO_ASSETS)
-        previous = self.app.state.asset
-        if previous is not None and previous.id in self.assets:
-            self.asset_tree.selection_set(previous.id)
-        self._update_import_button()
+        self.run_async(lambda: ready.load_ready(Path(folder)), done, failed)
 
     # --- acciones ---
+
+    def _guard_current(self) -> None:
+        """Antes de reemplazar lo que hay en memoria, lo ya procesado se guarda en su carpeta (y
+        queda en la lista): así no se pierde el trabajo de marcar y procesar."""
+        state = self.app.state
+        if state.wtg is not None and state.sections and state.blade_length_m:
+            ready.register_ready(state, keep_existing=True)
 
     def _import(self) -> None:
         from nexus_desktop.ui.screens.import_ import ImportScreen
 
-        project, asset = self._selected_project(), self._selected_asset()
-        if project is None or asset is None:
-            return
-        state = self.app.state
-        if state.asset is None or state.asset.id != asset.id:  # otra turbina: carpeta y marcas nuevas
-            state.forget_folder()
-        state.project, state.asset = project, asset
+        self._guard_current()
+        self.app.state.forget_folder()  # carpeta nueva: marcas y tiras nuevas
         self.app.show(ImportScreen)
 
-    def _logout(self) -> None:
-        self.logout_button.state(["disabled"])
-        self.import_button.state(["disabled"])
-        self._set_status("Cerrando sesión…")
-        self.app.logout()
+
+def _same(a, b) -> bool:
+    import os
+
+    return os.path.normcase(os.path.normpath(str(a))) == os.path.normcase(os.path.normpath(str(b)))

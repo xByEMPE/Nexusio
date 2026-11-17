@@ -5,8 +5,10 @@ turbina (`WTG …`), marca la punta y la raíz de cada cara de pala, reconstruye
 modelo de segmentación (ONNX) y sube fotos, tiras y calibración a la plataforma NEXUS.
 Sustituye al importador anterior y al script `scripts/ingest_demo`, ya retirados.
 
-Flujo: inicio de sesión → proyecto y turbina asignados → importar carpeta → longitud de pala →
-marcado → procesamiento → resultados → verificación → subida.
+Flujo (sin conexión hasta subir): Inicio → importar carpeta (nombre de la turbina y longitud de
+pala) → marcado → procesamiento → resultados → verificación → «¿Subir ahora o guardar para
+después?». Solo al subir se pide iniciar sesión y elegir proyecto y turbina (pantalla «Destino de
+la subida»); el técnico puede procesar varias carpetas en el campo y subirlas más tarde.
 
 ## Instalar la app (técnico)
 
@@ -53,12 +55,17 @@ Otras variables (opcionales, sobre todo para desarrollo):
 | `NEXUS_MODEL_PATH` | Ruta al modelo `blade_unet_512.onnx`. Si no, se busca en `apps/desktop/models/` y en la carpeta de la app (`models\`). Sin modelo la app avisa y cose sin segmentar. |
 | `NEXUS_SAMPLE_WTG` | Carpeta WTG de ejemplo para las pruebas lentas (por defecto la carpeta `WTG 25` junto al repositorio principal; ver `tests/`). |
 
-Datos locales del usuario en `%APPDATA%\NEXUS`: `config.json`, `pending.json` (subidas sin
-terminar), `thumbs\` (caché de miniaturas; se recorta sola a 500 MB) y `logs\nexus-desktop.log` (registro rotativo,
+Datos locales del usuario en `%APPDATA%\NEXUS`: `config.json`, `pending.json` (inspecciones
+«Listas para subir» y subidas sin terminar; solo rutas, nombres y estado), `thumbs\` (caché de miniaturas; se recorta sola a 500 MB) y `logs\nexus-desktop.log` (registro rotativo,
 5 copias de 2 MB, sin tokens, llaves ni contraseñas: es lo que se envía a soporte si algo
 falla). Junto a las fotos de la carpeta WTG la app deja
 `.ingest_index.json` (ids ya creados y archivos ya subidos), la carpeta
-`<WTG>_img_stitched\` con las tiras y `<WTG>_reconstruction.json`.
+`<WTG>_img_stitched\` con las tiras, `<WTG>_reconstruction.json` y, al terminar el procesado,
+`<WTG>_inspeccion_lista.json` (versión 1: nombre de la turbina, longitud de pala y, por sección,
+cara, pala, tira, tamaño, calibración en píxeles de la tira original y fotos con radio y GSD;
+todas las rutas son relativas a la carpeta WTG, así que sobrevive a moverla). Con él «Subir» en
+el Inicio reconstruye la subida aunque se haya cerrado la app; se valida al cargar y, si falta una
+foto o una tira o está dañado, la app lo dice en español sin borrar nada.
 
 exiftool: usar la distribución completa de Windows (`exiftool.exe` + carpeta `exiftool_files`,
 p. ej. `EXIF\exiftool-13.42_64`). El `exiftool.exe` suelto de `EXIF\` no funciona.
@@ -145,8 +152,8 @@ apps/desktop/
     domain/            carpeta WTG, EXIF, GSD, medidas, marcado, reconstrucción, posición
     vision/            segmentador U-Net (ONNX) y cosido de tiras
     nexus/             sesión, proyectos y turbinas, TUS, manifiesto v1, orquestador de subida
-    storage/           índice local (.ingest_index.json) y subidas pendientes
-    ui/                ventana, tema NEXUS y pantallas
+    storage/           índice local (.ingest_index.json), subidas pendientes e inspección lista (ready.py)
+    ui/                ventana, tema NEXUS, etiquetas compartidas (labels.py) y pantallas
     schema/            copia de src/contracts/ingest-manifest.v1.schema.json
   tests/               pytest (rápidas por defecto; -m slow con datos reales)
   packaging/           nexus_desktop.spec, build.ps1, launcher.py, installer.iss
@@ -155,9 +162,10 @@ apps/desktop/
 
 ## Contrato con la plataforma
 
-- **Sesión**: Supabase Auth con correo y contraseña del técnico; el token se renueva si vence
-  en menos de 5 minutos, antes de cada subida. Si se pierde, la app vuelve al login sin perder
-  lo hecho.
+- **Sesión**: Supabase Auth con correo y contraseña del técnico, solo al subir (la app abre en
+  el Inicio sin sesión: «Sin conexión»); el token se renueva si vence en menos de 5 minutos,
+  antes de cada subida. Si se pierde durante la subida, la app vuelve al login y después a la
+  subida sin perder lo hecho.
 - **Proyectos y turbinas**: solo los asignados al técnico (los filtra RLS): `projects`,
   `project_sites`, `assets` y el estado de su `inspections`.
 - **Inspección**: si no existe, la app inserta la fila (`kind = wind_blade`,
@@ -189,5 +197,6 @@ apps/desktop/
   cierra antes de procesar, hay que volver a marcar. Lo ya subido sí se conserva (índice local) y
   la subida se reanuda sin duplicar.
 - **La app escribe dentro de la carpeta WTG**: `<WTG>_img_stitched\` (las tiras),
-  `<WTG>_reconstruction.json` (radios, GSD, calibración y cuerda) y `.ingest_index.json`. Nunca
+  `<WTG>_reconstruction.json` (radios, GSD, calibración y cuerda), `<WTG>_inspeccion_lista.json`
+  (lo necesario para subir más tarde) y `.ingest_index.json`. Nunca
   borra fotos; reprocesar sobrescribe las tiras y el JSON.

@@ -25,6 +25,7 @@ READ_ERROR = "No se pudo leer la carpeta. Comprueba que existe y que tienes perm
 NO_SECTIONS = ("No se encontraron fotos de palas en esta carpeta. Debe tener carpetas "
                "Blade A/B/C (o Pala A/B/C) con las caras LE, TE, PS y SS.")
 NO_ID_PHOTO = "No se encontró la foto _ID en la carpeta."
+EMPTY_NAME = "Escribe un nombre para la turbina (por ejemplo, el de la carpeta)."
 MIN_BLADE_LENGTH_M, MAX_BLADE_LENGTH_M = 5.0, 150.0
 INVALID_LENGTH = "Escribe la longitud de la pala en metros, entre 5 y 150 (por ejemplo 61,5)."
 OUT_OF_RANGE_LENGTH = ("La longitud de la pala debe estar entre 5 y 150 m y escribiste {text} m: revisa "
@@ -93,9 +94,8 @@ class ImportScreen(Screen):
 
         state = app.state
         ttk.Label(self, text="Importar carpeta WTG", style="Title.TLabel").pack(anchor="w")
-        if state.project is not None and state.asset is not None:
-            ttk.Label(self, text=f"{state.project.name} · {state.asset.name}",
-                      style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
+        ttk.Label(self, text="Puedes trabajar sin conexión: la sesión solo hace falta al subir.",
+                  style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
 
         footer = ttk.Frame(self)
         footer.pack(side="bottom", fill="x", pady=(16, 0))
@@ -141,16 +141,27 @@ class ImportScreen(Screen):
                                        justify="left", foreground=TOKENS["caution"])
         self.missing_label.grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
-        ttk.Label(form, text="Longitud de pala (m)", style="Panel.TLabel").grid(
+        ttk.Label(form, text="Nombre de la turbina", style="Panel.TLabel").grid(
             row=6, column=0, columnspan=2, sticky="w", pady=(16, 0))
+        self.name_entry = ttk.Entry(form, width=36, validate="key",
+                                    validatecommand=(self.register(self._name_typed), "%P"))
+        self.name_entry.grid(row=7, column=0, sticky="w", pady=(4, 0))
+        self.name_error = ttk.Label(form, text="", style="Panel.TLabel", wraplength=560,
+                                    justify="left", foreground=TOKENS["critical"])
+        self.name_error.grid(row=8, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        if state.turbine_name:
+            self.name_entry.insert(0, state.turbine_name)
+
+        ttk.Label(form, text="Longitud de pala (m)", style="Panel.TLabel").grid(
+            row=9, column=0, columnspan=2, sticky="w", pady=(8, 0))
         # Sin StringVar: una variable Tk que el recolector libere en un hilo de trabajo bloquea
         # Tcl. Los cambios del texto se detectan en la validación por tecla.
         self.length_entry = ttk.Entry(form, width=14, validate="key",
                                       validatecommand=(self.register(self._length_typed), "%P"))
-        self.length_entry.grid(row=7, column=0, sticky="w", pady=(4, 0))
+        self.length_entry.grid(row=10, column=0, sticky="w", pady=(4, 0))
         self.length_error = ttk.Label(form, text="", style="Panel.TLabel", wraplength=560,
                                       justify="left", foreground=TOKENS["critical"])
-        self.length_error.grid(row=8, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.length_error.grid(row=11, column=0, columnspan=2, sticky="w", pady=(4, 0))
         if state.blade_length_m:
             self.length_entry.insert(0, _format_length(state.blade_length_m))
         self.length_entry.bind("<Return>", lambda _e: self._continue())
@@ -167,6 +178,7 @@ class ImportScreen(Screen):
     def on_show(self) -> None:
         if self.app.state.wtg is not None:  # se vuelve del marcado: misma carpeta, sin releer
             self.folder_label.configure(text=str(self.app.state.wtg.path))
+            self._set_name(self.app.state.turbine_name or self.app.state.wtg.path.name)
             self._show_wtg(self.app.state.wtg)
         else:
             self.browse_button.focus_set()
@@ -175,6 +187,10 @@ class ImportScreen(Screen):
         # La imagen Tk se libera aquí, en el hilo de Tk (ver MarkingScreen.on_hide).
         self.id_image_label.configure(image="")
         self.id_photo = None
+
+    def _name_typed(self, _proposed: str) -> bool:
+        self.after_idle(lambda: self.winfo_exists() and self._update_continue())
+        return True
 
     def _length_typed(self, proposed: str) -> bool:
         if not _typing_allowed(proposed):
@@ -197,6 +213,7 @@ class ImportScreen(Screen):
         gen = self._gen
         self.wtg = None
         self.folder_label.configure(text=str(path))
+        self._set_name(path.name)  # la turbina se llama como la carpeta, salvo que el técnico la cambie
         self._set_status(READING)
         self.summary_tree.delete(*self.summary_tree.get_children())
         self.missing_label.configure(text="")
@@ -234,6 +251,10 @@ class ImportScreen(Screen):
                       "procesarán las secciones presentes.") if missing else "")
         self._show_id(wtg)
         self._update_continue()
+
+    def _set_name(self, text: str) -> None:
+        self.name_entry.delete(0, "end")
+        self.name_entry.insert(0, text)
 
     def _clear_id(self) -> None:
         self.id_photo = None
@@ -275,11 +296,16 @@ class ImportScreen(Screen):
     def _has_sections(self) -> bool:
         return self.wtg is not None and any(f for faces in self.wtg.blades.values() for f in faces.values())
 
+    def update_continue(self) -> None:
+        self._update_continue()
+
     def _update_continue(self) -> None:
         text = self.length_entry.get()
         length = parse_blade_length(text)
         self.length_error.configure(text=length_error(text))
-        ready = self._has_sections() and length is not None
+        named = bool(self.name_entry.get().strip())
+        self.name_error.configure(text="" if named or self.wtg is None else EMPTY_NAME)
+        ready = self._has_sections() and length is not None and named
         self.continue_button.state(["!disabled"] if ready else ["disabled"])
 
     # --- acciones ---
@@ -288,7 +314,8 @@ class ImportScreen(Screen):
         from nexus_desktop.ui.screens.marking import MarkingScreen
 
         length = parse_blade_length(self.length_entry.get())
-        if not self._has_sections() or length is None:
+        name = self.name_entry.get().strip()
+        if not self._has_sections() or length is None or not name:
             self._update_continue()
             return
         state = self.app.state
@@ -296,7 +323,9 @@ class ImportScreen(Screen):
             state.wtg = self.wtg
             state.marks = MarkingState(self.wtg.blades)
             state.strips, state.sections = {}, []
+            state.asset = None  # el destino se elige al subir
         state.blade_length_m = length
+        state.turbine_name = name
         self.app.show(MarkingScreen)
 
     def _back(self) -> None:

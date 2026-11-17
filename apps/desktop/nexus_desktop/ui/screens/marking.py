@@ -71,9 +71,7 @@ class MarkingScreen(Screen):
         top = ttk.Frame(self)
         top.pack(fill="x")
         ttk.Label(top, text="Marcado de punta y raíz", style="Title.TLabel").pack(side="left")
-        subtitle = [x.name for x in (state.project, state.asset) if x is not None]
-        if state.wtg is not None and state.wtg.path.name not in subtitle:
-            subtitle.append(state.wtg.path.name)
+        subtitle = state.title_parts()
         ttk.Label(top, text=" · ".join(subtitle), style="Muted.TLabel").pack(side="left", padx=(12, 0))
 
         bar = ttk.Frame(self)

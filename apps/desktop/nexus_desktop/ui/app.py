@@ -43,6 +43,9 @@ class AppState:
     project: Project | None = None
     asset: Asset | None = None
     blade_length_m: float | None = None
+    # Nombre/etiqueta de la turbina para trabajar sin conexión (sale del nombre de la carpeta y se
+    # puede editar); el servidor no interviene hasta la subida (project/asset).
+    turbine_name: str = ""
     marks: MarkingState | None = None  # punta y raíz de las secciones de `wtg`
     # Tiras para la subida: {(pala, cara): ruta}; las fija la verificación.
     strips: dict = field(default_factory=dict)
@@ -53,7 +56,16 @@ class AppState:
     def forget_folder(self) -> None:
         """Olvida la carpeta WTG y todo lo calculado sobre ella (marcas, tiras, resultados)."""
         self.wtg, self.marks, self.blade_length_m = None, None, None
+        self.turbine_name = ""
         self.strips, self.sections = {}, []
+        self.asset = None  # el destino de la próxima carpeta se elige al subirla
+
+    def title_parts(self) -> list[str]:
+        """Texto bajo el título de las pantallas: turbina (etiqueta del técnico) y carpeta."""
+        parts = [self.turbine_name] if self.turbine_name else []
+        if self.wtg is not None and self.wtg.path.name not in parts:
+            parts.append(self.wtg.path.name)
+        return parts
 
 
 def create_session() -> tuple[Session | None, str | None]:
@@ -91,9 +103,9 @@ class App(tk.Tk):
         self._build_header()
         self.body = ttk.Frame(self)
         self.body.pack(fill="both", expand=True)
+        self.refresh_header()
         if start:
-            from nexus_desktop.ui.screens.login import LoginScreen
-            self.show(LoginScreen)
+            self.show_initial()
 
     def _build_header(self) -> None:
         header = ttk.Frame(self, style="Panel.TFrame", padding=(16, 10))
@@ -109,6 +121,11 @@ class App(tk.Tk):
                   font=theme.font(14, "bold")).pack(side="left")
         ttk.Label(header, text="Importador de palas", style="Panel.Muted.TLabel").pack(
             side="left", padx=(10, 0))
+        # A la derecha: «Sin conexión» o «Sesión: correo» y el botón para entrar o salir.
+        self.session_button = ttk.Button(header, text="Iniciar sesión", command=self._session_button)
+        self.session_button.pack(side="right")
+        self.connection_label = ttk.Label(header, text="Sin conexión", style="Panel.Muted.TLabel")
+        self.connection_label.pack(side="right", padx=(0, 12))
 
     def show(self, screen_cls: type[Screen], **kwargs: Any) -> Screen:
         """Destruye la pantalla actual y muestra una nueva de `screen_cls`."""
@@ -119,8 +136,55 @@ class App(tk.Tk):
         screen = screen_cls(self.body, self, **kwargs)
         screen.pack(fill="both", expand=True)
         self.current = screen
+        self.refresh_header()
         screen.on_show()
         return screen
+
+    # --- sesión (solo hace falta para subir) ---
+
+    @property
+    def logged_in(self) -> bool:
+        return self.session is not None and getattr(self.session, "email", None) is not None
+
+    def refresh_header(self) -> None:
+        """«Sin conexión» + «Iniciar sesión», o «Sesión: correo» + «Cerrar sesión». Entrar solo se
+        ofrece en el Inicio (en medio del trabajo se entra al subir)."""
+        from nexus_desktop.ui.screens.start import StartScreen
+
+        if self.logged_in:
+            self.connection_label.configure(text=f"Sesión: {self.session.email}")
+            self.session_button.configure(text="Cerrar sesión")
+            self.session_button.state(["!disabled"])
+        else:
+            self.connection_label.configure(text="Sin conexión")
+            self.session_button.configure(text="Iniciar sesión")
+            self.session_button.state(["!disabled"] if isinstance(self.current, StartScreen) else ["disabled"])
+
+    def _session_button(self) -> None:
+        if self.logged_in:
+            self.logout()
+        else:
+            self.show_login(next_screen=type(self.current) if self.current is not None else None)
+
+    def show_initial(self) -> None:
+        """Pantalla de arranque: el Inicio, sin pedir sesión (el técnico trabaja sin conexión)."""
+        from nexus_desktop.ui.screens.start import StartScreen
+
+        self.show(StartScreen)
+
+    def show_login(self, next_screen=None, message: str | None = None, email: str | None = None) -> None:
+        from nexus_desktop.ui.screens.login import LoginScreen
+
+        self.show(LoginScreen, message=message, email=email, next_screen=next_screen)
+
+    def show_destination(self) -> None:
+        """Camino de la subida: sin sesión, primero el login y luego el destino (proyecto y turbina)."""
+        from nexus_desktop.ui.screens.destination import DestinationScreen
+
+        if self.logged_in:
+            self.show(DestinationScreen)
+        else:
+            self.show_login(next_screen=DestinationScreen)
 
     def run_async(self, fn: Callable[[], Any], on_done: Callable[[Any], None],
                   on_error: Callable[[Exception], None] | None = None) -> None:
@@ -165,21 +229,37 @@ class App(tk.Tk):
         self.destroy()
 
     def session_lost(self) -> None:
-        """La sesión caducó: vuelve al login. Se conserva lo elegido (el avance está en el índice)."""
-        from nexus_desktop.ui.screens.login import LoginScreen
+        """La sesión caducó: vuelve al login y, tras entrar, a donde se estaba (la subida o el
+        destino). Se conserva todo lo hecho (el avance de la subida está en el índice local)."""
+        from nexus_desktop.ui.screens.destination import DestinationScreen
+        from nexus_desktop.ui.screens.start import StartScreen
+        from nexus_desktop.ui.screens.upload import UploadScreen
 
         email = self.session.email if self.session is not None else None
         if self.session is not None:
             self.session.email = None
-        self.show(LoginScreen, message=SESSION_EXPIRED, email=email)
+        if isinstance(self.current, UploadScreen) and self.state.project and self.state.asset:
+            target = UploadScreen
+        elif isinstance(self.current, (UploadScreen, DestinationScreen)):
+            target = DestinationScreen
+        else:
+            target = StartScreen
+        self.show_login(next_screen=target, message=SESSION_EXPIRED, email=email)
 
     def logout(self) -> None:
-        """Cierra la sesión en segundo plano y vuelve al login con el estado limpio."""
-        from nexus_desktop.ui.screens.login import LoginScreen
+        """Cierra la sesión en segundo plano. El trabajo local (carpeta, marcas, tiras) se conserva;
+        solo se olvida el destino elegido con la cuenta anterior."""
+        from nexus_desktop.ui.screens.destination import DestinationScreen
+
+        if self.busy():
+            return
 
         def back(_result: Any = None) -> None:
-            self.state = AppState()
-            self.show(LoginScreen)
+            self.state.project = self.state.asset = None
+            if isinstance(self.current, DestinationScreen):  # sin sesión no hay destino que elegir
+                self.show_login(next_screen=DestinationScreen)
+            else:
+                self.refresh_header()
 
         if self.session is None:
             back()
@@ -196,3 +276,4 @@ class App(tk.Tk):
         self.config_error = None
         self.state = AppState()
         self._closing = False
+        self.refresh_header()

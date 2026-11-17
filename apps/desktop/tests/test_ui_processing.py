@@ -12,6 +12,7 @@ from nexus_desktop.domain.reconstruction import PhotoResult, SectionResult
 from nexus_desktop.domain.wtg_folder import scan_wtg
 from nexus_desktop.nexus.projects import Asset, Project
 from nexus_desktop.ui.screens import processing as processing_module
+from nexus_desktop.ui.screens.login import LoginScreen
 from nexus_desktop.ui.screens.marking import MarkingScreen
 from nexus_desktop.ui.screens.processing import ProcessingScreen, load_segmenter
 from nexus_desktop.ui.screens.results import ResultsScreen
@@ -282,7 +283,7 @@ def test_results_review_blade_and_continue(app, tmp_path):
     app.current.continue_button.invoke()
     app.tasks.pump()
     assert isinstance(app.current, VerificationScreen) and app.current.blade == "A"
-    assert app.current.continue_button.cget("text") == "Continuar a la subida"
+    assert app.current.continue_button.cget("text") == "Terminar"
 
 
 def test_results_back_to_marking_keeps_marks(app, tmp_path):
@@ -351,17 +352,17 @@ def test_verification_selecting_photo_marks_it_on_strip(app, tmp_path):
     assert line[1] == pytest.approx(150 * fit.scale + fit.offset_y)
 
 
-def test_verification_continue_stores_strips_and_goes_to_upload_stub(app, tmp_path):
+def test_verification_finish_stores_strips_and_asks_what_to_do(app, tmp_path):
     screen = show_verification(app, tmp_path)
     sections = app.state.sections
     screen.continue_button.invoke()
     app.tasks.pump()
-    assert isinstance(app.current, UploadScreen)
+    assert app.current is screen and screen.finish_frame.winfo_manager() != ""
     assert app.state.strips == {(s.blade, s.face): s.strip_path for s in sections}
-    assert app.state.sections is sections  # radio y GSD por foto para la Task 14
-    app.current.back_button.invoke()
+    assert app.state.sections is sections  # radio y GSD por foto para la subida
+    screen.upload_now_button.invoke()
     app.tasks.pump()
-    assert isinstance(app.current, VerificationScreen)
+    assert isinstance(app.current, LoginScreen)  # sin sesión: el login va antes del destino
 
 
 def test_verification_releases_tk_images_on_hide(app, tmp_path):

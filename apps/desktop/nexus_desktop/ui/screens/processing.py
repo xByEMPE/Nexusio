@@ -72,9 +72,7 @@ class ProcessingScreen(Screen):
         top.pack(fill="x")
         ttk.Label(top, text="Procesamiento de tiras", style="Title.TLabel").pack(side="left")
         state = app.state
-        subtitle = [x.name for x in (state.project, state.asset) if x is not None]
-        if state.wtg is not None and state.wtg.path.name not in subtitle:
-            subtitle.append(state.wtg.path.name)
+        subtitle = state.title_parts()
         ttk.Label(top, text=" · ".join(subtitle), style="Muted.TLabel").pack(side="left", padx=(12, 0))
 
         self.status_label = ttk.Label(self, text="Preparando…", wraplength=900, justify="left")

@@ -3,8 +3,12 @@
 Mismo flujo: una pala a la vez y cuatro columnas (LE, TE, PS, SS) con las fotos de la punta
 (arriba) a la raíz (abajo). En lugar de una miniatura por foto, cada columna muestra la tira con
 las marcas de la calibración (punta y raíz) y la lista de fotos con su radio y GSD; al elegir una
-foto se marca su centro sobre la tira. «Continuar a la subida» deja las tiras en
-`app.state.strips` (con `app.state.sections`, que lleva radio y GSD por foto) para la subida.
+foto se marca su centro sobre la tira.
+
+«Terminar» deja las tiras en `app.state.strips` (con `app.state.sections`, que lleva radio y GSD por
+foto) y pregunta qué hacer con la inspección: «Subir ahora a NEXUS» (destino, y el login si no hay
+sesión) o «Guardar y subir después» (JSON en la carpeta WTG + entrada «Lista para subir» en la lista
+local, y vuelta al Inicio para procesar otra carpeta).
 """
 from __future__ import annotations
 
@@ -13,13 +17,21 @@ from tkinter import ttk
 
 from nexus_desktop.domain.reconstruction import SectionResult, stitch_order
 from nexus_desktop.domain.wtg_folder import FACES
+from nexus_desktop.storage import ready
 from nexus_desktop.ui.screens.results import StripGridScreen, decimal
+from nexus_desktop.ui import theme
 from nexus_desktop.ui.theme import TOKENS
 
 TIP_COLOR = TOKENS["caution"]
 ROOT_COLOR = TOKENS["telemetry"]
 PHOTO_COLOR = TOKENS["critical"]
 SHADOW = "#000000"
+FINISH_QUESTION = "¿Qué quieres hacer con esta inspección?"
+FINISH_HELP = ("«Subir ahora» pide iniciar sesión (si no la tienes) y elegir proyecto y turbina. «Guardar» "
+               "deja la inspección en el Inicio como «Lista para subir»: la subes cuando tengas "
+               "conexión, aunque cierres la app, y mientras tanto puedes procesar otra carpeta.")
+SAVE_ERROR = ("No se pudo guardar la inspección en la carpeta WTG (revisa el espacio en disco y que "
+              "tengas permiso de escritura). Puedes reintentar o subirla ahora.")
 _DJI_NAME = re.compile(r"^DJI_\d+_(.+)$", re.IGNORECASE)
 
 
@@ -40,7 +52,7 @@ class VerificationScreen(StripGridScreen):
         super().__init__(master, app, blade)
 
     def _build_footer(self, footer: ttk.Frame) -> None:
-        self.continue_button = ttk.Button(footer, text="Continuar a la subida", style="Accent.TButton",
+        self.continue_button = ttk.Button(footer, text="Terminar", style="Accent.TButton",
                                           command=self._continue)
         self.continue_button.pack(side="right")
         self.back_button = ttk.Button(footer, text="Volver a resultados", command=self._back)
@@ -51,6 +63,27 @@ class VerificationScreen(StripGridScreen):
         ttk.Label(footer, text="Radio en m · GSD en mm/px", style="Muted.TLabel").pack(side="left", padx=(16, 0))
         if not self.sections:
             self.continue_button.state(["disabled"])
+        self._build_finish_dialog()
+
+    def _build_finish_dialog(self) -> None:
+        """La pregunta del final: un panel en el centro de la pantalla (oculto hasta «Terminar»)."""
+        self.finish_frame = ttk.Frame(self, style="Panel.TFrame", padding=24, relief="solid", borderwidth=1)
+        ttk.Label(self.finish_frame, text=FINISH_QUESTION, style="Panel.TLabel",
+                  font=theme.font(13, "bold")).pack(anchor="w")
+        ttk.Label(self.finish_frame, text=FINISH_HELP, style="Panel.Muted.TLabel", wraplength=460,
+                  justify="left").pack(anchor="w", pady=(8, 14))
+        self.finish_error_label = ttk.Label(self.finish_frame, text="", style="Panel.TLabel",
+                                            foreground=TOKENS["critical"], wraplength=460, justify="left")
+        self.finish_error_label.pack(anchor="w")
+        self.upload_now_button = ttk.Button(self.finish_frame, text="Subir ahora a NEXUS",
+                                            style="Accent.TButton", command=self._upload_now)
+        self.upload_now_button.pack(fill="x", pady=(6, 0))
+        self.save_later_button = ttk.Button(self.finish_frame, text="Guardar y subir después",
+                                            command=self._save_later)
+        self.save_later_button.pack(fill="x", pady=(8, 0))
+        self.keep_reviewing_button = ttk.Button(self.finish_frame, text="Seguir revisando",
+                                                command=self._hide_finish)
+        self.keep_reviewing_button.pack(anchor="e", pady=(12, 0))
 
     def _build_column(self, grid: ttk.Frame, col: int, face: str) -> None:
         frame = ttk.Frame(grid, style="Panel.TFrame", borderwidth=0, relief="flat")
@@ -147,10 +180,43 @@ class VerificationScreen(StripGridScreen):
         self.app.show(ResultsScreen, blade=self.blade)
 
     def _continue(self) -> None:
-        from nexus_desktop.ui.screens.upload import UploadScreen
-
+        """«Terminar»: deja las tiras listas para la subida y pregunta qué hacer."""
         state = self.app.state
         if not state.sections:
             return
         state.strips = {(s.blade, s.face): s.strip_path for s in state.sections}
-        self.app.show(UploadScreen)
+        self._show_finish()
+
+    def _show_finish(self) -> None:
+        self.finish_error_label.configure(text="")
+        self.finish_frame.place(relx=0.5, rely=0.5, anchor="center")
+        self.finish_frame.lift()
+        for button in (self.continue_button, self.back_button):
+            button.state(["disabled"])
+        self.upload_now_button.focus_set()
+
+    def _hide_finish(self) -> None:
+        self.finish_frame.place_forget()
+        self.continue_button.state(["!disabled"])
+        self.back_button.state(["!disabled"])
+
+    def _upload_now(self) -> None:
+        """Subir ahora: destino de la subida (con el login antes si no hay sesión). Por si se cierra
+        la app a medias, lo procesado queda guardado en la carpeta y en la lista local."""
+        try:
+            ready.register_ready(self.app.state, keep_existing=True)
+        except (OSError, ready.ReadyError):
+            pass  # la lista es una ayuda: subir ahora no depende de ella
+        self.app.show_destination()
+
+    def _save_later(self) -> None:
+        """Guardar y subir después: JSON en la carpeta + «Lista para subir» en la lista local."""
+        from nexus_desktop.ui.screens.start import StartScreen
+
+        try:
+            ready.register_ready(self.app.state)
+        except (OSError, ready.ReadyError):
+            self.finish_error_label.configure(text=SAVE_ERROR)
+            return
+        self.app.state.forget_folder()  # lista para procesar otra carpeta; lo guardado no se toca
+        self.app.show(StartScreen)

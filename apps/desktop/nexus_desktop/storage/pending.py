@@ -1,7 +1,9 @@
 """Subidas sin terminar que conoce la app (config.data_dir()/pending.json).
 
-Lista pequeña por usuario para el panel «Inspecciones locales pendientes» del inicio. La escribe
-la pantalla de subida al empezar (`in_progress`) y al terminar (completa: se quita; si no,
+Lista pequeña por usuario de Windows para el panel «Inspecciones locales pendientes» del inicio.
+La escribe el final de la verificación («Guardar y subir después»: `ready`, «Lista para subir», con
+el nombre de la turbina en `asset` y `project` vacío), la pantalla de subida al empezar
+(`in_progress`) y al terminar (completa: se quita; si no,
 `cancelled`, `errors`, `interrupted` o `partial` si se omitieron fotos dañadas). Solo guarda la ruta de la carpeta WTG, los nombres del
 proyecto y la turbina, el estado y la fecha: nunca tokens ni datos de la sesión. El avance real
 de la subida está en el índice de la carpeta (storage/local_index.py).
@@ -18,6 +20,7 @@ from pathlib import Path
 
 FILE_NAME = "pending.json"
 STATUS_TEXT = {
+    "ready": "Lista para subir",
     "in_progress": "Subida en curso o interrumpida",
     "interrupted": "Subida interrumpida",
     "cancelled": "Subida cancelada",

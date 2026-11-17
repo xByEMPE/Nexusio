@@ -350,17 +350,11 @@ def test_leaving_marking_releases_tk_images_on_tk_thread(app, tmp_path):
     assert import_screen.id_photo is None
 
 
-def test_choosing_another_turbine_forgets_folder_and_marks(app, tmp_path):
-    from tests.test_ui_flow import TABLES, select_asset, select_project, show_start
-
+def test_importing_another_folder_from_start_forgets_folder_and_marks(app, tmp_path):
     show_marking(app, tmp_path, {"A": {"LE": 2}}, length=50.0)
-    assert app.state.asset.id == "a1"
-    _, start = show_start(app, TABLES)
-    select_project(app, start, 0)
-    select_asset(app, start, "a2")
+    start = app.show(StartScreen)
     start.import_button.invoke()
     app.tasks.pump()
-    assert app.state.asset.id == "a2"
     assert app.state.wtg is None and app.state.marks is None and app.state.blade_length_m is None
     assert isinstance(app.current, ImportScreen)
     assert app.current.continue_button.instate(["disabled"])

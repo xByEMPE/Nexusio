@@ -13,8 +13,10 @@ NO_CONNECTION = "No se pudo preparar la conexión con NEXUS."
 
 
 class LoginScreen(Screen):
-    def __init__(self, master, app, message: str | None = None, email: str | None = None) -> None:
+    def __init__(self, master, app, message: str | None = None, email: str | None = None,
+                 next_screen=None) -> None:
         super().__init__(master, app)
+        self.next_screen = next_screen  # pantalla a la que se vuelve tras entrar (por omisión, el Inicio)
         card = ttk.Frame(self, style="Panel.TFrame", padding=28)
         card.place(relx=0.5, rely=0.42, anchor="center")
 
@@ -40,6 +42,9 @@ class LoginScreen(Screen):
         self.submit_button = ttk.Button(card, text="Iniciar sesión", style="Accent.TButton",
                                         command=self.submit)
         self.submit_button.grid(row=7, column=0, sticky="ew")
+        # La sesión solo hace falta para subir: se puede dejar para después y seguir sin conexión.
+        self.cancel_button = ttk.Button(card, text="Volver al inicio", command=self._cancel)
+        self.cancel_button.grid(row=8, column=0, sticky="ew", pady=(8, 0))
 
         for widget in (self.email_entry, self.password_entry):
             widget.bind("<Return>", lambda _e: self.submit())
@@ -70,12 +75,17 @@ class LoginScreen(Screen):
 
     def _set_busy(self, busy: bool) -> None:
         flag = ["disabled"] if busy else ["!disabled"]
-        for widget in (self.email_entry, self.password_entry, self.submit_button):
+        for widget in (self.email_entry, self.password_entry, self.submit_button, self.cancel_button):
             widget.state(flag)
         self.error_label.configure(text="Iniciando sesión…" if busy else "",
                                    foreground=TOKENS["text_muted"] if busy else TOKENS["critical"])
 
     def _logged_in(self, _result) -> None:
+        from nexus_desktop.ui.screens.start import StartScreen
+
+        self.app.show(self.next_screen or StartScreen)
+
+    def _cancel(self) -> None:
         from nexus_desktop.ui.screens.start import StartScreen
 
         self.app.show(StartScreen)

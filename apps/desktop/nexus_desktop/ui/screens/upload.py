@@ -13,9 +13,10 @@ las que estén; las que falten se avisan en el resumen y el orquestador las omit
 
 Reanudar: el índice local guarda lo ya subido, así que «Reintentar» o «Reanudar la subida»
 continúan sin duplicar. Si la sesión caduca, la app vuelve al login conservando `app.state`
-(carpeta, marcas, secciones, proyecto y turbina); tras entrar de nuevo, el inicio ofrece
-«Continuar la subida». Cada subida sin terminar queda además en `storage.pending`
-(config.data_dir()/pending.json) para el panel «Inspecciones locales pendientes».
+(carpeta, marcas, secciones, proyecto y turbina); tras entrar de nuevo se vuelve a esta pantalla.
+Cada subida sin terminar queda además en `storage.pending` (config.data_dir()/pending.json) para
+el panel «Inspecciones locales pendientes», y al empezar se guarda `{wtg}_inspeccion_lista.json`
+(storage/ready.py) para poder retomarla desde el Inicio aunque se cierre la app.
 """
 from __future__ import annotations
 
@@ -30,7 +31,7 @@ from nexus_desktop.config import resolve_exiftool
 from nexus_desktop.nexus.builder import DIRECTIONS  # "unknown" no se envía al manifiesto
 from nexus_desktop.nexus.projects import InspectionError, InspectionLocked
 from nexus_desktop.nexus.uploader import PhotoInfo, StripInput, UploadPlan, UploadReport, upload_inspection
-from nexus_desktop.storage import pending
+from nexus_desktop.storage import pending, ready
 from nexus_desktop.storage.local_index import LocalIndex
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
@@ -310,6 +311,10 @@ class UploadScreen(Screen):
         self._cancel = threading.Event()
         cancel, session = self._cancel, self.app.session
         folder, names = plan.folder.path, (plan.project.name, plan.asset.name)
+        try:  # lo procesado queda en la carpeta: si la subida se interrumpe se puede retomar desde el Inicio
+            ready.save_ready(state)
+        except (OSError, ready.ReadyError):
+            pass
         self._mark_pending(folder, names, "in_progress")
         self.running = True
         self.completed = False
@@ -338,6 +343,7 @@ class UploadScreen(Screen):
                 self._mark_pending(folder, names, "partial")
             else:
                 self._mark_pending(folder, names, None)
+                ready.mark_uploaded(folder)  # los datos se conservan; solo cambia su estado
             return report
 
         self.run_async(work, self._done, self._failed)

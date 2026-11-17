@@ -369,13 +369,9 @@ def test_session_lost_returns_to_login(app, monkeypatch):
     login.password_entry.insert(0, "clave-secreta")
     login.submit()
     app.tasks.pump()
-    start = app.current
-    assert isinstance(start, StartScreen)
-    assert start.resume_button.winfo_manager() != ""
-    assert start.resume_button.instate(["!disabled"])
-    start.resume_button.invoke()
-    app.tasks.pump()
+    # tras entrar de nuevo se vuelve directo a la subida (el destino ya estaba elegido)
     assert isinstance(app.current, UploadScreen)
+    assert app.current.upload_button.instate(["!disabled"])
     app.current.upload_button.invoke()
     app.tasks.pump()
     app.current._poll()
