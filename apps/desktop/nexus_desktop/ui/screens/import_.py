@@ -2,7 +2,7 @@
 encontradas, lo que falta y la foto _ID → longitud de pala (m) → marcado de punta y raíz.
 
 Viene de `_show_import_dialog` del original, sin parque/número de WTG/modelo (ya los da el
-proyecto y la turbina elegidos), sin Hermes y sin mover carpetas: `scan_wtg` ya reconoce la
+proyecto y la turbina elegidos) y sin mover carpetas: `scan_wtg` ya reconoce la
 estructura plana, así que la carpeta del técnico no se toca.
 """
 from __future__ import annotations

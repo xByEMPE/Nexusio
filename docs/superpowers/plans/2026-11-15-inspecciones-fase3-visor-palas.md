@@ -1,5 +1,7 @@
 # Inspecciones NEXUS · Fase 3 (pala completa y visor) — Plan de implementación
 
+> **Nota (17/11/2026):** `scripts/ingest_demo` ya no existe: su lógica pasó a la app de escritorio `apps/desktop` (ver `apps/desktop/README.md`). Las menciones de abajo son históricas.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Vista de pala completa (solo visual), visor de fotos de palas con regla, medición, daños, comentarios, revisión del cliente y modo térmico, y mapa del parque con la posición real de cada turbina, probados con la inspección real WTG 25 en local.

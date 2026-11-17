@@ -1,5 +1,7 @@
 # Inspecciones NEXUS · Fase 1: base de datos, aislamiento por cliente y contrato de subida
 
+> **Nota (17/11/2026):** `scripts/ingest_demo` ya no existe: su lógica pasó a la app de escritorio `apps/desktop` (ver `apps/desktop/README.md`). Las menciones de abajo son históricas.
+
 Fecha: 11/11/2026 · Estado: borrador para revisión · Autor del producto: líder de desarrollo de NEXUS (autor de VND Platform v2)
 
 ---

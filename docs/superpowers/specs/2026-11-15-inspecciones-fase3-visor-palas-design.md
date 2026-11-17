@@ -1,5 +1,7 @@
 # Inspecciones NEXUS · Fase 3: pala completa y visor de palas
 
+> **Nota (17/11/2026):** `scripts/ingest_demo` ya no existe: su lógica pasó a la app de escritorio `apps/desktop` (ver `apps/desktop/README.md`). Las menciones de abajo son históricas.
+
 Fecha: 15/11/2026 · Estado: borrador para revisión · Parte de: plataforma de inspecciones (fase 1 en `docs/superpowers/specs/2026-11-11-inspecciones-fase1-base-design.md`)
 
 ---

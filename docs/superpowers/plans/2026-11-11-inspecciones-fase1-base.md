@@ -1,5 +1,7 @@
 # Inspecciones NEXUS · Fase 1 (base) — Plan de implementación
 
+> **Nota (17/11/2026):** `scripts/ingest_demo` ya no existe: su lógica pasó a la app de escritorio `apps/desktop` (ver `apps/desktop/README.md`). Las menciones de abajo son históricas.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Base de datos multi-cliente para inspecciones (palas, solar, líneas) en Supabase local, con aislamiento probado, Storage privado, contrato de subida `ingest_manifest`, admin mínimo, esqueleto del portal de clientes y un script de Python que demuestra el contrato.
