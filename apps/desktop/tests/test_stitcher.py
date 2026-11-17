@@ -229,3 +229,14 @@ def test_metadata_from_exif_uses_same_keys_and_defaults():
         "alt": 83.265, "dist": 4.5, "pitch": 0.0, "roll": 0.0, "yaw": 0.0,
         "focal_35": 0.0, "focal_real": 12.29, "img_w": 5280.0,
     }
+
+
+def test_chord_root_flip_can_be_disabled():
+    # La app nueva marca y cose sin auto-rotación, así que la raíz marcada en la mitad de arriba
+    # de la última foto es real: reconstruction pasa invert_upper_root=False.
+    imgs = [np.zeros((100, 200, 3), np.uint8)] * 2
+    c = chord_for_section(
+        imgs, None, [{"x": 90.0, "y": 20.0}, {"x": 110.0, "y": 20.0}],
+        [(0, 0), (0, 80)], 0.0, invert_upper_root=False,
+    )
+    assert c["chord_end_root"] == {"x": 100.0, "y": 100.0}

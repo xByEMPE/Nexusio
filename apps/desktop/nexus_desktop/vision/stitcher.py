@@ -325,12 +325,16 @@ def chord_for_section(
     masks: list[np.ndarray | None] | None = None,
     tip_image_index: int = 0,
     root_image_index: int = -1,
+    *,
+    invert_upper_root: bool = True,
 ) -> dict | None:
     """Cuerda longitudinal (punta -> raíz) y posición radial de cada foto en la tira.
 
     tip_marker: {"x", "y"} local a la foto `tip_image_index`, o None (centro de esa foto).
     root_markers: dos o más {"x", "y"} locales a la foto `root_image_index` (se usa el punto
     medio de los dos primeros); si faltan, el centro de esa foto.
+    invert_upper_root: heurística del monolito (ver abajo). Quien marca y cose sin auto-rotación
+    (domain/reconstruction) la desactiva: ahí una raíz en la mitad de arriba es real.
     Devuelve None si `offsets` no tiene un elemento por imagen.
     """
     if not offsets or len(offsets) != len(images):
@@ -373,7 +377,7 @@ def chord_for_section(
         # Heurística del monolito: raíz en la última foto pero marcada en su mitad superior
         # -> se asume marcado invertido y se refleja la Y.
         img_h = root_img.shape[0]
-        if root_image_index == len(images) - 1 and local_ry < img_h / 2:
+        if invert_upper_root and root_image_index == len(images) - 1 and local_ry < img_h / 2:
             old_ry = local_ry
             local_ry = img_h - local_ry
             log.debug("Y de la raíz invertida: %.1f -> %.1f (alto %d)", old_ry, local_ry, img_h)
