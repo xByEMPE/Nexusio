@@ -4,6 +4,11 @@ La URL de Supabase y la llave pública se leen, en este orden, de las variables 
 NEXUS_SUPABASE_URL / NEXUS_PUBLISHABLE_KEY y del archivo %APPDATA%/NEXUS/config.json
 (claves `supabase_url` y `supabase_publishable_key`; lo deja el despliegue del instalador).
 Una llave que no sea pública (secreta o JWT de otro rol que no sea anon) se descarta.
+
+Sin URL ni llave se usa Supabase local (desarrollo). Una llave SIN URL, o una URL que no sea
+https:// (salvo http:// a localhost/127.0.0.1/::1), es un error de configuración: `CONFIG_ERROR`
+lleva el mensaje en español y `SUPABASE_URL` queda vacía (así el token nunca viaja sin cifrar ni
+a un servidor que no se eligió).
 """
 from __future__ import annotations
 
@@ -13,12 +18,21 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 APP_NAME = "nexus-desktop"
 VERSION = "0.1.0"
 
 DEFAULT_SUPABASE_URL = "http://127.0.0.1:54321"  # Supabase local (desarrollo)
 USER_CONFIG_FILE = "config.json"
+LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")  # únicos servidores admitidos con http://
+
+MISSING_URL = ("Falta la dirección del servidor de NEXUS (clave supabase_url) en el archivo {path} "
+               "o en la variable de entorno NEXUS_SUPABASE_URL. Pide la configuración a tu "
+               "administrador y vuelve a abrir la app.")
+INSECURE_URL = ("La dirección del servidor de NEXUS (supabase_url en {path} o NEXUS_SUPABASE_URL) debe "
+                "empezar por https:// (http:// solo se admite para un servidor local: localhost o "
+                "127.0.0.1). Corrige la configuración y vuelve a abrir la app.")
 
 MODEL_FILE = "blade_unet_512.onnx"  # modelo U-Net de segmentación de palas
 EXIFTOOL_DIR = "exiftool"  # carpeta del exiftool incluido con la app empaquetada
@@ -61,15 +75,35 @@ def _is_public_key(key: str) -> bool:
     return True
 
 
-def _load_supabase() -> tuple[str, str]:
+def _is_safe_url(url: str) -> bool:
+    """https:// con servidor, o http:// solo a un servidor local."""
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname
+    except ValueError:
+        return False
+    scheme = parts.scheme.lower()
+    if not host:
+        return False
+    return scheme == "https" or (scheme == "http" and host.lower() in LOCAL_HOSTS)
+
+
+def _load_supabase() -> tuple[str, str, str | None]:
+    """(url, llave pública, error de configuración o None)."""
     file_cfg = _read_user_config()
-    url = (os.environ.get("NEXUS_SUPABASE_URL") or file_cfg.get("supabase_url")
-           or DEFAULT_SUPABASE_URL)
+    configured = os.environ.get("NEXUS_SUPABASE_URL") or file_cfg.get("supabase_url")
     key = os.environ.get("NEXUS_PUBLISHABLE_KEY") or file_cfg.get("supabase_publishable_key", "")
-    return url, key if key and _is_public_key(key) else ""
+    key = key if key and _is_public_key(key) else ""
+    if configured is None:
+        if key:  # la llave es de un servidor concreto: no se adivina cuál
+            return "", key, MISSING_URL.format(path=user_config_path())
+        return DEFAULT_SUPABASE_URL, key, None
+    if not _is_safe_url(configured):
+        return "", key, INSECURE_URL.format(path=user_config_path())
+    return configured, key, None
 
 
-SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY = _load_supabase()
+SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CONFIG_ERROR = _load_supabase()
 
 
 def bundle_dirs() -> list[Path]:

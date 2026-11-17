@@ -39,8 +39,11 @@ La URL y la llave se buscan en este orden:
    }
    ```
 
-3. Si no hay URL se usa la de Supabase local, `http://127.0.0.1:54321`. Si no hay llave, la
-   app abre igual y muestra el aviso en la pantalla de inicio de sesión.
+3. Si no hay URL ni llave se usa la de Supabase local, `http://127.0.0.1:54321`, y la pantalla
+   de inicio de sesión avisa de que falta la llave. Una llave **sin** URL es un error de
+   configuración (no se adivina el servidor), igual que una URL que no empiece por `https://`:
+   `http://` solo se admite para un servidor local (`localhost`, `127.0.0.1` o `::1`), porque el
+   token viajaría sin cifrar. En ambos casos la pantalla de inicio de sesión dice qué corregir.
 
 Otras variables (opcionales, sobre todo para desarrollo):
 

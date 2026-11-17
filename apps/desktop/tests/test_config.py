@@ -12,10 +12,10 @@ from nexus_desktop import config
 @pytest.fixture
 def reload_config():
     """Recarga config.py con el entorno de la prueba y deja los valores de antes al terminar
-    (los demás módulos leen config.SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY)."""
-    saved = (config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY)
+    (los demás módulos leen config.SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY / CONFIG_ERROR)."""
+    saved = (config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY, config.CONFIG_ERROR)
     yield lambda: importlib.reload(config)
-    config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY = saved
+    config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY, config.CONFIG_ERROR = saved
 
 
 @pytest.fixture
@@ -176,3 +176,58 @@ def test_model_search_paths_find_bundled_model_when_frozen(frozen, monkeypatch):
     paths = config.model_search_paths()
     assert frozen / "_internal" / "models" / config.MODEL_FILE in paths
     assert frozen / "models" / config.MODEL_FILE in paths
+
+
+# --- revisión final: URL que falta o insegura -------------------------------------------------
+
+def test_user_config_with_bom_is_read(appdata, reload_config):
+    """El Bloc de notas de Windows puede guardar config.json con BOM UTF-8."""
+    path = appdata / "NEXUS" / "config.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"supabase_url": "https://ejemplo.supabase.co",
+                                "supabase_publishable_key": "sb_publishable_bom"}), encoding="utf-8-sig")
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+    cfg = reload_config()
+    assert cfg.SUPABASE_URL == "https://ejemplo.supabase.co"
+    assert cfg.SUPABASE_PUBLISHABLE_KEY == "sb_publishable_bom" and cfg.CONFIG_ERROR is None
+
+
+@pytest.mark.parametrize("source", ["file", "env"])
+def test_key_without_url_is_a_config_error(appdata, monkeypatch, reload_config, source):
+    """Una llave sin URL ya no apunta en silencio a Supabase local (el login diría «revise el
+    correo o la contraseña»): es un error de configuración que dice qué falta y dónde."""
+    if source == "file":
+        write_user_config(appdata, {"supabase_publishable_key": "sb_publishable_x"})
+    else:
+        monkeypatch.setenv("NEXUS_PUBLISHABLE_KEY", "sb_publishable_x")
+    cfg = reload_config()
+    assert cfg.CONFIG_ERROR and "supabase_url" in cfg.CONFIG_ERROR
+    assert str(cfg.user_config_path()) in cfg.CONFIG_ERROR
+    assert cfg.SUPABASE_URL == ""
+
+
+@pytest.mark.parametrize("url", ["http://ejemplo.supabase.co", "http://10.0.0.5:54321", "ftp://ejemplo.com",
+                                 "ejemplo.supabase.co", "https://"])
+def test_insecure_or_invalid_url_is_refused(appdata, reload_config, url):
+    """Con http:// el token viajaría sin cifrar: solo se admite para un servidor local."""
+    write_user_config(appdata, {"supabase_url": url, "supabase_publishable_key": "sb_publishable_x"})
+    cfg = reload_config()
+    assert cfg.CONFIG_ERROR and "https://" in cfg.CONFIG_ERROR
+    assert cfg.SUPABASE_URL == ""
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:54321", "http://localhost:54321", "http://[::1]:54321",
+                                 "https://ejemplo.supabase.co", "HTTPS://Ejemplo.supabase.co/"])
+def test_https_or_local_http_url_is_accepted(appdata, reload_config, url):
+    write_user_config(appdata, {"supabase_url": url, "supabase_publishable_key": "sb_publishable_x"})
+    cfg = reload_config()
+    assert cfg.CONFIG_ERROR is None and cfg.SUPABASE_URL == url
+
+
+def test_create_session_reports_config_error(appdata, reload_config):
+    from nexus_desktop.ui import app as app_module
+
+    write_user_config(appdata, {"supabase_url": "http://ejemplo.com", "supabase_publishable_key": "sb_publishable_x"})
+    reload_config()
+    session, error = app_module.create_session()
+    assert session is None and error == config.CONFIG_ERROR

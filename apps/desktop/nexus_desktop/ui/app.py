@@ -49,6 +49,8 @@ def create_session() -> tuple[Session | None, str | None]:
     from nexus_desktop import config
 
     path = config.user_config_path()
+    if config.CONFIG_ERROR:  # URL que falta o insegura: ya es un mensaje en español
+        return None, config.CONFIG_ERROR
     if not config.SUPABASE_PUBLISHABLE_KEY:
         return None, MISSING_KEY.format(path=path)
     try:
