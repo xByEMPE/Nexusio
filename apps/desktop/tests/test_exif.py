@@ -135,3 +135,50 @@ def test_real_exiftool_reads_paths_with_accents(tmp_path):
     got = exif.read_exif_batch([photo, missing], exe)
     assert got[photo]["Model"] == "M4E" and got[photo]["GPSAltitude"] == meta["GPSAltitude"]
     assert got[missing] is None
+
+
+# --- revisión final: exiftool colgado ---------------------------------------------------------
+
+def test_read_exif_has_timeout_and_raises_timeout_expired(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(exif.subprocess, "run", fake_run)
+    with pytest.raises(subprocess.TimeoutExpired):
+        exif.read_exif(tmp_path / "a.JPG", Path("exiftool"))
+    assert seen["timeout"] == exif.SINGLE_TIMEOUT_S >= 30
+
+
+def test_read_exif_batch_timeout_is_a_clear_spanish_error(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(exif.subprocess, "run", fake_run)
+    with pytest.raises(exif.ExifTimeout) as err:
+        exif.read_exif_batch([tmp_path / "a.JPG", tmp_path / "b.JPG"], Path("exiftool"))
+    assert seen["timeout"] == exif.BATCH_TIMEOUT_S > exif.SINGLE_TIMEOUT_S
+    text = str(err.value)
+    assert "exiftool" in text and "no respondió" in text and "Traceback" not in text
+
+
+def test_read_exif_batch_stops_between_batches_when_cancelled(tmp_path, monkeypatch):
+    import threading
+
+    cancel = threading.Event()
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        cancel.set()  # se cancela durante el primer lote
+        return subprocess.CompletedProcess(cmd, 0, b"[]", b"")
+
+    monkeypatch.setattr(exif.subprocess, "run", fake_run)
+    paths = [tmp_path / f"{i}.JPG" for i in range(exif.BATCH_SIZE * 3)]
+    got = exif.read_exif_batch(paths, Path("exiftool"), cancel=cancel)
+    assert len(calls) == 1 and set(got) == set(paths) and all(v is None for v in got.values())

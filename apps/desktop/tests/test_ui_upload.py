@@ -470,11 +470,25 @@ def test_missing_object_text_says_retry_helps():
 
 
 def test_position_warning_is_not_plain_success(app, monkeypatch):
-    report = ok_report(warnings=["No se pudo guardar la posición de la turbina; reintenta la subida."])
+    msg = "No se pudo guardar la posición de la turbina; reintenta la subida."
+    report = ok_report(warnings=[msg], retryable_warnings=[msg])
     screen = run_upload(app, monkeypatch, FakeUpload(report))
     status = screen.status_label.cget("text")
     assert not status.startswith("Subida completa") and "posición de la turbina" in status
     assert str(screen.status_label.cget("foreground")) == TOKENS["caution"]
+    assert screen.upload_button.cget("text") == "Reintentar" and not screen.upload_button.instate(["disabled"])
+
+
+@pytest.mark.parametrize("msg", ["Sin foto _ID: sin posición de la turbina.",
+                                 "La foto _ID no tiene láser ni GPS válidos: sin posición de la turbina."])
+def test_permanent_warning_is_complete_without_retry(app, monkeypatch, msg):
+    """Un aviso que reintentar no arregla (carpeta sin _ID, _ID sin láser ni GPS) no deja la subida
+    en ámbar para siempre: es una subida completa con su nota, sin «Reintentar»."""
+    screen = run_upload(app, monkeypatch, FakeUpload(ok_report(warnings=[msg])))
+    status = screen.status_label.cget("text")
+    assert status.startswith("Subida completa") and msg in status
+    assert str(screen.status_label.cget("foreground")) == TOKENS["telemetry"]
+    assert screen.upload_button.instate(["disabled"]) and screen.completed
 
 
 @pytest.mark.parametrize("how", ["exception", "report"])

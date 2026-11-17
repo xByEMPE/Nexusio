@@ -416,3 +416,11 @@ def test_section_warnings_shown_under_strip(app, tmp_path):
     app.show(VerificationScreen)
     app.tasks.pump()
     assert "no tienen altitud" in app.current.info_labels["LE"].cget("text")
+
+
+def test_exif_timeout_message_is_spanish_and_plain():
+    from nexus_desktop.domain.exif import ExifTimeout
+    from nexus_desktop.ui.screens.processing import error_message
+
+    exc = ExifTimeout("exiftool no respondió en 180 s al leer los metadatos de 40 fotos.")
+    assert error_message(exc) == str(exc)

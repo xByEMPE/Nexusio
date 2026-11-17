@@ -5,17 +5,26 @@ import json
 import math
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 # Fotos por llamada a exiftool en `read_exif_batch`.
 BATCH_SIZE = 40
+# Tiempo máximo (s) de una llamada a exiftool. Generosos: una foto tarda menos de 1 s y un lote de
+# 40, unos pocos; solo cortan un exiftool colgado (antivirus, red caída en una carpeta remota).
+SINGLE_TIMEOUT_S = 60
+BATCH_TIMEOUT_S = 180
 
 # La app empaquetada no tiene consola: sin esta bandera Windows abriría una ventana de consola
 # por cada llamada a exiftool.exe. (0 fuera de Windows.)
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
-def _exiftool(exiftool: Path, paths: list[Path], *, check: bool) -> subprocess.CompletedProcess:
+class ExifTimeout(RuntimeError):
+    """exiftool no respondió a tiempo al leer un lote (mensaje en español, para la pantalla)."""
+
+
+def _exiftool(exiftool: Path, paths: list[Path], *, check: bool, timeout: float) -> subprocess.CompletedProcess:
     """Llama a exiftool con las rutas por la entrada estándar (`-@ -`), una por línea en UTF-8.
 
     En Windows exiftool (Perl) lee la línea de órdenes en la página de códigos ANSI: una ruta con
@@ -25,14 +34,15 @@ def _exiftool(exiftool: Path, paths: list[Path], *, check: bool) -> subprocess.C
     args = "".join(f"{p}\n" for p in paths).encode("utf-8")
     return subprocess.run(
         [str(exiftool), "-j", "-n", "-charset", "filename=utf8", "-@", "-"],
-        input=args, check=check, capture_output=True, creationflags=_NO_WINDOW,
+        input=args, check=check, capture_output=True, creationflags=_NO_WINDOW, timeout=timeout,
     )
 
 
 def read_exif(path: Path, exiftool: Path) -> dict:
     """`exiftool -j -n` sobre un archivo; devuelve el primer elemento.
-    Si exiftool no puede leerlo lanza CalledProcessError."""
-    out = _exiftool(exiftool, [Path(path)], check=True).stdout
+    Si exiftool no puede leerlo lanza CalledProcessError; si no responde en SINGLE_TIMEOUT_S,
+    subprocess.TimeoutExpired (el proceso se termina). Ambos son fallos de ESTE archivo."""
+    out = _exiftool(exiftool, [Path(path)], check=True, timeout=SINGLE_TIMEOUT_S).stdout
     return json.loads(out.decode("utf-8", errors="replace"))[0]
 
 
@@ -41,18 +51,31 @@ def _key(path) -> str:
     return os.path.normcase(os.path.normpath(os.path.abspath(str(path))))
 
 
-def read_exif_batch(paths: list[Path], exiftool: Path) -> dict[Path, dict | None]:
+def read_exif_batch(paths: list[Path], exiftool: Path,
+                    cancel: threading.Event | None = None) -> dict[Path, dict | None]:
     """Como `read_exif` pero con una llamada a exiftool por cada `BATCH_SIZE` fotos.
 
     Devuelve {ruta: metadatos} para todas las rutas. Las que exiftool no pudo leer (las omite
     y sale con código 1) quedan en None, para que quien llama lo sepa y avise: nunca {}.
-    Si exiftool no existe se propaga FileNotFoundError (fallo del entorno, no de una foto).
+    Si exiftool no existe se propaga FileNotFoundError (fallo del entorno, no de una foto); si un
+    lote no responde en BATCH_TIMEOUT_S, ExifTimeout con un mensaje en español. Con `cancel`
+    activo no se empiezan más lotes (las fotos sin leer quedan en None).
     """
     found: dict[str, dict] = {}
     paths = [Path(p) for p in paths]
     for start in range(0, len(paths), BATCH_SIZE):
+        if cancel is not None and cancel.is_set():
+            break
         chunk = paths[start:start + BATCH_SIZE]
-        text = _exiftool(exiftool, chunk, check=False).stdout.decode("utf-8", errors="replace").strip()
+        try:
+            proc = _exiftool(exiftool, chunk, check=False, timeout=BATCH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            folder = chunk[0].parent.name
+            raise ExifTimeout(
+                f"exiftool no respondió en {BATCH_TIMEOUT_S} s al leer los metadatos de {len(chunk)} fotos "
+                f"(carpeta {folder}). Reintenta; si se repite, revisa que la carpeta sea accesible y que el "
+                "antivirus no bloquee exiftool.") from None
+        text = proc.stdout.decode("utf-8", errors="replace").strip()
         if not text:
             continue
         try:

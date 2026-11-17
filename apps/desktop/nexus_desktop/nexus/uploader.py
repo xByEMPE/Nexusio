@@ -34,10 +34,12 @@ from .upload import tus_upload
 
 Progress = Callable[[str, float], None]
 
-# Fallos de UN archivo (se omite y se sigue). Falta de exiftool (FileNotFoundError al lanzarlo),
-# fallos al escribir temporales y errores de programación NO están aquí: se propagan.
+# Fallos de UN archivo (se omite y se sigue; exiftool colgado, TimeoutExpired, también, con su
+# propio aviso). Falta de exiftool (FileNotFoundError al lanzarlo), fallos al escribir temporales
+# y errores de programación NO están aquí: se propagan.
 _EXIF_FILE_ERRORS = (subprocess.CalledProcessError, ValueError, IndexError)  # ValueError incluye JSONDecodeError
 _SOURCE_ERRORS = (UnidentifiedImageError, Image.DecompressionBombError, OSError)  # al leer la foto de ORIGEN
+POSITION_NOT_SAVED = "No se pudo guardar la posición de la turbina; reintenta la subida."
 
 
 @dataclass
@@ -75,14 +77,17 @@ class UploadReport:
     (nombre de la foto o tira local) si el puntero `path` señala una captura o un mosaico del
     manifiesto. Códigos locales además de los del servidor: `unknown`, `schema_invalid`,
     `no_valid_photos`, `nothing_to_upload`. Con errores, la subida NO debe presentarse como correcta.
-    `warnings`: avisos que no son errores del manifiesto (p. ej. la posición de la turbina no se
-    guardó); tampoco deben presentarse como una subida completa sin más."""
+    `warnings`: avisos que no son errores del manifiesto. `retryable_warnings` es la parte de
+    `warnings` que reintentar puede arreglar (la posición de la turbina no se guardó): esa subida no
+    se presenta como completa. Los demás avisos son permanentes (carpeta sin `_ID`, `_ID` sin láser
+    ni GPS): la subida está completa y el aviso es solo una nota."""
     inserted: dict
     updated: dict
     skipped: dict
     errors: list[dict]
     cancelled: bool = False
     warnings: list[str] = field(default_factory=list)
+    retryable_warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -269,6 +274,9 @@ class _Run:
         bad = f"Foto omitida (dañada o ilegible): {ph.path.name}"
         try:
             meta = read_exif(ph.path, self.exiftool)
+        except subprocess.TimeoutExpired:
+            self.skip_file(ph.path.name, f"Foto omitida (exiftool no respondió a tiempo): {ph.path.name}")
+            return None
         except _EXIF_FILE_ERRORS:
             self.skip_file(ph.path.name, bad)
             return None
@@ -414,7 +422,7 @@ class _Run:
                  .eq("id", self.insp_id).execute())
                 self.say(f"Posición de la turbina: {lat}, {lon} ({source}).")
             except Exception:
-                self.warn("No se pudo guardar la posición de la turbina; reintenta la subida.")
+                self.warn(POSITION_NOT_SAVED, retryable=True)
         elif self.id_read:
             self.warn("La foto _ID no tiene láser ni GPS válidos: sin posición de la turbina.")
         elif self.id_photo is not None:
@@ -422,8 +430,10 @@ class _Run:
         else:
             self.warn("Sin foto _ID: sin posición de la turbina.")
 
-    def warn(self, msg: str) -> None:
+    def warn(self, msg: str, *, retryable: bool = False) -> None:
         self.report.warnings.append(msg)
+        if retryable:
+            self.report.retryable_warnings.append(msg)
         self.say(msg)
 
     def upload_all(self) -> None:

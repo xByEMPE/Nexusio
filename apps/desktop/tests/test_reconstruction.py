@@ -81,7 +81,8 @@ def exif_calls(monkeypatch):
         metas: dict[Path, dict] = {}
         batches: list[list[Path]] = []
 
-    def read(paths, exiftool):
+    def read(paths, exiftool, cancel=None):
+        Calls.cancel = cancel
         Calls.batches.append(list(paths))
         out = {}
         for p in paths:
@@ -474,3 +475,12 @@ def test_wtg25_a_le_strip_matches_task5_golden(tmp_path):
     # GSD solo donde el LRF midió (8 de 18 fotos dicen LRFStatus=TooFar: sin GSD, no se inventa)
     gsds = [p.gsd_mm_px for p in le.photos if p.gsd_mm_px is not None]
     assert len(gsds) == 10 and all(1.0 < g < 1.4 for g in gsds)
+
+
+def test_exif_batches_receive_the_cancel_event(tmp_path, exif_calls):
+    """Cancelar también corta la lectura del EXIF entre lotes (exiftool lento o colgado)."""
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_UP}})
+    mark_standard(marks)
+    cancel = threading.Event()
+    run(wtg, marks, tmp_path / "out", cancel=cancel)
+    assert exif_calls.cancel is cancel

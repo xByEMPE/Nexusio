@@ -206,7 +206,7 @@ def reconstruct(wtg: WtgFolder, marks: MarkingState, blade_length_m: float,
     inversiones del marcado; en la app es el mismo objeto que `wtg.blades`). Con `cancel`
     activado devuelve lo terminado hasta ese momento. Sin `segmenter` (modelo no encontrado) se
     cose sin máscaras y se avisa por `progress`. Si exiftool no existe se propaga
-    FileNotFoundError.
+    FileNotFoundError; si se cuelga, `exif.ExifTimeout` (mensaje en español).
     """
     blades = marks.blades
     sections = [(b, f) for b in BLADES for f in FACES if blades.get(b, {}).get(f)]
@@ -226,7 +226,7 @@ def reconstruct(wtg: WtgFolder, marks: MarkingState, blade_length_m: float,
             progress("Procesamiento cancelado.", EXIF_SHARE * i / len(sections))
             return results
         progress(f"Leyendo metadatos de la pala {blade}, cara {face}…", EXIF_SHARE * i / len(sections))
-        exif.update(read_exif_batch(list(blades[blade][face]), exiftool))
+        exif.update(read_exif_batch(list(blades[blade][face]), exiftool, cancel=cancel))
     root_alt: dict[str, float] = {}
     for blade in {b for b, _ in sections}:
         alts = [(face, a) for face in FACES for p in blades[blade].get(face, [])

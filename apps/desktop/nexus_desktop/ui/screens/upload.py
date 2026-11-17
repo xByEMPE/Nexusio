@@ -414,6 +414,7 @@ class UploadScreen(Screen):
         self._set_buttons(running=False)
         self.home_button.pack(side="right", padx=(0, 8), before=self.back_button)
         warnings = [str(w) for w in getattr(report, "warnings", None) or []]
+        retryable = [str(w) for w in getattr(report, "retryable_warnings", None) or []]
 
         if report.errors:
             n = len(report.errors)
@@ -429,24 +430,28 @@ class UploadScreen(Screen):
         elif report.cancelled:
             self._set_status(f"{CANCELLED}: lo ya subido queda guardado y no se repite.", TOKENS["caution"])
             self._show_upload_button("Reanudar la subida")
-        elif local_files or warnings:
+        elif local_files or retryable:
             notes = []
             if local_files:
                 notes.append(f"se omitieron {_count_label(len(local_files), 'archivo dañado', 'archivos dañados')}"
                              " (revísalos)")
             notes += warnings
             self._set_status("Subida terminada con avisos: " + "; ".join(notes), TOKENS["caution"])
-            if local_files:
-                self.upload_button.state(["disabled"])
-            else:  # solo avisos (p. ej. la posición no se guardó): reintentar puede arreglarlo
-                self.completed = True
+            if retryable:  # p. ej. la posición no se guardó: reintentar puede arreglarlo
+                self.completed = not local_files
                 self._show_upload_button("Reintentar")
+            else:
+                self.upload_button.state(["disabled"])
         else:
+            # Completa. Un aviso permanente (sin _ID, _ID sin láser ni GPS) va como nota: reintentar
+            # no lo cambiaría, así que no se ofrece.
             self.completed = True
             inserted = sum(v for v in report.inserted.values() if isinstance(v, (int, float)))
             updated = sum(v for v in report.updated.values() if isinstance(v, (int, float)))
-            self._set_status(f"{COMPLETE}: {inserted:g} registros nuevos y {updated:g} actualizados en NEXUS.",
-                             TOKENS["telemetry"])
+            text = f"{COMPLETE}: {inserted:g} registros nuevos y {updated:g} actualizados en NEXUS."
+            if warnings:
+                text += " Nota: " + " ".join(warnings)
+            self._set_status(text, TOKENS["telemetry"])
             self.upload_button.state(["disabled"])
 
     def _fill_counts(self, report: UploadReport) -> None:

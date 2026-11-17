@@ -17,6 +17,7 @@ from tkinter import ttk
 
 from nexus_desktop import config
 from nexus_desktop.config import resolve_exiftool
+from nexus_desktop.domain.exif import ExifTimeout
 from nexus_desktop.domain.reconstruction import reconstruct
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
@@ -46,6 +47,8 @@ def load_segmenter() -> tuple[BladeSegmenter | None, str | None]:
 
 
 def error_message(exc: Exception) -> str:
+    if isinstance(exc, ExifTimeout):  # ya es un mensaje en español
+        return str(exc)
     if isinstance(exc, FileNotFoundError):
         what = exc.filename or str(exc)
         return (f"Error: no se encontró {what}. Revisa exiftool (NEXUS_EXIFTOOL) y que la carpeta "

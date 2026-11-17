@@ -493,6 +493,8 @@ def test_position_not_saved_is_reported_as_warning(tmp_path, monkeypatch, case):
     report = run(plan, client, tus)
     assert report.errors == []
     assert len(report.warnings) == 1 and "posición" in report.warnings[0]
+    # solo el fallo al guardar se arregla reintentando; la falta de _ID o de posición, no
+    assert report.retryable_warnings == (report.warnings if case == "update_fails" else [])
 
 
 def test_position_saved_has_no_warning(tmp_path):
@@ -561,3 +563,20 @@ def test_scratch_paths_never_derived_from_index_ids(tmp_path, monkeypatch):
     assert (victim / "importante.txt").read_text(encoding="utf-8") == "no borrar"
     assert len(seen) == len(PHOTOS) + 1
     assert all(str(victim) not in str(p) and p.parent.name.startswith("nexus_upload_") for p in seen)
+
+
+def test_exiftool_timeout_on_one_file_skips_it_with_spanish_message(tmp_path, monkeypatch):
+    import subprocess
+
+    def read(path, exiftool):
+        if path.name == "a2.jpg":
+            raise subprocess.TimeoutExpired("exiftool", 60)
+        return {}
+
+    monkeypatch.setattr(uploader, "read_exif", read)
+    root, plan, client, tus = setup(tmp_path)
+    msgs = []
+    report = run(plan, client, tus, msgs=msgs)
+    assert report.skipped["local_files"] == ["a2.jpg"] and report.errors == []
+    assert len(tus.calls) == N_OBJECTS - 3
+    assert any("a2.jpg" in m and "exiftool no respondió" in m for m, _ in msgs)
