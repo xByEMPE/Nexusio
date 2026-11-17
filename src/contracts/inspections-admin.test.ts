@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   AssetInputSchema,
   AssignmentSchema,
+  FieldProjectSchema,
   InspectionInputSchema,
   InviteUserSchema,
   OrganizationInputSchema,
@@ -120,5 +121,46 @@ describe("AssignmentSchema e InspectionInputSchema", () => {
     expect(AssignmentSchema.safeParse({ project_id: "x", user_id: ORG }).success).toBe(false);
     expect(InspectionInputSchema.safeParse({ project_id: ORG, asset_id: ORG, kind: "wind_blade" }).success).toBe(true);
     expect(InspectionInputSchema.safeParse({ project_id: ORG, asset_id: ORG, kind: "otro" }).success).toBe(false);
+  });
+});
+
+describe("FieldProjectSchema", () => {
+  const SITE = "7f1c0c2e-3b0e-4c8e-9f0a-2d3a4b5c6d7e";
+  const valid = () => ({
+    org: { mode: "new" as const, name: "Cliente Z", slug: "cliente-z" },
+    site: { mode: "new" as const, name: "Parque Z", kind: "wind_farm" as const },
+    turbines: [{ name: "WTG-01" }, { name: "WTG-02", code: "B2", lat: 10, lon: 20 }],
+    project: { name: "Campaña 2026", status: "in_field" as const },
+    technician: { email: "tec@ejemplo.com" },
+  });
+  test("acepta organización y sitio nuevos", () => {
+    expect(FieldProjectSchema.safeParse(valid()).success).toBe(true);
+  });
+  test("acepta organización y sitio existentes con medidas comunes", () => {
+    const r = FieldProjectSchema.safeParse({
+      ...valid(),
+      org: { mode: "existing", id: ORG },
+      site: { mode: "existing", id: SITE },
+      specs: { manufacturer: "Vestas", blade_length_m: 62 },
+    });
+    expect(r.success).toBe(true);
+  });
+  test("organización nueva con sitio existente es incoherente", () => {
+    const r = FieldProjectSchema.safeParse({ ...valid(), site: { mode: "existing", id: SITE } });
+    expect(r.success).toBe(false);
+  });
+  test.each([
+    ["correo inválido", { technician: { email: "no-es-correo" } }],
+    ["sin turbinas", { turbines: [] }],
+    ["más de 300 turbinas", { turbines: Array.from({ length: 301 }, (_, i) => ({ name: `T${i}` })) }],
+    ["nombre de turbina largo", { turbines: [{ name: "x".repeat(61) }] }],
+    ["lat fuera de rango", { turbines: [{ name: "A", lat: 91, lon: 0 }] }],
+    ["slug inválido", { org: { mode: "new", name: "Cliente Z", slug: "Cliente Z" } }],
+    ["proyecto sin nombre", { project: { name: "", status: "in_field" } }],
+    ["fecha final anterior", { project: { name: "Campaña", status: "in_field", start_date: "2026-05-02", end_date: "2026-05-01" } }],
+    ["pala fuera de rango", { specs: { blade_length_m: 500 } }],
+    ["sitio de otro tipo", { site: { mode: "new", name: "Planta", kind: "solar_plant" } }],
+  ])("rechaza %s", (_n, patch) => {
+    expect(FieldProjectSchema.safeParse({ ...valid(), ...patch }).success).toBe(false);
   });
 });

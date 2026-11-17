@@ -52,7 +52,14 @@ export default async function ProjectsPage({
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
       <section className="min-w-0">
-        <h1 className="text-2xl font-medium">Proyectos</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-medium">Proyectos</h1>
+          {isAdmin && (
+            <Link href="/admin/inspecciones/proyectos/nuevo-campo" className="rounded-[2px] border border-accent-primary px-3 py-1.5 text-xs text-foreground hover:bg-accent-deep">
+              Nuevo proyecto de campo
+            </Link>
+          )}
+        </div>
         {isAdmin && <OrgFilter basePath="/admin/inspecciones/proyectos" orgs={orgList} selected={org} extra={{ status }} />}
         <nav aria-label="Estado" className="mt-3 flex flex-wrap gap-2">
           <Link href={statusHref()} className={chip(!status)}>

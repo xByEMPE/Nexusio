@@ -96,3 +96,66 @@ export const InspectionInputSchema = z.object({
   kind: z.enum(INSPECTION_KINDS),
 });
 export type InspectionInput = z.infer<typeof InspectionInputSchema>;
+
+export const MAX_FIELD_TURBINES = 300;
+
+export const TurbineLineSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  code: z.string().trim().min(1).max(60).optional(),
+  lat: lat.optional(),
+  lon: lon.optional(),
+});
+export type TurbineLine = z.infer<typeof TurbineLineSchema>;
+
+/**
+ * «Nuevo proyecto de campo»: organización → sitio → turbinas → proyecto → técnico en un solo formulario.
+ * La organización y el sitio se eligen entre los existentes o se crean; un sitio existente exige
+ * una organización existente (la acción comprueba además que el sitio pertenezca a ella).
+ */
+export const FieldProjectSchema = z
+  .object({
+    org: z.discriminatedUnion("mode", [
+      z.object({ mode: z.literal("existing"), id: z.uuid("Elige la organización") }),
+      z.object({
+        mode: z.literal("new"),
+        name: z.string().trim().min(2, "El nombre de la organización debe tener entre 2 y 120 caracteres").max(120),
+        slug: z.string().regex(/^[a-z0-9-]{2,60}$/, "El identificador usa minúsculas, números y guiones (2–60)"),
+      }),
+    ]),
+    site: z.discriminatedUnion("mode", [
+      z.object({ mode: z.literal("existing"), id: z.uuid("Elige el sitio") }),
+      z.object({
+        mode: z.literal("new"),
+        kind: z.literal("wind_farm", "El sitio debe ser un parque eólico"),
+        name: z.string().trim().min(2, "El nombre del sitio debe tener entre 2 y 120 caracteres").max(120),
+        lat: lat.optional(),
+        lon: lon.optional(),
+      }),
+    ]),
+    turbines: z
+      .array(TurbineLineSchema)
+      .min(1, "Agrega al menos una turbina")
+      .max(MAX_FIELD_TURBINES, `Máximo ${MAX_FIELD_TURBINES} turbinas por proyecto`),
+    specs: TurbineSpecsSchema.optional(),
+    project: z.object({
+      name: z.string().trim().min(2, "El nombre del proyecto debe tener entre 2 y 160 caracteres").max(160),
+      code: z.string().trim().min(1).max(60).optional(),
+      status: z.enum(PROJECT_STATUSES).default("in_field"),
+      start_date: isoDate.optional(),
+      end_date: isoDate.optional(),
+    }),
+    technician: z.object({
+      email: z.email("El correo del técnico no es válido"),
+      full_name: z.string().trim().min(2).max(120).optional(),
+    }),
+  })
+  .superRefine((v, ctx) => {
+    if (v.org.mode === "new" && v.site.mode === "existing") {
+      ctx.addIssue({ code: "custom", path: ["site"], message: "Una organización nueva no tiene sitios existentes: crea el sitio" });
+    }
+    const { start_date, end_date } = v.project;
+    if (start_date && end_date && end_date < start_date) {
+      ctx.addIssue({ code: "custom", path: ["project", "end_date"], message: "La fecha final no puede ser anterior a la inicial" });
+    }
+  });
+export type FieldProjectInput = z.infer<typeof FieldProjectSchema>;
