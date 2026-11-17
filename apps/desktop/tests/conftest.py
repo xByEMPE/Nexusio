@@ -153,10 +153,12 @@ def fake_client():
 
 # --- Interfaz (Tk) ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def _ui_app():
-    # Una sola App (que es la raíz Tk) por módulo: crear/destruir varias raíces en el mismo
-    # proceso hace que Tcl a veces no encuentre init.tcl en Windows (fallo intermitente).
+    # Una sola App (que es la raíz Tk) para toda la sesión, compartida por los módulos de
+    # interfaz: crear/destruir varias raíces en el mismo proceso hace que Tcl a veces no
+    # encuentre init.tcl en Windows (fallo intermitente; con una raíz por módulo se saltaban
+    # módulos enteros).
     import tkinter as tk
 
     from nexus_desktop.ui.app import App

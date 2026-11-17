@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from tkinter import ttk
 from typing import Any, Callable
 
+from nexus_desktop.domain.marking import MarkingState
 from nexus_desktop.domain.wtg_folder import WtgFolder
 from nexus_desktop.nexus.projects import Asset, Project
 from nexus_desktop.nexus.session import Session
@@ -28,6 +29,7 @@ class AppState:
     project: Project | None = None
     asset: Asset | None = None
     blade_length_m: float | None = None
+    marks: MarkingState | None = None  # punta y raíz de las secciones de `wtg`
     strips: dict = field(default_factory=dict)
 
 

@@ -69,13 +69,11 @@ def test_font_tuple():
 
 
 @pytest.fixture(scope="module")
-def _tk_root():
-    # Una sola raíz Tk por módulo: crear/destruir varias en el mismo proceso hace que
-    # Tcl a veces no encuentre init.tcl en Windows (fallo intermitente observado).
-    try:
-        r = tk.Tk()
-    except tk.TclError as exc:
-        pytest.skip(f"sin pantalla: {exc}")
+def _tk_root(_ui_app):
+    # Una ventana hija de la única raíz Tk de la sesión (la App de conftest): crear/destruir
+    # varias raíces en el mismo proceso hace que Tcl a veces no encuentre init.tcl en Windows
+    # (fallo intermitente observado).
+    r = tk.Toplevel(_ui_app)
     r.withdraw()
     yield r
     r.destroy()

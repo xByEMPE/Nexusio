@@ -182,7 +182,10 @@ class StartScreen(Screen):
         project, asset = self._selected_project(), self._selected_asset()
         if project is None or asset is None:
             return
-        self.app.state.project, self.app.state.asset = project, asset
+        state = self.app.state
+        if state.asset is None or state.asset.id != asset.id:  # otra turbina: carpeta y marcas nuevas
+            state.wtg, state.marks, state.blade_length_m, state.strips = None, None, None, {}
+        state.project, state.asset = project, asset
         self.app.show(ImportScreen)
 
     def _logout(self) -> None:
