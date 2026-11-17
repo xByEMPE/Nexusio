@@ -588,3 +588,21 @@ def test_calibration_without_mm_per_px_is_not_attached(tmp_path):
     root, plan, client, tus = setup(tmp_path, strips=[StripInput("A", "LE", strip, cal)])
     run(plan, client, tus)
     assert "calibration" not in manifests(client)[0]["mosaics"][0]
+
+
+@pytest.mark.filterwarnings("ignore::PIL.Image.DecompressionBombWarning")
+def test_photo_bomb_is_skipped_but_big_strip_is_uploaded(tmp_path, monkeypatch):
+    """La protección de Pillow sigue activa para las fotos (una «bomba» se omite como dañada); las
+    tiras, panorámicas largas, se abren con el límite relajado solo mientras se leen."""
+    import io
+
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), (5, 5, 5)).save(buf, "JPEG")
+    strip = make_strip(tmp_path, size=(60, 400))
+    root, plan, client, tus = setup(tmp_path, extra={"Blade A/TE/bomba.jpg": buf.getvalue()},
+                                    strips=[StripInput("A", "LE", strip, None)])
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1600)  # error > 3200 px: fotos 64x48 sí, 100x100 no
+    report = run(plan, client, tus)
+    assert report.skipped["local_files"] == ["bomba.jpg"] and report.errors == []
+    assert len(tus.calls) == N_OBJECTS  # todas las demás fotos y la tira de 60x400
+    assert Image.MAX_IMAGE_PIXELS == 1600

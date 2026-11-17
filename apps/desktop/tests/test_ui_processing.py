@@ -424,3 +424,12 @@ def test_exif_timeout_message_is_spanish_and_plain():
 
     exc = ExifTimeout("exiftool no respondió en 180 s al leer los metadatos de 40 fotos.")
     assert error_message(exc) == str(exc)
+
+
+def test_results_open_big_strips_with_pillow_limit_restored(app, tmp_path, monkeypatch):
+    from PIL import Image
+
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10000)  # tiras de 120x900 px: "bomba" sin relajar
+    screen = show_results(app, tmp_path)
+    assert set(screen._photos) == {"LE", "PS"}
+    assert Image.MAX_IMAGE_PIXELS == 10000

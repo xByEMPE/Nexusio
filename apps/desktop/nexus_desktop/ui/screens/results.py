@@ -14,13 +14,20 @@ from tkinter import Canvas, ttk
 
 from PIL import Image, ImageTk
 
-from nexus_desktop.domain import mosaics  # noqa: F401  (Image.MAX_IMAGE_PIXELS = None: tiras grandes)
+from nexus_desktop.domain import mosaics
 from nexus_desktop.domain.marking import Fit, fit_image
 from nexus_desktop.domain.reconstruction import SectionResult
 from nexus_desktop.domain.wtg_folder import BLADES, FACES
 from nexus_desktop.ui import thumbnails
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
+
+
+def _load_strip(path: Path, cache: Path) -> thumbnails.DisplayImage:
+    """Miniatura de una tira: se abre con el límite de Pillow relajado solo para ella."""
+    with mosaics.large_images():
+        return thumbnails.load_display(path, cache)
+
 
 FACE_NAMES = {"LE": "Borde de ataque", "TE": "Borde de salida", "PS": "Intradós", "SS": "Extradós"}
 FALLBACK_CANVAS = 200
@@ -161,7 +168,7 @@ class StripGridScreen(Screen):
                 self._render(face)
                 continue
             self._canvas_text(canvas, "Cargando…", TOKENS["text_muted"])
-            self.run_async(lambda p=path: thumbnails.load_display(p, cache),
+            self.run_async(lambda p=path: _load_strip(p, cache),
                            lambda shown, f=face, p=path: self._loaded(gen, f, p, shown),
                            lambda _exc, f=face, p=path: self._load_failed(gen, f, p))
 

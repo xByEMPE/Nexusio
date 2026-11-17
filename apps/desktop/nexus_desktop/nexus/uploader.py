@@ -322,7 +322,7 @@ class _Run:
 
     def upload_strip(self, strip: StripInput) -> dict | None:
         try:
-            with Image.open(strip.path) as im:
+            with mosaics.large_images(), Image.open(strip.path) as im:  # tira: panorámica grande
                 im.load()  # la tira de origen se lee entera; un fallo aquí es de este archivo
                 original_h = im.size[1]
             # Reprocesar reescribe la tira con el MISMO nombre (mismo id y misma ruta en Storage): la
