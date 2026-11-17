@@ -98,8 +98,11 @@ class FakeClient:
         self.auth = FakeAuth(session, login_error)
         self.rpc_calls = []
         self.rpc_handler = None  # callable(name, params) -> data; puede lanzar
+        self.table_error = None  # excepción que lanza table() (simula red caída o sesión perdida)
 
     def table(self, name):
+        if self.table_error is not None:
+            raise self.table_error
         return FakeQuery(self, name)
 
     def rpc(self, name, params):
@@ -146,3 +149,34 @@ class FakeTus:
 @pytest.fixture
 def fake_client():
     return FakeClient
+
+
+# --- Interfaz (Tk) ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def _ui_app():
+    # Una sola App (que es la raíz Tk) por módulo: crear/destruir varias raíces en el mismo
+    # proceso hace que Tcl a veces no encuentre init.tcl en Windows (fallo intermitente).
+    import tkinter as tk
+
+    from nexus_desktop.ui.app import App
+
+    try:
+        app = App(start=False)
+    except tk.TclError as exc:
+        pytest.skip(f"sin pantalla: {exc}")
+    app.withdraw()
+    yield app
+    app.destroy()
+
+
+@pytest.fixture
+def ui_app(_ui_app):
+    """App limpia para cada prueba. Las tareas en segundo plano se esperan con
+    `ui_app.tasks.pump()`, que entrega los resultados en el hilo de Tk."""
+    _ui_app.reset()
+    yield _ui_app
+    try:
+        _ui_app.tasks.pump()
+    finally:
+        _ui_app.reset()

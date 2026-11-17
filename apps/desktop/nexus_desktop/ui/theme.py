@@ -71,7 +71,8 @@ def apply_theme(root: tk.Tk) -> None:
         ("*insertBackground", t["text"]),
         ("*highlightBackground", t["border"]),
         ("*highlightColor", t["accent"]),
-        ("*Font", base),
+        # Sin "*Font": fijaría -font en cada ttk.Label y anularía la fuente de los estilos
+        # (Title.TLabel). Los widgets clásicos toman las fuentes Tk* configuradas abajo.
         ("*Text.Background", t["raised"]),
         ("*Listbox.Background", t["raised"]),
         ("*Canvas.Background", t["background"]),

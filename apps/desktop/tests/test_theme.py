@@ -180,6 +180,14 @@ def test_accent_button_map_entries(root):
     assert {"active", "pressed", "disabled"} <= states
 
 
+def test_title_label_uses_style_font(root):
+    # Un "*Font" en la base de opciones fija -font en cada ttk.Label y anula la fuente del estilo.
+    theme.apply_theme(root)
+    label = ttk.Label(root, text="Título", style="Title.TLabel")
+    assert str(label.cget("font")) == ""
+    assert ttk.Style(root).lookup("Title.TLabel", "font").endswith("16 bold")
+
+
 def test_configured_colors(root):
     theme.apply_theme(root)
     st = ttk.Style(root)
