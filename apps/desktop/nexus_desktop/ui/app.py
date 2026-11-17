@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import tkinter as tk
 from dataclasses import dataclass, field
 from tkinter import messagebox, ttk
@@ -27,6 +28,10 @@ CLIENT_ERROR = ("No se pudo preparar la conexión con NEXUS. Revisa la configura
 UNEXPECTED_ERROR = ("Ocurrió un error inesperado. Lo ya subido y la carpeta WTG no se pierden; si algo "
                     "no responde, cierra la app y vuelve a abrirla. Si se repite, envía a soporte el "
                     "registro: {path}")
+
+CLOSE_PROMPT = "Hay un proceso en curso. ¿Salir? Lo ya subido queda guardado y podrás reanudar."
+CLOSE_WAIT_S = 15  # al salir con un proceso en curso, espera a que termine el archivo actual
+CLOSE_POLL_MS = 100
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +86,8 @@ class App(tk.Tk):
         self.state = AppState()
         self.tasks = TaskRunner(self)
         self.current: Screen | None = None
+        self._closing = False
+        self.protocol("WM_DELETE_WINDOW", self.on_close)
         self._build_header()
         self.body = ttk.Frame(self)
         self.body.pack(fill="both", expand=True)
@@ -129,6 +136,34 @@ class App(tk.Tk):
         except tk.TclError:  # la ventana ya se cerró
             pass
 
+    def busy(self) -> bool:
+        """Hay un procesamiento o una subida en curso en la pantalla actual."""
+        return bool(getattr(self.current, "running", False))
+
+    def on_close(self) -> None:
+        """La «X» de la ventana. Con un proceso en curso pregunta; si se confirma, lo cancela
+        (termina el archivo en curso, lo ya subido queda en el índice) y cierra al terminar."""
+        if self._closing:
+            return
+        if self.busy():
+            if not messagebox.askyesno("NEXUS", CLOSE_PROMPT, parent=self):
+                return
+            self._closing = True
+            log.info("Cierre pedido con un proceso en curso: se cancela")
+            cancel = getattr(self.current, "cancel", None)
+            if callable(cancel):
+                cancel()
+        self._closing = True
+        self._close_when_idle(time.monotonic() + CLOSE_WAIT_S)
+
+    def _close_when_idle(self, deadline: float) -> None:
+        if self.busy() and time.monotonic() < deadline:
+            self.after(CLOSE_POLL_MS, lambda: self._close_when_idle(deadline))
+            return
+        if self.current is not None:
+            self.current.on_hide()
+        self.destroy()
+
     def session_lost(self) -> None:
         """La sesión caducó: vuelve al login. Se conserva lo elegido (el avance está en el índice)."""
         from nexus_desktop.ui.screens.login import LoginScreen
@@ -160,3 +195,4 @@ class App(tk.Tk):
         self.session = None
         self.config_error = None
         self.state = AppState()
+        self._closing = False

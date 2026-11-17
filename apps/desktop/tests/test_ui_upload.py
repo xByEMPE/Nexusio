@@ -553,3 +553,56 @@ def test_errors_table_visible_at_minimum_window_size(app, monkeypatch):
         app.withdraw()
         app.geometry(old)
         app.update()
+
+
+# --- revisión final: cerrar la ventana con un proceso en curso ---------------------------------
+
+def _closing(app, monkeypatch, answer):
+    asked, closed = [], []
+    monkeypatch.setattr("nexus_desktop.ui.app.messagebox.askyesno",
+                        lambda title, message, **kw: asked.append(message) or answer)
+    monkeypatch.setattr(app, "destroy", lambda: closed.append(True))  # la raíz compartida no se destruye
+    return asked, closed
+
+
+def test_close_window_is_handled(app):
+    assert "on_close" in app.protocol("WM_DELETE_WINDOW")  # la «X» pasa por App.on_close
+
+
+def test_close_without_running_process_exits_without_asking(app, monkeypatch):
+    asked, closed = _closing(app, monkeypatch, answer=False)
+    app.show(UploadScreen)
+    app.on_close()
+    assert asked == [] and closed == [True]
+
+
+def test_close_during_upload_asks_and_no_keeps_running(app, monkeypatch):
+    fake = FakeUpload(wait_cancel=True)
+    monkeypatch.setattr(upload_module, "upload_inspection", fake)
+    asked, closed = _closing(app, monkeypatch, answer=False)
+    screen = app.show(UploadScreen)
+    screen.upload_button.invoke()
+    assert fake.started.wait(5)
+    app.on_close()
+    assert asked == ["Hay un proceso en curso. ¿Salir? Lo ya subido queda guardado y podrás reanudar."]
+    assert closed == [] and not fake.calls[0]["cancel"].is_set() and screen.running
+    screen.cancel_button.invoke()  # limpieza: que el hilo termine
+
+
+def test_close_during_upload_yes_cancels_and_exits_after_worker_stops(app, monkeypatch):
+    import time
+
+    fake = FakeUpload(wait_cancel=True)
+    monkeypatch.setattr(upload_module, "upload_inspection", fake)
+    asked, closed = _closing(app, monkeypatch, answer=True)
+    screen = app.show(UploadScreen)
+    screen.upload_button.invoke()
+    assert fake.started.wait(5)
+    app.on_close()
+    assert len(asked) == 1 and fake.calls[0]["cancel"].is_set()
+    deadline = time.monotonic() + 5
+    while not closed and time.monotonic() < deadline:
+        app.update()
+        time.sleep(0.01)
+    assert closed == [True] and not screen.running  # cerró cuando el hilo terminó el archivo en curso
+    assert [p.status for p in pending.load()] == ["cancelled"]
