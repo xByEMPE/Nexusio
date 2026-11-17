@@ -1,10 +1,13 @@
 """Inicio: proyectos asignados → turbinas del proyecto → "Importar carpeta WTG"."""
 from __future__ import annotations
 
+from pathlib import Path
 from tkinter import ttk
 
 from nexus_desktop.nexus.projects import Asset, Project, list_assets, list_projects
+from nexus_desktop.storage import pending
 from nexus_desktop.ui.screens.base import Screen
+from nexus_desktop.ui.screens.upload import short_path
 from nexus_desktop.ui.theme import TOKENS
 
 STATUS_TEXT = {
@@ -69,16 +72,79 @@ class StartScreen(Screen):
         self.import_button.grid(row=5, column=0, sticky="e", pady=(12, 0))
         self.import_button.state(["disabled"])
 
-        pending = ttk.Frame(self, style="Panel.TFrame", padding=16)
+        box = ttk.Frame(self, style="Panel.TFrame", padding=16)
         # Abajo y antes que el panel principal en el orden de pack: así nunca queda recortado.
-        pending.pack(side="bottom", fill="x", pady=(16, 0), before=panel)
-        ttk.Label(pending, text="Inspecciones locales pendientes", style="Panel.TLabel").pack(anchor="w")
-        items = list(app.pending_local)
-        ttk.Label(pending, text="\n".join(items) if items else NO_PENDING,
-                  style="Panel.Muted.TLabel", justify="left").pack(anchor="w", pady=(4, 0))
+        box.pack(side="bottom", fill="x", pady=(16, 0), before=panel)
+        head = ttk.Frame(box, style="Panel.TFrame", borderwidth=0, relief="flat")
+        head.pack(fill="x")
+        ttk.Label(head, text="Inspecciones locales pendientes", style="Panel.TLabel").pack(side="left")
+        self.remove_pending_button = ttk.Button(head, text="Quitar de la lista", command=self._remove_pending)
+        # Subida a medias en esta sesión de la app (p. ej. tras caducar la sesión): se retoma tal cual.
+        self.resume_button = ttk.Button(head, text="Continuar la subida", style="Accent.TButton",
+                                        command=self._resume_upload)
+        if self._can_resume():
+            self.resume_button.configure(text=f"Continuar la subida de {app.state.wtg.path.name}")
+            self.resume_button.pack(side="right")
+            self.resume_button.state(["disabled"])  # hasta confirmar que el proyecto sigue asignado
+        self.no_pending_label = ttk.Label(box, text=NO_PENDING, style="Panel.Muted.TLabel")
+        self.pending_tree = ttk.Treeview(box, columns=("folder", "inspection", "status"), show="headings",
+                                         selectmode="browse", height=3)
+        for key, title, width in (("folder", "Carpeta", 380), ("inspection", "Proyecto · turbina", 240),
+                                  ("status", "Estado", 200)):
+            self.pending_tree.heading(key, text=title)
+            self.pending_tree.column(key, width=width, anchor="w", stretch=key == "folder")
+        self.pending_tree.bind("<<TreeviewSelect>>", lambda _e: self._update_remove_button())
+        self._fill_pending()
 
     def on_show(self) -> None:
         self._load_projects()
+
+    # --- subidas pendientes ---
+
+    def _can_resume(self) -> bool:
+        s = self.app.state
+        return bool(s.wtg is not None and s.sections and s.project is not None and s.asset is not None)
+
+    def _fill_pending(self) -> None:
+        tree = self.pending_tree
+        tree.delete(*tree.get_children())
+        self._pending_rows: dict[str, str] = {}
+        items = pending.load()
+        for entry in items:
+            item = tree.insert("", "end", values=(short_path(Path(entry.folder), 60),
+                                                  f"{entry.project} · {entry.asset}",
+                                                  pending.status_text(entry.status)))
+            self._pending_rows[item] = entry.folder
+        if items:
+            self.no_pending_label.pack_forget()
+            tree.pack(fill="x", pady=(6, 0))
+            self.remove_pending_button.pack(side="right", padx=(8, 0))
+        else:
+            tree.pack_forget()
+            self.remove_pending_button.pack_forget()
+            self.no_pending_label.pack(anchor="w", pady=(4, 0))
+        self._update_remove_button()
+
+    def _update_remove_button(self) -> None:
+        self.remove_pending_button.state(["!disabled"] if self.pending_tree.selection() else ["disabled"])
+
+    def _remove_pending(self) -> None:
+        sel = self.pending_tree.selection()
+        folder = self._pending_rows.get(sel[0]) if sel else None
+        if folder is None:
+            return
+        try:
+            pending.remove(folder)
+        except OSError:
+            self._set_status("No se pudo actualizar la lista de inspecciones pendientes.", error=True)
+            return
+        self._fill_pending()
+
+    def _resume_upload(self) -> None:
+        from nexus_desktop.ui.screens.upload import UploadScreen
+
+        if self._can_resume():
+            self.app.show(UploadScreen)
 
     # --- estado y mensajes ---
 
@@ -131,6 +197,8 @@ class StartScreen(Screen):
         self._set_status("Elige un proyecto.")
         previous = self.app.state.project
         ids = [p.id for p in projects]
+        if self._can_resume() and previous is not None and previous.id in ids:
+            self.resume_button.state(["!disabled"])
         if previous is not None and previous.id in ids:
             self.project_combo.current(ids.index(previous.id))
             self._project_selected()

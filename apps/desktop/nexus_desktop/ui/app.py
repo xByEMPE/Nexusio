@@ -30,7 +30,7 @@ class AppState:
     asset: Asset | None = None
     blade_length_m: float | None = None
     marks: MarkingState | None = None  # punta y raíz de las secciones de `wtg`
-    # Tiras para la subida (Task 14): {(pala, cara): ruta}; las fija la verificación.
+    # Tiras para la subida: {(pala, cara): ruta}; las fija la verificación.
     strips: dict = field(default_factory=dict)
     # Resultado del procesamiento: domain.reconstruction.SectionResult por sección cosida
     # (tira, calibración en píxeles de la tira guardada, radio y GSD de cada foto).
@@ -67,8 +67,6 @@ class App(tk.Tk):
         self.session = session
         self.config_error = config_error
         self.state = AppState()
-        # Carpetas WTG con una subida a medias (las registra la pantalla de subida, Task 14).
-        self.pending_local: list[str] = []
         self.tasks = TaskRunner(self)
         self.current: Screen | None = None
         self._build_header()
@@ -140,4 +138,3 @@ class App(tk.Tk):
         self.session = None
         self.config_error = None
         self.state = AppState()
-        self.pending_local = []

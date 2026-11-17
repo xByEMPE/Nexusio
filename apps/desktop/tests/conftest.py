@@ -173,9 +173,13 @@ def _ui_app():
 
 
 @pytest.fixture
-def ui_app(_ui_app):
+def ui_app(_ui_app, monkeypatch, tmp_path):
     """App limpia para cada prueba. Las tareas en segundo plano se esperan con
-    `ui_app.tasks.pump()`, que entrega los resultados en el hilo de Tk."""
+    `ui_app.tasks.pump()`, que entrega los resultados en el hilo de Tk.
+
+    APPDATA apunta a tmp_path: las pruebas nunca leen ni escriben los datos reales del usuario
+    (miniaturas, lista de subidas pendientes)."""
+    monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     _ui_app.reset()
     yield _ui_app
     try:
