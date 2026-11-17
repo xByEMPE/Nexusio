@@ -317,7 +317,8 @@ def test_verification_lists_photos_with_radius_and_gsd_tip_on_top(app, tmp_path)
     rows = [tree.item(i, "values") for i in tree.get_children()]
     le = app.state.wtg.blades["A"]["LE"]
     # LE se voló de la raíz a la punta: se muestra al revés (punta arriba), como el original
-    assert [r[0] for r in rows] == [p.name for p in le[::-1]]
+    assert [r[3] for r in rows] == [p.name for p in le[::-1]]  # nombre completo (columna oculta)
+    assert rows[0][0] == le[-1].stem  # sin prefijo DJI_<fecha>_ se ve el nombre sin extensión
     assert rows[0][1] == "40,00" and rows[-1][1] == "0,00"
     assert rows[0][2] == "1,27"
     ps_rows = [screen.trees["PS"].item(i, "values") for i in screen.trees["PS"].get_children()]
@@ -392,3 +393,10 @@ def test_forget_folder_clears_sections(app, tmp_path):
     app.state.strips = {("A", "LE"): Path("x.jpg")}
     app.state.forget_folder()
     assert app.state.sections == [] and app.state.strips == {} and app.state.wtg is None
+
+
+def test_short_photo_name():
+    from nexus_desktop.ui.screens.verification import short_name
+
+    assert short_name("DJI_20260429135958_0019_V_E.JPG") == "0019_V_E"
+    assert short_name("foto 1.jpg") == "foto 1"

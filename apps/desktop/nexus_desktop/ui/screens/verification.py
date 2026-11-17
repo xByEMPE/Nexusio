@@ -8,6 +8,7 @@ foto se marca su centro sobre la tira. «Continuar a la subida» deja las tiras 
 """
 from __future__ import annotations
 
+import re
 from tkinter import ttk
 
 from nexus_desktop.domain.reconstruction import SectionResult, stitch_order
@@ -19,11 +20,19 @@ TIP_COLOR = TOKENS["caution"]
 ROOT_COLOR = TOKENS["telemetry"]
 PHOTO_COLOR = TOKENS["critical"]
 SHADOW = "#000000"
+_DJI_NAME = re.compile(r"^DJI_\d+_(.+)$", re.IGNORECASE)
+
+
+def short_name(file_name: str) -> str:
+    """Etiqueta corta de la foto: DJI_20260429135958_0019_V_E.JPG -> 0019_V_E (cabe en la columna)."""
+    stem = file_name.rsplit(".", 1)[0]
+    m = _DJI_NAME.match(stem)
+    return m.group(1) if m else stem
 
 
 class VerificationScreen(StripGridScreen):
     TITLE = "Verificación"
-    CANVAS_HEIGHT = 240
+    CANVAS_HEIGHT = 200
 
     def __init__(self, master, app, blade: str | None = None) -> None:
         self.trees: dict[str, ttk.Treeview] = {}
@@ -39,6 +48,7 @@ class VerificationScreen(StripGridScreen):
         ttk.Label(footer, text="Punta", foreground=TIP_COLOR).pack(side="left")
         ttk.Label(footer, text="Raíz", foreground=ROOT_COLOR).pack(side="left", padx=(12, 0))
         ttk.Label(footer, text="Foto elegida", foreground=PHOTO_COLOR).pack(side="left", padx=(12, 0))
+        ttk.Label(footer, text="Radio en m · GSD en mm/px", style="Muted.TLabel").pack(side="left", padx=(16, 0))
         if not self.sections:
             self.continue_button.state(["disabled"])
 
@@ -46,10 +56,12 @@ class VerificationScreen(StripGridScreen):
         frame = ttk.Frame(grid, style="Panel.TFrame", borderwidth=0, relief="flat")
         frame.grid(row=3, column=col, sticky="nsew", padx=4, pady=(6, 0))
         grid.rowconfigure(3, weight=1)
-        tree = ttk.Treeview(frame, columns=("photo", "radius", "gsd"), show="headings", height=8,
-                            selectmode="browse")
-        for key, title, width, anchor in (("photo", "Foto", 120, "w"), ("radius", "Radio (m)", 64, "e"),
-                                          ("gsd", "GSD (mm/px)", 72, "e")):
+        # "file" (nombre completo) va oculto; se ve la etiqueta corta.
+        tree = ttk.Treeview(frame, columns=("photo", "radius", "gsd", "file"), show="headings", height=6,
+                            selectmode="browse", displaycolumns=("photo", "radius", "gsd"))
+        # Encabezados cortos: las columnas son estrechas (4 caras en la ventana).
+        for key, title, width, anchor in (("photo", "Foto", 70, "w"), ("radius", "Radio", 60, "e"),
+                                          ("gsd", "GSD", 50, "e")):
             tree.heading(key, text=title)
             tree.column(key, width=width, minwidth=40, anchor=anchor, stretch=key == "photo")
         scroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
@@ -73,9 +85,10 @@ class VerificationScreen(StripGridScreen):
             for idx in stitch_order(face, len(section.photos)):
                 photo = section.photos[idx]
                 item = tree.insert("", "end", values=(
-                    photo.path.name,
+                    short_name(photo.path.name),
                     decimal(photo.radius_m) if photo.radius_m is not None else "—",
                     decimal(photo.gsd_mm_px) if photo.gsd_mm_px is not None else "—",
+                    photo.path.name,
                 ))
                 self._rows[face][item] = photo.path.name
 
