@@ -1,6 +1,14 @@
-"""Configuración de la app. Solo la llave pública; nunca llaves de servicio."""
+"""Configuración de la app. Solo la llave pública; nunca llaves de servicio.
+
+La URL de Supabase y la llave pública se leen, en este orden, de las variables de entorno
+NEXUS_SUPABASE_URL / NEXUS_PUBLISHABLE_KEY y del archivo %APPDATA%/NEXUS/config.json
+(claves `supabase_url` y `supabase_publishable_key`; lo deja el despliegue del instalador).
+Una llave que no sea pública (secreta o JWT de otro rol que no sea anon) se descarta.
+"""
 from __future__ import annotations
 
+import base64
+import json
 import os
 import shutil
 import sys
@@ -9,10 +17,12 @@ from pathlib import Path
 APP_NAME = "nexus-desktop"
 VERSION = "0.1.0"
 
-SUPABASE_URL = os.environ.get("NEXUS_SUPABASE_URL", "http://127.0.0.1:54321")
-SUPABASE_PUBLISHABLE_KEY = os.environ.get("NEXUS_PUBLISHABLE_KEY", "")
+DEFAULT_SUPABASE_URL = "http://127.0.0.1:54321"  # Supabase local (desarrollo)
+USER_CONFIG_FILE = "config.json"
 
 MODEL_FILE = "blade_unet_512.onnx"  # modelo U-Net de segmentación de palas
+EXIFTOOL_DIR = "exiftool"  # carpeta del exiftool incluido con la app empaquetada
+EXIFTOOL_EXE = "exiftool.exe"
 
 
 def data_dir() -> Path:
@@ -21,26 +31,86 @@ def data_dir() -> Path:
     return Path(base) / "NEXUS"
 
 
-def resolve_exiftool() -> Path | None:
-    """exiftool a usar: NEXUS_EXIFTOOL (si el archivo existe), luego `exiftool` en el PATH.
+def user_config_path() -> Path:
+    """Archivo de configuración del usuario: %APPDATA%/NEXUS/config.json."""
+    return data_dir() / USER_CONFIG_FILE
 
-    El exiftool incluido en el instalador se añade aquí en la Task 15. None si no hay ninguno.
-    """
+
+def _read_user_config() -> dict[str, str]:
+    """Valores de texto de config.json; {} si no existe o no se puede leer (nunca falla)."""
+    try:
+        data = json.loads(user_config_path().read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v.strip() for k, v in data.items() if isinstance(v, str) and v.strip()}
+
+
+def _is_public_key(key: str) -> bool:
+    """True si `key` puede ser la llave pública: sb_publishable_… o un JWT de rol anon."""
+    if key.startswith("sb_secret_"):
+        return False
+    parts = key.split(".")
+    if len(parts) == 3 and key.startswith("eyJ"):  # llave JWT antigua: solo la de rol anon
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (-len(parts[1]) % 4)))
+        except (ValueError, TypeError):
+            return False
+        return isinstance(payload, dict) and payload.get("role") == "anon"
+    return True
+
+
+def _load_supabase() -> tuple[str, str]:
+    file_cfg = _read_user_config()
+    url = (os.environ.get("NEXUS_SUPABASE_URL") or file_cfg.get("supabase_url")
+           or DEFAULT_SUPABASE_URL)
+    key = os.environ.get("NEXUS_PUBLISHABLE_KEY") or file_cfg.get("supabase_publishable_key", "")
+    return url, key if key and _is_public_key(key) else ""
+
+
+SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY = _load_supabase()
+
+
+def bundle_dirs() -> list[Path]:
+    """Carpetas de la app instalada donde buscar lo que se empaqueta con ella.
+
+    Empaquetada con PyInstaller (sys.frozen): primero sys._MEIPASS (la carpeta `_internal`
+    de la compilación de carpeta única) y luego la carpeta del ejecutable. Sin empaquetar:
+    la carpeta del intérprete de Python."""
+    dirs: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if getattr(sys, "frozen", False) and meipass:
+        dirs.append(Path(meipass).resolve())
+    exe_dir = Path(sys.executable).resolve().parent
+    if exe_dir not in dirs:
+        dirs.append(exe_dir)
+    return dirs
+
+
+def resolve_exiftool() -> Path | None:
+    """exiftool a usar: NEXUS_EXIFTOOL (si el archivo existe), luego el incluido con la app
+    (`exiftool/exiftool.exe` en una de `bundle_dirs()`), luego `exiftool` en el PATH.
+    None si no hay ninguno."""
     env = os.environ.get("NEXUS_EXIFTOOL")
     if env and Path(env).is_file():
         return Path(env)
+    for base in bundle_dirs():
+        bundled = base / EXIFTOOL_DIR / EXIFTOOL_EXE
+        if bundled.is_file():
+            return bundled
     found = shutil.which("exiftool")
     return Path(found) if found else None
 
 
 def model_search_paths() -> list[Path]:
-    """Dónde buscar el modelo, en orden: NEXUS_MODEL_PATH, apps/desktop/models/ y junto al
-    ejecutable (o en su carpeta models/)."""
+    """Dónde buscar el modelo, en orden: NEXUS_MODEL_PATH, apps/desktop/models/ y en cada una
+    de `bundle_dirs()` (suelto o en su carpeta models/)."""
     paths: list[Path] = []
     env = os.environ.get("NEXUS_MODEL_PATH")
     if env:
         paths.append(Path(env))
     paths.append(Path(__file__).resolve().parent.parent / "models" / MODEL_FILE)
-    exe_dir = Path(sys.executable).resolve().parent
-    paths += [exe_dir / MODEL_FILE, exe_dir / "models" / MODEL_FILE]
+    for base in bundle_dirs():
+        paths += [base / MODEL_FILE, base / "models" / MODEL_FILE]
     return paths

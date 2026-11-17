@@ -21,7 +21,7 @@ class Session:
 
             from nexus_desktop.config import SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL
             if not SUPABASE_PUBLISHABLE_KEY:
-                raise LoginError("Falta la llave pública de NEXUS (NEXUS_PUBLISHABLE_KEY).")
+                raise LoginError("Falta la llave pública de NEXUS (config.json o NEXUS_PUBLISHABLE_KEY).")
             client = create_client(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
         self.client = client
         self._now = now

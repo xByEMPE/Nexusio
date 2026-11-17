@@ -169,6 +169,10 @@ def test_missing_publishable_key_shows_clear_message(ui_app, monkeypatch):
     session, error = app_module.create_session()
     assert session is None
     assert "NEXUS_PUBLISHABLE_KEY" in error
+    # La app instalada no tiene variables de entorno: el mensaje dice dónde va config.json.
+    from nexus_desktop import config
+    assert str(config.user_config_path()) in error
+    assert "supabase_publishable_key" in error
     ui_app.session, ui_app.config_error = None, error
     screen = ui_app.show(LoginScreen)
     assert screen.error_label.cget("text") == error

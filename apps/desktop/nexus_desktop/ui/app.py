@@ -16,10 +16,12 @@ from nexus_desktop.ui.threading import TaskRunner
 
 WINDOW_TITLE = "NEXUS · Importador de palas"
 SESSION_EXPIRED = "La sesión caducó; inicia sesión de nuevo."
-MISSING_KEY = ("Falta la llave pública de NEXUS (variable de entorno NEXUS_PUBLISHABLE_KEY). "
-               "Pide la configuración a tu administrador y vuelve a abrir la app.")
+MISSING_KEY = ("Falta la llave pública de NEXUS. Debe estar en el archivo {path} "
+               "(claves supabase_url y supabase_publishable_key) o en la variable de entorno "
+               "NEXUS_PUBLISHABLE_KEY. Pide la configuración a tu administrador y vuelve a "
+               "abrir la app.")
 CLIENT_ERROR = ("No se pudo preparar la conexión con NEXUS. Revisa la configuración "
-                "(NEXUS_SUPABASE_URL y NEXUS_PUBLISHABLE_KEY) y vuelve a abrir la app.")
+                "({path}, o NEXUS_SUPABASE_URL y NEXUS_PUBLISHABLE_KEY) y vuelve a abrir la app.")
 
 
 @dataclass
@@ -46,12 +48,13 @@ def create_session() -> tuple[Session | None, str | None]:
     """Crea la sesión con la configuración; si falta algo devuelve (None, mensaje en español)."""
     from nexus_desktop import config
 
+    path = config.user_config_path()
     if not config.SUPABASE_PUBLISHABLE_KEY:
-        return None, MISSING_KEY
+        return None, MISSING_KEY.format(path=path)
     try:
         return Session(), None
     except Exception:  # URL inválida u otro fallo del cliente: sin traza ni datos sensibles
-        return None, CLIENT_ERROR
+        return None, CLIENT_ERROR.format(path=path)
 
 
 class App(tk.Tk):
