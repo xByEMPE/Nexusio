@@ -15,11 +15,10 @@ dependencies = [
   "numpy",
   "opencv-python",
   "onnxruntime",
-  "openpyxl",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "onnx"]
+dev = ["pytest", "onnx", "pyinstaller"]
 
 [tool.setuptools.packages.find]
 include = ["nexus_desktop*"]

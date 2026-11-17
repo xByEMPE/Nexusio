@@ -1,0 +1,16 @@
+# Dependencias de la app de escritorio con las versiones con las que se probó y empaquetó.
+# Las mismas que pyproject.toml (que no fija versiones). Sin PyTorch ni entrenamiento:
+# la app solo usa el modelo exportado a ONNX con onnxruntime.
+#   apps/desktop/.venv/Scripts/python -m pip install -r apps/desktop/requirements.txt
+pillow==13.0.0
+tuspy==1.1.0
+supabase==2.34.1
+jsonschema==4.26.0
+numpy==2.5.5
+opencv-python==5.0.0.93
+onnxruntime==1.32.0
+
+# Desarrollo: pruebas y empaquetado
+pytest==9.2.0
+onnx==1.23.2
+pyinstaller==6.22.3
