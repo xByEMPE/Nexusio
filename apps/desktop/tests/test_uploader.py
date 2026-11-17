@@ -580,3 +580,11 @@ def test_exiftool_timeout_on_one_file_skips_it_with_spanish_message(tmp_path, mo
     assert report.skipped["local_files"] == ["a2.jpg"] and report.errors == []
     assert len(tus.calls) == N_OBJECTS - 3
     assert any("a2.jpg" in m and "exiftool no respondió" in m for m, _ in msgs)
+
+
+def test_calibration_without_mm_per_px_is_not_attached(tmp_path):
+    cal = {"tip_row_px": None, "root_row_px": None, "blade_length_m": 60.0, "mm_per_px": None, "root_at_top": None}
+    strip = make_strip(tmp_path)
+    root, plan, client, tus = setup(tmp_path, strips=[StripInput("A", "LE", strip, cal)])
+    run(plan, client, tus)
+    assert "calibration" not in manifests(client)[0]["mosaics"][0]

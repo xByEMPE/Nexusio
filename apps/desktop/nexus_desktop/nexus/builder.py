@@ -66,8 +66,10 @@ def build_capture(path: Path, blade: str | None, face: str | None, seq: int, met
 
 
 def scale_row(row: int, original_h: int, uploaded_h: int) -> int:
-    """Fila de la tira original -> fila en el tamaño subido (la tira se reduce si pasa de 8000 px)."""
-    return round(row * uploaded_h / original_h)
+    """Fila de la tira original -> fila en el tamaño subido (la tira se reduce si pasa de 8000 px).
+    Siempre dentro de la imagen subida: 0..uploaded_h-1 (la última fila escalada redondea a
+    uploaded_h)."""
+    return min(max(round(row * uploaded_h / original_h), 0), max(uploaded_h - 1, 0))
 
 
 def build_calibration(tip_row_px: int | None, root_row_px: int | None, blade_length_m: float | None,

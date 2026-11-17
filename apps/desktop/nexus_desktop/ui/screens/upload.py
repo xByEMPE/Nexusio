@@ -126,6 +126,14 @@ def error_message(exc: Exception) -> str:
     return GENERIC_ERROR
 
 
+def usable_calibration(calibration: dict | None) -> dict | None:
+    """La calibración solo se envía si tiene escala (mm_per_px). Sin marcas (todo null) o con la
+    punta y la raíz en la misma fila, el servidor la sobrescribiría con nulos y la daría por hecha."""
+    if not calibration or calibration.get("mm_per_px") is None:
+        return None
+    return calibration
+
+
 def build_upload_plan(state) -> UploadPlan:
     """`AppState` -> `UploadPlan`: una StripInput por sección (calibración tal cual, en píxeles de
     la tira guardada: el orquestador la escala, R5) y PhotoInfo por foto (radio y, si se conoce,
@@ -136,7 +144,7 @@ def build_upload_plan(state) -> UploadPlan:
     photo_info: dict[Path, PhotoInfo] = {}
     for section in state.sections:
         strips.append(StripInput(section.blade, section.face, Path(section.strip_path),
-                                 section.calibration or None))
+                                 usable_calibration(section.calibration)))
         direction = section.direction if section.direction in DIRECTIONS else None
         for photo in section.photos:
             photo_info[photo.path] = PhotoInfo(photo.radius_m, direction)

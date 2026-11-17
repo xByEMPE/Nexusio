@@ -25,12 +25,15 @@ READ_ERROR = "No se pudo leer la carpeta. Comprueba que existe y que tienes perm
 NO_SECTIONS = ("No se encontraron fotos de palas en esta carpeta. Debe tener carpetas "
                "Blade A/B/C (o Pala A/B/C) con las caras LE, TE, PS y SS.")
 NO_ID_PHOTO = "No se encontró la foto _ID en la carpeta."
-INVALID_LENGTH = "Escribe la longitud de la pala en metros, mayor que 0 (por ejemplo 61,5)."
+MIN_BLADE_LENGTH_M, MAX_BLADE_LENGTH_M = 5.0, 150.0
+INVALID_LENGTH = "Escribe la longitud de la pala en metros, entre 5 y 150 (por ejemplo 61,5)."
+OUT_OF_RANGE_LENGTH = ("La longitud de la pala debe estar entre 5 y 150 m y escribiste {text} m: revisa "
+                       "que no sobre ni falte una cifra (escala todos los radios y las medidas).")
 ID_PREVIEW_SIDE = 220
 
 
-def parse_blade_length(text: str) -> float | None:
-    """Longitud de pala en metros: número positivo, con coma o punto decimal; si no, None."""
+def _parse_number(text: str) -> float | None:
+    """Número finito y positivo, con coma o punto decimal; si no, None."""
     value = text.strip().replace(",", ".")
     if not value or value.count(".") > 1 or not all(c.isdigit() or c == "." for c in value):
         return None
@@ -39,6 +42,21 @@ def parse_blade_length(text: str) -> float | None:
     except ValueError:
         return None
     return number if math.isfinite(number) and number > 0 else None
+
+
+def parse_blade_length(text: str) -> float | None:
+    """Longitud de pala en metros (5-150 m, con coma o punto decimal); si no, None."""
+    number = _parse_number(text)
+    return number if number is not None and MIN_BLADE_LENGTH_M <= number <= MAX_BLADE_LENGTH_M else None
+
+
+def length_error(text: str) -> str:
+    """Mensaje para lo escrito en la longitud ("" si está vacío o es válido)."""
+    if not text.strip() or parse_blade_length(text) is not None:
+        return ""
+    if _parse_number(text) is not None:
+        return OUT_OF_RANGE_LENGTH.format(text=text.strip())
+    return INVALID_LENGTH
 
 
 def _typing_allowed(proposed: str) -> bool:
@@ -260,7 +278,7 @@ class ImportScreen(Screen):
     def _update_continue(self) -> None:
         text = self.length_entry.get()
         length = parse_blade_length(text)
-        self.length_error.configure(text=INVALID_LENGTH if text.strip() and length is None else "")
+        self.length_error.configure(text=length_error(text))
         ready = self._has_sections() and length is not None
         self.continue_button.state(["!disabled"] if ready else ["disabled"])
 

@@ -154,6 +154,20 @@ def test_build_upload_plan_keeps_calibration_and_filters_direction(app):
     assert plan.photo_info[b_te.photos[1].path].direction == "tip_to_root"
 
 
+@pytest.mark.parametrize("cal", [
+    {"tip_row_px": None, "root_row_px": None, "blade_length_m": 40.0, "mm_per_px": None, "root_at_top": None},
+    {"tip_row_px": 400, "root_row_px": 400, "blade_length_m": 40.0, "mm_per_px": None, "root_at_top": False},
+])
+def test_calibration_without_mm_per_px_is_not_sent(app, cal):
+    """Sin marcas (todo null) o con punta y raíz en la misma fila (mm_per_px null) no se envía la
+    calibración: el servidor la sobrescribiría con nulos y la daría por calibrada."""
+    state = app.state
+    state.sections[0].calibration = cal
+    plan = build_upload_plan(state)
+    assert plan.strips[0].calibration is None
+    assert plan.strips[1].calibration == state.sections[1].calibration  # la buena, sí
+
+
 def test_build_upload_plan_without_calibration_and_missing_state(app):
     state = app.state
     state.sections[0].calibration = {}

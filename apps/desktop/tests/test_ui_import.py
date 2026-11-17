@@ -54,12 +54,26 @@ def type_length(app, screen: ImportScreen, text: str) -> None:
 # --- Longitud de pala ------------------------------------------------------------------------
 
 @pytest.mark.parametrize("text,expected", [
-    ("42", 42.0), ("42,5", 42.5), ("42.5", 42.5), (" 61,25 ", 61.25), ("0,1", 0.1),
+    ("42", 42.0), ("42,5", 42.5), ("42.5", 42.5), (" 61,25 ", 61.25), ("5", 5.0), ("150", 150.0),
+    ("0,1", None), ("4,9", None), ("150,5", None), ("600", None),  # fuera de 5-150 m
     ("", None), ("0", None), ("0,0", None), ("-3", None), ("abc", None), ("4,2,1", None),
     ("inf", None), ("nan", None),
 ])
 def test_parse_blade_length(text, expected):
     assert parse_blade_length(text) == expected
+
+
+@pytest.mark.parametrize("text", ["600", "1,5", "151"])
+def test_out_of_range_length_is_refused_with_clear_message(app, tmp_path, text):
+    """Un 600 en lugar de 60 escalaría por 10 todos los radios y mm/px: no se acepta en silencio."""
+    screen = import_folder(app, make_wtg(tmp_path / "WTG 1", {"A": {"LE": 2}}))
+    type_length(app, screen, text)
+    assert screen.continue_button.instate(["disabled"])
+    message = screen.length_error.cget("text")
+    assert "entre 5 y 150" in message and text in message
+    screen.continue_button.invoke()
+    app.tasks.pump()
+    assert not isinstance(app.current, MarkingScreen) and app.state.blade_length_m is None
 
 
 def test_length_entry_rejects_letters_while_typing(app, tmp_path):

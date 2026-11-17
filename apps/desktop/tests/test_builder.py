@@ -83,13 +83,23 @@ def test_build_capture_applies_radius_and_direction():
 
 def test_calibration_rows_scaled_to_uploaded_size():
     assert scale_row(8000, 16000, 8000) == 4000
-    assert scale_row(1, 16000, 8000) == 0 or scale_row(1, 16000, 8000) == 1  # redondeo
-    assert scale_row(5000, 5000, 5000) == 5000
+    assert scale_row(1, 16000, 8000) == 0  # 0,5 -> 0 (redondeo al par)
+    assert scale_row(3, 16000, 8000) == 2  # 1,5 -> 2
+    assert scale_row(4999, 5000, 5000) == 4999
     cal = build_calibration(scale_row(1000, 16000, 8000), scale_row(15000, 16000, 8000), 70.0, 12.5, True)
     assert cal == {"tip_row_px": 500, "root_row_px": 7500, "blade_length_m": 70.0, "mm_per_px": 12.5,
                    "root_at_top": True}
     assert build_calibration(None, None, None, None, None) == {
         "tip_row_px": None, "root_row_px": None, "blade_length_m": None, "mm_per_px": None, "root_at_top": None}
+
+
+def test_scaled_last_row_is_clamped_inside_uploaded_strip():
+    """round((H-1)*8000/H) puede dar 8000 = alto subido, fuera de la imagen (filas 0..7999)."""
+    assert round(35999 * 8000 / 36000) == 8000  # el caso que hay que recortar
+    assert scale_row(35999, 36000, 8000) == 7999
+    assert scale_row(36000, 36000, 8000) == 7999  # fila fuera de rango en el original
+    assert scale_row(0, 36000, 8000) == 0
+    assert scale_row(-3, 36000, 8000) == 0
 
 
 def _manifest_parts():

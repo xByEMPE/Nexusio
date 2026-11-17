@@ -338,7 +338,8 @@ class _Run:
             mosaic = mosaics.build_mosaic(mosaics.StripFile(strip.path, strip.blade, strip.face), mid, self.prefix,
                                           w, h)
             self.strip_names[mosaic["path"]] = strip.path.name
-            if strip.calibration is not None:
+            if strip.calibration is not None and strip.calibration.get("mm_per_px") is not None:
+                # sin escala no se envía: el servidor sobrescribiría la calibración con nulos
                 mosaic["calibration"] = _scaled_calibration(strip.calibration, original_h, h)
             uploaded = self.index.is_uploaded(mosaic["path"], sha)
             if not uploaded:
