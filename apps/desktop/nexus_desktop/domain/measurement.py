@@ -31,9 +31,11 @@ def radius_from_altitude(alt_m: float, root_alt_m: float, tip_alt_m: float | Non
     """Radio (m) acotado a [0, blade_length_m].
 
     Con altitud de punta conocida (a más de 0,1 m de la raíz): (alt − raíz) / (punta − raíz)
-    escalado a la longitud de la pala. El cociente lleva signo, así vale para palas hacia arriba
-    y hacia abajo, y una foto más allá de la raíz (p. ej. bajo la raíz de referencia) da 0 en
-    lugar de un radio reflejado. Sin punta: max(0, alt − raíz).
+    escalado a la longitud de la pala. El cociente lleva signo: una foto más allá de la raíz
+    (p. ej. bajo la raíz de referencia) da 0 en lugar de un radio reflejado. Ojo: el resto del
+    flujo supone la punta ARRIBA (la raíz de referencia es la altitud mínima y la costura apila
+    la punta arriba); si la punta queda más baja que la raíz, `reconstruction` avisa porque
+    estos radios no serían fiables. Sin punta: max(0, alt − raíz).
     """
     if tip_alt_m is not None and abs(tip_alt_m - root_alt_m) > MIN_TIP_ROOT_ALT_DIFF_M:
         radius = (alt_m - root_alt_m) / (tip_alt_m - root_alt_m) * blade_length_m

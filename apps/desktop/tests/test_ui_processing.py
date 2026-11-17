@@ -400,3 +400,19 @@ def test_short_photo_name():
 
     assert short_name("DJI_20260429135958_0019_V_E.JPG") == "0019_V_E"
     assert short_name("foto 1.jpg") == "foto 1"
+
+
+def test_section_warnings_shown_under_strip(app, tmp_path):
+    sections = make_sections(app, tmp_path)
+    sections[0].warnings = ["Atención: 3 de 3 fotos de A/LE no tienen altitud en el EXIF; la "
+                            "separación entre fotos de la tira y los radios no son fiables."]
+    app.state.sections = sections
+    screen = app.show(ResultsScreen)
+    app.tasks.pump()
+    text = screen.info_labels["LE"].cget("text")
+    assert "no tienen altitud" in text
+    assert str(screen.info_labels["LE"].cget("foreground")) == TOKENS["caution"]
+    assert "Atención" not in screen.info_labels["PS"].cget("text")
+    app.show(VerificationScreen)
+    app.tasks.pump()
+    assert "no tienen altitud" in app.current.info_labels["LE"].cget("text")

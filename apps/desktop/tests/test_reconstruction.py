@@ -83,7 +83,11 @@ def exif_calls(monkeypatch):
 
     def read(paths, exiftool):
         Calls.batches.append(list(paths))
-        return {Path(p): dict(Calls.metas.get(Path(p), {})) for p in paths}
+        out = {}
+        for p in paths:
+            meta = Calls.metas.get(Path(p), {})
+            out[Path(p)] = None if meta is None else dict(meta)  # None: exiftool no la pudo leer
+        return out
 
     monkeypatch.setattr(rec, "read_exif_batch", read)
     return Calls
@@ -135,6 +139,7 @@ def test_reconstruct_writes_strip_with_expected_name(tmp_path, exif_calls):
     with Image.open(le.strip_path) as im:
         assert im.format == "JPEG" and im.size == (le.width_px, le.height_px)
     assert le.height_px == 2 * STEP_PX + 600
+    assert le.warnings == [] and results[1].warnings == []
     # `mosaics.scan` (la subida) reconoce los nombres
     found = {(s.blade, s.face): s.path for s in mosaics.scan(out)}
     assert found == {("A", "LE"): le.strip_path, ("A", "PS"): results[1].strip_path}
@@ -249,7 +254,7 @@ def test_inverted_section_uses_post_inversion_order(tmp_path, exif_calls):
     assert [p.radius_m for p in le.photos] == pytest.approx([0.0, 20.0, 40.0])
 
 
-def test_dropped_root_photo_maps_to_previous_kept_photo(tmp_path, exif_calls):
+def test_dropped_root_photo_maps_to_previous_kept_photo(tmp_path, exif_calls, caplog):
     # La foto de la raíz (100,0 m) está a 0,3 m de la anterior (100,3 m): el cosedor la descarta
     # por dron flotando. La raíz se sitúa con la foto conservada que la sustituye.
     alts = [100.0, 100.3, 102.0, 104.0]
@@ -262,6 +267,9 @@ def test_dropped_root_photo_maps_to_previous_kept_photo(tmp_path, exif_calls):
     assert le.height_px == STEP_PX + step2 + 600
     assert len(le.chord["image_centers"]) == 3  # 3 fotos conservadas de 4
     assert len(le.photos) == 4  # pero todas las fotos llevan su radio
+    # la foto de la raíz toma la posición de otra a 0,3 m (> 0,2 m): queda en el log
+    assert any("raíz" in r.getMessage() and "0,30 m" in r.getMessage()
+               for r in caplog.records if r.levelname == "WARNING")
 
 
 def test_kept_index_remap_for_tip_after_dropped_photo(tmp_path, exif_calls):
@@ -349,6 +357,45 @@ def test_photo_without_altitude_has_no_radius(tmp_path, exif_calls):
     (le,) = run(wtg, marks, tmp_path / "out")
     assert le.photos[0].radius_m is None and le.photos[0].gsd_mm_px is None
     assert le.photos[2].radius_m is not None
+    assert le.warnings == []  # 1 de 3 sin altitud: no es la mayoría
+
+
+def test_section_mostly_without_altitude_is_flagged(tmp_path, exif_calls):
+    # Sin altitud la costura no puede separar las fotos (todas a 0 m: el filtro de dron flotando
+    # deja una sola). No debe pasar en silencio.
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": [100.0, 102.0, 104.0, 106.0]}})
+    for p in wtg.blades["A"]["LE"][:3]:
+        exif_calls.metas[p] = {k: v for k, v in exif_calls.metas[p].items()
+                               if k not in ("GPSAltitude", "RelativeAltitude")}
+    mark_standard(marks)
+    msgs = []
+    (le,) = run(wtg, marks, tmp_path / "out", msgs=msgs)
+    assert len(le.warnings) == 1
+    warning = le.warnings[0]
+    assert "3 de 4" in warning and "altitud" in warning and "A/LE" in warning
+    assert warning in [m for m, _ in msgs]
+
+
+def test_unreadable_exif_is_reported(tmp_path, exif_calls):
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_UP}})
+    exif_calls.metas[wtg.blades["A"]["LE"][1]] = None  # exiftool no devolvió nada para esta foto
+    mark_standard(marks)
+    msgs = []
+    (le,) = run(wtg, marks, tmp_path / "out", msgs=msgs)
+    assert any("exiftool no pudo leer 1 de 3 fotos de A/LE" in w for w in le.warnings)
+    assert le.photos[1].radius_m is None
+    assert any("exiftool no pudo leer" in m for m, _ in msgs)
+
+
+def test_tip_lower_than_root_warns(tmp_path, exif_calls):
+    # PS con la punta (foto 0) a 100 m y la raíz (última) a 104 m: la pala parece apuntar
+    # hacia abajo; los radios y la costura suponen la punta arriba.
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"PS": [100.0, 102.0, 104.0]}})
+    mark_standard(marks, faces=("PS",))
+    msgs = []
+    (ps,) = run(wtg, marks, tmp_path / "out", msgs=msgs)
+    assert any("más baja que la raíz" in w and "A/PS" in w for w in ps.warnings)
+    assert any("más baja que la raíz" in m for m, _ in msgs)
 
 
 def test_reconstruct_end_to_end_writes_summary_json(tmp_path, exif_calls):

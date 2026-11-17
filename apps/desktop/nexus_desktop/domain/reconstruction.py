@@ -50,6 +50,7 @@ ROOT_TO_TIP_FACES = ("LE", "TE")  # se vuelan de la raíz a la punta: se cosen a
 MAX_STRIP_SIDE = 65500            # límite del formato JPEG (65535) con margen, como el original
 JPEG_QUALITY = 85                 # IMAGE_PROCESSING_CONFIG["jpeg_quality"]
 EXIF_SHARE = 0.1                  # parte de la barra de progreso para la lectura del EXIF
+BORROW_WARN_ALT_DIFF_M = 0.2      # aviso si una foto marcada toma la posición de otra más lejana
 
 NO_MODEL_WARNING = ("Aviso: no se encontró el modelo de segmentación (blade_unet_512.onnx); "
                     "se usa la costura simple, sin alinear la pala con IA.")
@@ -73,6 +74,9 @@ class SectionResult:
     photos: list[PhotoResult]  # todas las fotos de la sección, en el orden de `marks.blades`
     direction: str = "unknown"  # measurement.sequence_direction (orden de captura)
     chord: dict | None = None   # stitcher.chord_for_section con marcas y longitud de pala
+    # Avisos de la sección (EXIF ilegible, sin altitud, punta más baja que la raíz): la tira y
+    # los radios pueden no ser fiables. También se envían por `progress`.
+    warnings: list[str] = field(default_factory=list)
 
 
 # --- utilidades de imagen -------------------------------------------------------------------
@@ -151,6 +155,15 @@ def build_section_calibration(tip_row: float | None, root_row: float | None, hei
             "root_at_top": root < tip}
 
 
+def _meta(exif: dict[Path, dict | None], path: Path) -> dict:
+    """Metadatos de una foto ({} si exiftool no la pudo leer: None en `read_exif_batch`)."""
+    return exif.get(path) or {}
+
+
+def _decimal(value: float) -> str:
+    return f"{value:.2f}".replace(".", ",")
+
+
 def _altitude(meta: dict) -> float | None:
     """Altitud de la foto: GPSAltitude o, si falta, RelativeAltitude (mismo orden que el original)."""
     alt = num(meta.get("GPSAltitude"))
@@ -207,7 +220,7 @@ def reconstruct(wtg: WtgFolder, marks: MarkingState, blade_length_m: float,
         progress(NO_MODEL_WARNING, 0.0)
 
     # 1. EXIF de todas las fotos (lo necesita la altitud de raíz de cada pala)
-    exif: dict[Path, dict] = {}
+    exif: dict[Path, dict | None] = {}
     for i, (blade, face) in enumerate(sections):
         if cancel.is_set():
             progress("Procesamiento cancelado.", EXIF_SHARE * i / len(sections))
@@ -217,7 +230,7 @@ def reconstruct(wtg: WtgFolder, marks: MarkingState, blade_length_m: float,
     root_alt: dict[str, float] = {}
     for blade in {b for b, _ in sections}:
         alts = [(face, a) for face in FACES for p in blades[blade].get(face, [])
-                if (a := _altitude(exif.get(p, {}))) is not None]
+                if (a := _altitude(_meta(exif, p))) is not None]
         root_alt[blade] = reference_root_altitude(alts)
 
     # 2. Secciones
@@ -249,10 +262,40 @@ def reconstruct(wtg: WtgFolder, marks: MarkingState, blade_length_m: float,
     return results
 
 
-def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, exif: dict[Path, dict],
+def _section_warnings(blade: str, face: str, paths: list[Path], section: SectionMarks,
+                      exif: dict[Path, dict | None]) -> list[str]:
+    """Avisos sobre los datos de la sección, antes de coser."""
+    code, n = f"{blade}/{face}", len(paths)
+    warnings = []
+    unread = sum(1 for p in paths if exif.get(p) is None)
+    if unread:
+        warnings.append(f"Atención: exiftool no pudo leer {unread} de {n} fotos de {code}; "
+                        "sin sus metadatos no tienen radio ni GSD.")
+    no_alt = sum(1 for p in paths if _altitude(_meta(exif, p)) is None)
+    if no_alt * 2 > n:
+        warnings.append(f"Atención: {no_alt} de {n} fotos de {code} no tienen altitud en el EXIF; "
+                        "la separación entre fotos de la tira y los radios no son fiables.")
+
+    def marked_alt(index: int | None) -> float | None:
+        return _altitude(_meta(exif, paths[index])) if index is not None and 0 <= index < n else None
+
+    tip_alt = marked_alt(section.tip_index) if section.tip is not None else None
+    root_alt = marked_alt(section.root_index) if section.root_complete else None
+    if tip_alt is not None and root_alt is not None and tip_alt < root_alt:
+        warnings.append(f"Atención: en {code} la foto de la punta ({_decimal(tip_alt)} m) está más baja "
+                        f"que la raíz ({_decimal(root_alt)} m): la pala parece apuntar hacia abajo, pero "
+                        "los radios y la tira suponen la punta arriba. Revisa las marcas o «Invertir».")
+    return warnings
+
+
+def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, exif: dict[Path, dict | None],
              root_alt: float, blade_length_m: float, segmenter, out_dir: Path, name: str,
              progress: Progress, cancel: threading.Event) -> SectionResult | None:
     order = stitch_order(face, len(paths))
+    warnings = _section_warnings(blade, face, paths, section, exif)
+    for warning in warnings:
+        log.warning(warning)
+        progress(warning, 0.0)
     loaded = _Loaded()
     for n, idx in enumerate(order):
         if cancel.is_set():
@@ -267,7 +310,7 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
         img = resize_for_processing(img)
         loaded.images.append(img)
         loaded.masks.append(segmenter.predict(img) if segmenter is not None else None)
-        loaded.metas.append(metadata_from_exif(exif.get(path, {})))
+        loaded.metas.append(metadata_from_exif(_meta(exif, path)))
         loaded.scales.append((img.shape[1] / w0, img.shape[0] / h0))
         loaded.source.append(idx)
 
@@ -289,7 +332,7 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
     kept_images = [loaded.images[k] for k in kept]
     kept_masks = [loaded.masks[k] for k in kept]
 
-    def locate(image_index: int | None) -> tuple[int, tuple[float, float]] | None:
+    def locate(image_index: int | None, what: str) -> tuple[int, tuple[float, float]] | None:
         """(posición en la tira, escala de la foto marcada) de una foto de la sección."""
         if image_index is None or image_index not in order:
             return None
@@ -298,10 +341,22 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
         stitch_pos = order.index(image_index)
         earlier = [k for k, src in enumerate(loaded.source) if order.index(src) <= stitch_pos]
         loaded_pos = earlier[-1] if earlier else 0
-        return _kept_position(loaded_pos, kept), loaded.scales[loaded_pos]
+        position = _kept_position(loaded_pos, kept)
+        used = loaded.source[kept[position]]
+        if used != image_index:
+            marked_alt = _altitude(_meta(exif, paths[image_index]))
+            used_alt = _altitude(_meta(exif, paths[used]))
+            if (marked_alt is not None and used_alt is not None
+                    and abs(marked_alt - used_alt) > BORROW_WARN_ALT_DIFF_M):
+                message = (f"La {what} de {blade}/{face} se marcó en {paths[image_index].name}, que no está "
+                           f"en la tira; se usa la posición de {paths[used].name} "
+                           f"(diferencia de altitud {_decimal(abs(marked_alt - used_alt))} m).")
+                log.warning(message)
+                progress(f"  {message}", 0.8)
+        return position, loaded.scales[loaded_pos]
 
-    tip = locate(section.tip_index) if section.tip is not None else None
-    root = locate(section.root_index) if section.root_complete else None
+    tip = locate(section.tip_index, "punta") if section.tip is not None else None
+    root = locate(section.root_index, "raíz") if section.root_complete else None
     tip_marker = None
     if tip is not None:
         sx, sy = tip[1]
@@ -335,18 +390,19 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
         chord["scale_to_strip"] = factor
     progress(f"  {face}: tira de {width}x{height} px", 1.0)
     return SectionResult(blade=blade, face=face, strip_path=out, width_px=width, height_px=height,
-                         calibration=calibration, photos=photos, direction=direction, chord=chord)
+                         calibration=calibration, photos=photos, direction=direction, chord=chord,
+                         warnings=warnings)
 
 
-def _photo_results(paths: list[Path], section: SectionMarks, exif: dict[Path, dict], root_alt: float,
+def _photo_results(paths: list[Path], section: SectionMarks, exif: dict[Path, dict | None], root_alt: float,
                    blade_length_m: float) -> list[PhotoResult]:
     """Radio y GSD de cada foto. La altitud de la punta es la de la foto donde se marcó."""
     tip_alt = None
     if section.tip is not None and section.tip_index is not None and 0 <= section.tip_index < len(paths):
-        tip_alt = _altitude(exif.get(paths[section.tip_index], {}))
+        tip_alt = _altitude(_meta(exif, paths[section.tip_index]))
     out = []
     for path in paths:
-        meta = exif.get(path, {})
+        meta = _meta(exif, path)
         alt = _altitude(meta)
         radius = radius_from_altitude(alt, root_alt, tip_alt, blade_length_m) if alt is not None else None
         width = num(meta.get("ImageWidth")) or num(meta.get("ExifImageWidth")) or 0
@@ -363,7 +419,7 @@ def _write_summary(path: Path, blade_length_m: float, results: list[SectionResul
         "sections": [{
             "blade": r.blade, "face": r.face, "strip": r.strip_path.name,
             "width_px": r.width_px, "height_px": r.height_px, "calibration": r.calibration,
-            "direction": r.direction, "chord": r.chord,
+            "direction": r.direction, "chord": r.chord, "warnings": r.warnings,
             "photos": [{"file": p.path.name, "radius_m": p.radius_m, "gsd_mm_px": p.gsd_mm_px}
                        for p in r.photos],
         } for r in results],

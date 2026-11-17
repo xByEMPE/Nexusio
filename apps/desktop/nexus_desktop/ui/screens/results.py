@@ -148,10 +148,14 @@ class StripGridScreen(Screen):
             canvas.delete("all")
             section = self.section(face)
             if section is None:
-                self.info_labels[face].configure(text=NO_STRIP)
+                self.info_labels[face].configure(text=NO_STRIP, foreground=TOKENS["text_muted"])
                 self._canvas_text(canvas, NO_STRIP, TOKENS["text_subtle"])
                 continue
-            self.info_labels[face].configure(text=self._info_text(section))
+            # Los avisos de la reconstrucción (sin altitud, EXIF ilegible, punta abajo) se ven aquí.
+            warnings = list(getattr(section, "warnings", []) or [])
+            text = self._info_text(section) + "".join(f"\n{w}" for w in warnings)
+            self.info_labels[face].configure(
+                text=text, foreground=TOKENS["caution"] if warnings else TOKENS["text_muted"])
             path = section.strip_path
             if path in self._display:
                 self._render(face)
