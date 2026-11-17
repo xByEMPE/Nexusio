@@ -1,6 +1,8 @@
 """Cliente Supabase falso para las pruebas (sin red)."""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 
@@ -43,8 +45,17 @@ class FakeQuery:
     def __init__(self, client, name):
         self.client, self.name = client, name
         self.filters, self.row, self.max, self.upd = [], None, None, None
+        self.columns: list[str] | None = None  # None: todas ("*")
 
-    def select(self, *_a, **_k):
+    def select(self, columns: str = "*", *_a, **_k):
+        """Como PostgREST: cada columna pedida debe existir (en las filas falsas de la tabla) y
+        solo se devuelven las pedidas. Así una columna mal escrita en producción falla la prueba."""
+        cols = [c.strip() for c in columns.split(",") if c.strip()]
+        if cols and cols != ["*"]:
+            for row in self.client.tables.get(self.name, []):
+                missing = [c for c in cols if c not in row]
+                assert not missing, f"select de {self.name}: columna(s) inexistente(s) {missing}"
+            self.columns = cols
         return self
 
     def eq(self, col, val):
@@ -86,6 +97,8 @@ class FakeQuery:
         rows = [r for r in self.client.tables.get(self.name, []) if all(f(r) for f in self.filters)]
         if self.max is not None:
             rows = rows[: self.max]
+        if self.columns is not None:
+            rows = [{c: r[c] for c in self.columns} for r in rows]
         return type("R", (), {"data": rows})()
 
 
@@ -153,6 +166,14 @@ def fake_client():
 
 # --- Interfaz (Tk) ---------------------------------------------------------------------------
 
+def tk_unavailable(exc: Exception):
+    """Sin Tk (sin pantalla): en local se omiten las pruebas de interfaz; en CI (variable CI o
+    NEXUS_REQUIRE_TK) es un fallo, para que nunca pasen «en verde» sin haberse ejecutado."""
+    if os.environ.get("CI") or os.environ.get("NEXUS_REQUIRE_TK"):
+        pytest.fail(f"Tk no se pudo iniciar y es obligatorio (CI/NEXUS_REQUIRE_TK): {exc}")
+    pytest.skip(f"sin pantalla: {exc}")
+
+
 @pytest.fixture(scope="session")
 def _ui_app():
     # Una sola App (que es la raíz Tk) para toda la sesión, compartida por los módulos de
@@ -166,7 +187,7 @@ def _ui_app():
     try:
         app = App(start=False)
     except tk.TclError as exc:
-        pytest.skip(f"sin pantalla: {exc}")
+        tk_unavailable(exc)
     app.withdraw()
     yield app
     app.destroy()
