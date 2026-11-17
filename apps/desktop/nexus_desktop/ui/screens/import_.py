@@ -277,7 +277,7 @@ class ImportScreen(Screen):
         if state.wtg is not self.wtg or state.marks is None:  # carpeta nueva: marcas nuevas
             state.wtg = self.wtg
             state.marks = MarkingState(self.wtg.blades)
-            state.strips = {}
+            state.strips, state.sections = {}, []
         state.blade_length_m = length
         self.app.show(MarkingScreen)
 

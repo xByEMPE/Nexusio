@@ -350,3 +350,34 @@ def test_choosing_another_turbine_forgets_folder_and_marks(app, tmp_path):
     assert app.state.wtg is None and app.state.marks is None and app.state.blade_length_m is None
     assert isinstance(app.current, ImportScreen)
     assert app.current.continue_button.instate(["disabled"])
+
+
+def test_click_on_photo_bigger_than_thumbnail_stores_original_pixels(app, tmp_path):
+    # Foto de 3000x2000 (> DISPLAY_MAX_SIDE = 1024): las marcas deben salir en píxeles de la
+    # foto ORIGINAL, no de la miniatura. Lo esperado se calcula aquí con la regla del original
+    # (`_load_image_to_canvas`: escala min((lienzo − 10) / foto), foto centrada).
+    from nexus_desktop.ui.thumbnails import DISPLAY_MAX_SIDE
+
+    folder = make_wtg(tmp_path / "WTG G", {"A": {"PS": 2}}, size=(3000, 2000), with_id=False)
+    wtg = scan_wtg(folder)
+    app.state.wtg, app.state.blade_length_m = wtg, 40.0
+    app.state.marks = MarkingState(wtg.blades)
+    screen = app.show(MarkingScreen)
+    app.tasks.pump()
+    canvas = screen.canvases[("PS", "tip")]
+    cw, ch = canvas.winfo_width(), canvas.winfo_height()
+    if cw < 10 or ch < 10:  # ventana oculta: el lienzo usa su tamaño por defecto
+        cw = ch = 200
+    ratio = min((cw - 10) / 3000, (ch - 10) / 2000)
+    drawn_w, drawn_h = int(3000 * ratio), int(2000 * ratio)
+    off_x, off_y = (cw - drawn_w) // 2, (ch - drawn_h) // 2
+    click_x, click_y = off_x + round(drawn_w * 0.8), off_y + round(drawn_h * 0.7)
+    expected_x, expected_y = (click_x - off_x) / ratio, (click_y - off_y) / ratio
+
+    screen.set_mode("tip")
+    screen.click("PS", "tip", click_x, click_y)
+    tip = app.state.marks.section("A", "PS").tip
+    assert expected_x > DISPLAY_MAX_SIDE  # fuera del rango de la miniatura
+    assert tip.x == pytest.approx(expected_x, abs=1e-6)
+    assert tip.y == pytest.approx(expected_y, abs=1e-6)
+    assert tip.x == pytest.approx(2400, abs=1 / ratio + 1) and tip.y == pytest.approx(1400, abs=1 / ratio + 1)

@@ -184,7 +184,7 @@ class StartScreen(Screen):
             return
         state = self.app.state
         if state.asset is None or state.asset.id != asset.id:  # otra turbina: carpeta y marcas nuevas
-            state.wtg, state.marks, state.blade_length_m, state.strips = None, None, None, {}
+            state.forget_folder()
         state.project, state.asset = project, asset
         self.app.show(ImportScreen)
 

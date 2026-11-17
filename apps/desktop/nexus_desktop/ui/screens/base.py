@@ -19,7 +19,18 @@ class Screen(ttk.Frame):
         """La pantalla ya es la actual (aquí se lanzan las cargas iniciales)."""
 
     def on_hide(self) -> None:
-        """La pantalla va a dejar de mostrarse (justo antes de destruirse)."""
+        """La pantalla va a dejar de mostrarse (justo antes de destruirse).
+
+        Reglas para las pantallas con imágenes o trabajo en segundo plano:
+        - Liberar aquí las imágenes Tk (`ImageTk.PhotoImage`): borrar los lienzos que las usan y
+          soltar las referencias. Si las liberara el recolector de ciclos, que puede correr en un
+          hilo de trabajo, su `__del__` llamaría a Tcl desde ese hilo y la app se bloquearía.
+        - No usar `StringVar`/`IntVar` (mismo problema al liberarse): actualizar los widgets
+          con `configure(text=...)`.
+        - Crear las `PhotoImage` solo en el hilo de Tk (en `on_done`); el hilo de trabajo solo
+          lee y reduce la imagen con Pillow.
+        - Cancelar aquí los `after()` pendientes y avisar a las tareas que deban parar.
+        """
 
     @property
     def is_current(self) -> bool:

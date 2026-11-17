@@ -30,7 +30,16 @@ class AppState:
     asset: Asset | None = None
     blade_length_m: float | None = None
     marks: MarkingState | None = None  # punta y raíz de las secciones de `wtg`
+    # Tiras para la subida (Task 14): {(pala, cara): ruta}; las fija la verificación.
     strips: dict = field(default_factory=dict)
+    # Resultado del procesamiento: domain.reconstruction.SectionResult por sección cosida
+    # (tira, calibración en píxeles de la tira guardada, radio y GSD de cada foto).
+    sections: list = field(default_factory=list)
+
+    def forget_folder(self) -> None:
+        """Olvida la carpeta WTG y todo lo calculado sobre ella (marcas, tiras, resultados)."""
+        self.wtg, self.marks, self.blade_length_m = None, None, None
+        self.strips, self.sections = {}, []
 
 
 def create_session() -> tuple[Session | None, str | None]:

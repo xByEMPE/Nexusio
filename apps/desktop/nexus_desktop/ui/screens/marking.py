@@ -371,8 +371,7 @@ class MarkingScreen(Screen):
         """Descarta la carpeta y las marcas y vuelve al inicio."""
         from nexus_desktop.ui.screens.start import StartScreen
 
-        state = self.app.state
-        state.wtg, state.marks, state.blade_length_m, state.strips = None, None, None, {}
+        self.app.state.forget_folder()
         self.app.show(StartScreen)
 
     def on_hide(self) -> None:
