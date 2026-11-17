@@ -395,3 +395,14 @@ def test_click_on_photo_bigger_than_thumbnail_stores_original_pixels(app, tmp_pa
     assert tip.x == pytest.approx(expected_x, abs=1e-6)
     assert tip.y == pytest.approx(expected_y, abs=1e-6)
     assert tip.x == pytest.approx(2400, abs=1 / ratio + 1) and tip.y == pytest.approx(1400, abs=1 / ratio + 1)
+
+
+def test_marking_memory_cache_is_lru(app, tmp_path):
+    """Las miniaturas en memoria se descartan por uso (LRU), no por orden de llegada (FIFO):
+    las fotos que se están mostrando no salen de la caché mientras se cargan otras."""
+    from nexus_desktop.ui import thumbnails
+    from nexus_desktop.ui.screens import marking as marking_module
+
+    screen = show_marking(app, tmp_path, {"A": {"LE": 2}})
+    assert isinstance(screen._display, thumbnails.LruCache)
+    assert screen._display.maxsize == marking_module.MEMORY_CACHE

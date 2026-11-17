@@ -63,7 +63,8 @@ class MarkingScreen(Screen):
         self.invert_buttons: dict[str, ttk.Button] = {}
         self.blade_buttons: dict[str, ttk.Button] = {}
         self._photos: dict[tuple[str, str], ImageTk.PhotoImage] = {}
-        self._display: dict[Path, thumbnails.DisplayImage] = {}
+        # LRU: lo que se está mostrando (se lee en cada dibujo) no sale al cargar otras fotos.
+        self._display: thumbnails.LruCache = thumbnails.LruCache(MEMORY_CACHE)
         self._resize_jobs: dict[tuple[str, str], str] = {}
         self._gen = 0
 
@@ -201,9 +202,7 @@ class MarkingScreen(Screen):
                            lambda _exc, p=path: self._load_failed(gen, p))
 
     def _loaded(self, gen: int, path: Path, shown: thumbnails.DisplayImage) -> None:
-        self._display[path] = shown
-        while len(self._display) > MEMORY_CACHE:
-            self._display.pop(next(iter(self._display)))
+        self._display[path] = shown  # LruCache descarta lo usado hace más tiempo
         if gen != self._gen:
             return
         for key, p in list(self.shown.items()):
