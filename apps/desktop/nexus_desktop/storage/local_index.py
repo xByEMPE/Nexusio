@@ -37,6 +37,20 @@ class LocalIndex:
             raise ValueError("mapa inválido")
         return dict(value)
 
+    @classmethod
+    def _id_map(cls, value: object) -> dict[str, str]:
+        """Mapa de ids: cada valor debe ser un UUID canónico en minúsculas. El índice viaja con la
+        carpeta WTG entre personas; un id con otra forma (una ruta, p. ej.) se trata como daño."""
+        out = cls._str_map(value)
+        for v in out.values():
+            try:
+                ok = str(uuid.UUID(v)) == v
+            except ValueError:
+                ok = False
+            if not ok:
+                raise ValueError("id no es un UUID canónico")
+        return out
+
     def _quarantine(self) -> None:
         try:
             backup = self._backup_path()
@@ -69,7 +83,7 @@ class LocalIndex:
             if not isinstance(raw, dict):
                 raise ValueError("índice no es un objeto")
             data = {
-                key: self._str_map(raw.get(key, {}))
+                key: self._id_map(raw.get(key, {}))
                 for key in ("inspections", "captures", "mosaics")
             }
             up = raw.get("uploaded", [])

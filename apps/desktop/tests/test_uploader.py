@@ -537,3 +537,27 @@ def test_strip_marked_uploaded_by_old_index_is_resent_once(tmp_path):
     assert [c["object"] for c in tus.calls[first:]] == [path]
     run(plan, client, tus, index=LocalIndex(root))
     assert len(tus.calls) == first + 1
+
+
+# --- revisión final: los temporales nunca salen de datos del índice ---------------------------
+
+def test_scratch_paths_never_derived_from_index_ids(tmp_path, monkeypatch):
+    """Un id del índice (aunque llegue en memoria sin validar) nunca se usa como ruta local: un id
+    con forma de carpeta no debe acabar borrada por la limpieza de temporales."""
+    victim = tmp_path / "victima"
+    victim.mkdir()
+    (victim / "importante.txt").write_text("no borrar", encoding="utf-8")
+    root, plan, client, tus = setup(tmp_path)
+    index = LocalIndex(root)
+    for i, rel in enumerate(PHOTOS):
+        index._data["captures"][sha256_file(root / rel)] = str(victim if i == 0 else victim / f"s{i}")
+    index._data["mosaics"]["25_A_LeadingEdge.jpg"] = str(victim / "x")
+
+    seen = []
+    real_deriv, real_strip = uploader.make_derivatives, uploader.mosaics.make_strip
+    monkeypatch.setattr(uploader, "make_derivatives", lambda src, out: seen.append(out) or real_deriv(src, out))
+    monkeypatch.setattr(uploader.mosaics, "make_strip", lambda src, out: seen.append(out) or real_strip(src, out))
+    run(plan, client, tus, index=index)
+    assert (victim / "importante.txt").read_text(encoding="utf-8") == "no borrar"
+    assert len(seen) == len(PHOTOS) + 1
+    assert all(str(victim) not in str(p) and p.parent.name.startswith("nexus_upload_") for p in seen)

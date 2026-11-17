@@ -3,6 +3,9 @@ import uuid
 
 from nexus_desktop.storage.local_index import INDEX_NAME, LocalIndex
 
+I1 = "5d1f5b0e-3a52-4c1e-9b7a-2f4f3c1a9e01"
+C1 = "8a6e0804-2bd0-4672-b79d-d97027f9071a"
+
 
 def test_capture_id_is_stable_across_reload(tmp_path):
     idx = LocalIndex(tmp_path)
@@ -20,12 +23,12 @@ def test_two_shas_get_different_ids(tmp_path):
 
 def test_loads_legacy_ingest_demo_index(tmp_path):
     (tmp_path / INDEX_NAME).write_text(
-        json.dumps({"inspections": {"A1": "i-1"}, "captures": {"sha": "c-1"}}),
+        json.dumps({"inspections": {"A1": I1}, "captures": {"sha": C1}}),
         encoding="utf-8",
     )
     idx = LocalIndex(tmp_path)
-    assert idx.inspection_id("A1") == "i-1"
-    assert idx.capture_id("sha") == "c-1"
+    assert idx.inspection_id("A1") == I1
+    assert idx.capture_id("sha") == C1
     assert idx.is_uploaded("x") is False
     assert idx.inspection_id("nope") is None
     idx.mosaic_id("m")  # sin "mosaics" en el archivo legado
@@ -37,12 +40,12 @@ def test_is_uploaded_survives_save_and_reload(tmp_path):
     idx = LocalIndex(tmp_path)
     idx.mark_uploaded("o/p.jpg")
     idx.mark_uploaded("o/p.jpg")
-    idx.set_inspection("A1", "i-9")
+    idx.set_inspection("A1", I1)
     idx.save()
     again = LocalIndex(tmp_path)
     assert again.is_uploaded("o/p.jpg")
     assert not again.is_uploaded("o/q.jpg")
-    assert again.inspection_id("A1") == "i-9"
+    assert again.inspection_id("A1") == I1
     data = json.loads((tmp_path / INDEX_NAME).read_text(encoding="utf-8"))
     assert data["uploaded"] == ["o/p.jpg"]
     assert [p.name for p in tmp_path.iterdir()] == [INDEX_NAME]
@@ -158,3 +161,33 @@ def test_wrong_typed_uploaded_sha_is_corrupt(tmp_path):
     (tmp_path / INDEX_NAME).write_text(json.dumps({"uploaded_sha256": ["x"]}), encoding="utf-8")
     idx = LocalIndex(tmp_path)
     assert (tmp_path / (INDEX_NAME + ".bak")).exists() and idx.load_warning
+
+
+# --- revisión final: ids que no son UUID -------------------------------------------------------
+
+import pytest  # noqa: E402
+
+GOOD = "0f8fad5b-d9cb-469f-a165-70867728950e"
+
+
+@pytest.mark.parametrize("data", [
+    {"captures": {"sha": "C:/Users/x/Documents"}},
+    {"captures": {"sha": r"..\..\Documents"}},
+    {"mosaics": {"25_A_LeadingEdge.jpg": "/home/x"}},
+    {"inspections": {"asset": "i-1"}},
+    {"captures": {"sha": GOOD.upper()}},  # no canónico
+    {"captures": {"sha": "{" + GOOD + "}"}},
+])
+def test_index_with_non_uuid_ids_is_quarantined(tmp_path, data):
+    (tmp_path / INDEX_NAME).write_text(json.dumps(data), encoding="utf-8")
+    idx = LocalIndex(tmp_path)
+    assert (tmp_path / (INDEX_NAME + ".bak")).exists() and idx.load_warning
+    assert str(uuid.UUID(idx.capture_id("sha"))) == idx.capture_id("sha")
+    assert idx.inspection_id("asset") is None
+
+
+def test_index_with_canonical_uuids_loads(tmp_path):
+    data = {"inspections": {"asset": GOOD}, "captures": {"sha": GOOD}, "mosaics": {"m.jpg": GOOD}}
+    (tmp_path / INDEX_NAME).write_text(json.dumps(data), encoding="utf-8")
+    idx = LocalIndex(tmp_path)
+    assert idx.load_warning is None and idx.capture_id("sha") == GOOD and idx.inspection_id("asset") == GOOD

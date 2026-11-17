@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -223,6 +224,11 @@ class _Run:
         else:
             self.say(msg)
 
+    def scratch(self, suffix: str = "") -> Path:
+        """Ruta temporal nueva dentro de `self.tmp`. Nunca sale de datos del índice local (un id
+        manipulado podría señalar otra carpeta, que luego se borraría al limpiar)."""
+        return self.tmp / f"{uuid.uuid4().hex}{suffix}"
+
     def check_cancel(self) -> None:
         if self.cancel.is_set():
             raise _Cancelled
@@ -288,7 +294,7 @@ class _Run:
         if ph is self.id_photo:
             self.id_read = True
             self.id_pos = turbine_position(meta)
-        work = self.tmp / cap_id
+        work = self.scratch()
         try:
             if pending:
                 self.index.save()  # ids nuevos en disco antes de subir
@@ -318,7 +324,7 @@ class _Run:
             self.skip_file(strip.path.name, f"Tira omitida (dañada o ilegible): {strip.path.name}")
             return None
         mid = self.index.mosaic_id(strip.path.name)
-        out = self.tmp / f"strip_{mid}.webp"
+        out = self.scratch(".webp")
         try:
             w, h = mosaics.make_strip(strip.path, out)  # fallos al escribir el temporal se propagan
             mosaic = mosaics.build_mosaic(mosaics.StripFile(strip.path, strip.blade, strip.face), mid, self.prefix,
