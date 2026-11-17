@@ -54,7 +54,9 @@ Otras variables (opcionales, sobre todo para desarrollo):
 | `NEXUS_SAMPLE_WTG` | Carpeta WTG de ejemplo para las pruebas lentas (por defecto la carpeta `WTG 25` junto al repositorio principal; ver `tests/`). |
 
 Datos locales del usuario en `%APPDATA%\NEXUS`: `config.json`, `pending.json` (subidas sin
-terminar) y `thumbs\` (caché de miniaturas). Junto a las fotos de la carpeta WTG la app deja
+terminar), `thumbs\` (caché de miniaturas) y `logs\nexus-desktop.log` (registro rotativo,
+5 copias de 2 MB, sin tokens, llaves ni contraseñas: es lo que se envía a soporte si algo
+falla). Junto a las fotos de la carpeta WTG la app deja
 `.ingest_index.json` (ids ya creados y archivos ya subidos), la carpeta
 `<WTG>_img_stitched\` con las tiras y `<WTG>_reconstruction.json`.
 

@@ -5,6 +5,7 @@ Tk no es seguro entre hilos: `fn` no debe tocar widgets; `on_done`/`on_error` s√
 """
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 import time
@@ -12,6 +13,8 @@ import tkinter as tk
 from typing import Any, Callable
 
 POLL_MS = 40
+
+log = logging.getLogger(__name__)
 
 
 class TaskRunner:
@@ -36,6 +39,8 @@ class TaskRunner:
             try:
                 result = fn()
             except Exception as exc:  # se entrega a on_error en el hilo de Tk
+                # Tambi√©n al registro: la pantalla muestra un mensaje corto; la traza, para soporte.
+                log.warning("Tarea en segundo plano fallida", exc_info=True)
                 self._queue.put((on_error, exc, True))
             else:
                 self._queue.put((on_done, result, False))

@@ -1,11 +1,13 @@
 """Ventana principal: cabecera con el logo y una pantalla (Screen) a la vez."""
 from __future__ import annotations
 
+import logging
 import tkinter as tk
 from dataclasses import dataclass, field
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Any, Callable
 
+from nexus_desktop import applog
 from nexus_desktop.domain.marking import MarkingState
 from nexus_desktop.domain.wtg_folder import WtgFolder
 from nexus_desktop.nexus.projects import Asset, Project
@@ -22,6 +24,11 @@ MISSING_KEY = ("Falta la llave pública de NEXUS. Debe estar en el archivo {path
                "abrir la app.")
 CLIENT_ERROR = ("No se pudo preparar la conexión con NEXUS. Revisa la configuración "
                 "({path}, o NEXUS_SUPABASE_URL y NEXUS_PUBLISHABLE_KEY) y vuelve a abrir la app.")
+UNEXPECTED_ERROR = ("Ocurrió un error inesperado. Lo ya subido y la carpeta WTG no se pierden; si algo "
+                    "no responde, cierra la app y vuelve a abrirla. Si se repite, envía a soporte el "
+                    "registro: {path}")
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -111,6 +118,16 @@ class App(tk.Tk):
     def run_async(self, fn: Callable[[], Any], on_done: Callable[[Any], None],
                   on_error: Callable[[Exception], None] | None = None) -> None:
         self.tasks.run_async(fn, on_done, on_error)
+
+    def report_callback_exception(self, exc_type, exc, tb) -> None:
+        """Error no atrapado en un callback de Tk (o en una tarea sin `on_error`): queda en el
+        registro con su traza y el técnico ve un aviso en español, nunca la traza."""
+        log.error("Error inesperado en la interfaz", exc_info=(exc_type, exc, tb))
+        path = applog.log_path() or applog.default_log_dir() / applog.LOG_FILE
+        try:
+            messagebox.showerror("NEXUS", UNEXPECTED_ERROR.format(path=path), parent=self)
+        except tk.TclError:  # la ventana ya se cerró
+            pass
 
     def session_lost(self) -> None:
         """La sesión caducó: vuelve al login. Se conserva lo elegido (el avance está en el índice)."""
