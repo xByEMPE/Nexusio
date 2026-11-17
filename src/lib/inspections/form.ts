@@ -37,6 +37,7 @@ export type TurbineListError = { line: number; message: string };
 
 /** Máximo de turbinas por alta (igual que MAX_FIELD_TURBINES del contrato). */
 const MAX_TURBINES = 300;
+const DECIMAL = /^-?\d+([.,]\d+)?$/;
 
 /**
  * Turbinas en texto, una por línea: «nombre | código | lat | lon» (código, lat y lon opcionales).
@@ -46,6 +47,7 @@ export function parseTurbineList(raw: string): { turbines: TurbineListLine[]; er
   const turbines: TurbineListLine[] = [];
   const errors: TurbineListError[] = [];
   const firstSeen = new Map<string, number>();
+  let overflowReported = false;
 
   raw.split(/\r?\n/).forEach((text, i) => {
     const line = i + 1;
@@ -64,8 +66,9 @@ export function parseTurbineList(raw: string): { turbines: TurbineListLine[]; er
     let lon: number | undefined;
     if (latRaw !== "" || lonRaw !== "") {
       if (latRaw === "" || lonRaw === "") return err("Indica latitud y longitud juntas, o ninguna.");
-      lat = Number(latRaw.replace(",", "."));
-      lon = Number(lonRaw.replace(",", "."));
+      // Solo decimales con punto o coma: Number() aceptaría «1e1» o «0x10».
+      lat = DECIMAL.test(latRaw) ? Number(latRaw.replace(",", ".")) : NaN;
+      lon = DECIMAL.test(lonRaw) ? Number(lonRaw.replace(",", ".")) : NaN;
       if (!Number.isFinite(lat) || lat < -90 || lat > 90) return err("La latitud debe ser un número entre -90 y 90.");
       if (!Number.isFinite(lon) || lon < -180 || lon > 180) return err("La longitud debe ser un número entre -180 y 180.");
     }
@@ -74,7 +77,8 @@ export function parseTurbineList(raw: string): { turbines: TurbineListLine[]; er
     if (prev !== undefined) return err(`«${name}» está repetida (ya aparece en la línea ${prev}).`);
     firstSeen.set(name, line);
     if (turbines.length >= MAX_TURBINES) {
-      if (!errors.some((e) => e.message.includes(String(MAX_TURBINES)))) err(`Máximo ${MAX_TURBINES} turbinas por proyecto.`);
+      if (!overflowReported) err(`Máximo ${MAX_TURBINES} turbinas por proyecto.`);
+      overflowReported = true;
       return;
     }
 

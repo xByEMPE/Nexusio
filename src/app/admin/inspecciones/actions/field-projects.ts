@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { FieldProjectSchema, type FieldProjectInput } from "@/contracts/inspections-admin";
+import { CONCURRENT_MESSAGE, decideOrganization, decideProject, isUniqueViolation, planTechnician, reusedTurbinesWarning } from "@/lib/inspections/field-project-rules";
 import { requireAdminAction } from "@/lib/inspections/admin-action";
 import type { FieldProjectResult, FieldStep, FieldStepKey } from "@/lib/inspections/field-project";
 import { readFieldProjectForm } from "@/lib/inspections/form";
@@ -44,7 +45,10 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
   const steps: FieldStep[] = [];
   const add = (key: FieldStepKey, label: string, status: FieldStep["status"], detail: string) =>
     steps.push({ key, label, status, detail });
+  const warnings: string[] = [];
   let projectId: string | undefined;
+  const dupOr = (error: { code?: string } | null | undefined, fallback: string) =>
+    isUniqueViolation(error) ? CONCURRENT_MESSAGE : fallback;
   const stop = (key: FieldStepKey, label: string, detail: string): FieldProjectResult => {
     add(key, label, "failed", detail);
     return {
@@ -63,15 +67,19 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
     .eq("email", email)
     .maybeSingle();
   if (profileErr) return stop("technician", "Técnico", "No se pudo consultar la cuenta del técnico.");
-  if (profile?.platform_role === "admin") {
-    return stop("technician", "Técnico", "Ese correo es de un administrador; elige a un técnico o integrante de servicio.");
-  }
+  let isClientMember = false;
   if (profile && !profile.platform_role) {
     const { data: member } = await sb.from("organization_members").select("user_id").eq("user_id", profile.id).limit(1);
-    if (member?.length) {
-      return stop("technician", "Técnico", "Ese correo es de una cuenta de cliente; usa otro correo para el técnico.");
-    }
+    isClientMember = Boolean(member?.length);
   }
+  // ¿Ya aceptó la invitación? (null = se desconoce; en ese caso no se reenvía nada)
+  let confirmed: boolean | null = null;
+  if (profile?.platform_role && profile.is_active) {
+    const { data: u } = await service.auth.admin.getUserById(profile.id);
+    if (u?.user) confirmed = Boolean(u.user.email_confirmed_at);
+  }
+  const plan = planTechnician(profile, isClientMember, confirmed);
+  if (plan.kind === "stop") return stop("technician", "Técnico", plan.message);
 
   // 1. Organización
   let orgId: string;
@@ -83,11 +91,13 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
   } else {
     const { data: found } = await sb.from("organizations").select("id, name").eq("slug", v.org.slug).maybeSingle();
     if (found) {
+      const d = decideOrganization(found.name, v.org.name);
+      if (d.action === "stop") return stop("organization", "Organización", d.message);
       orgId = found.id;
       add("organization", "Organización", "reused", `«${found.name}» ya existía con el identificador ${v.org.slug}.`);
     } else {
       const { data, error } = await sb.from("organizations").insert({ name: v.org.name, slug: v.org.slug }).select("id").single();
-      if (error || !data) return stop("organization", "Organización", "No se pudo crear la organización.");
+      if (error || !data) return stop("organization", "Organización", dupOr(error, "No se pudo crear la organización."));
       orgId = data.id;
       add("organization", "Organización", "created", `«${v.org.name}» (${v.org.slug}).`);
     }
@@ -119,14 +129,14 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
         .insert({ organization_id: orgId, kind: "wind_farm", name: v.site.name, lat: v.site.lat ?? null, lon: v.site.lon ?? null })
         .select("id")
         .single();
-      if (error || !data) return stop("site", "Sitio", "No se pudo crear el sitio.");
+      if (error || !data) return stop("site", "Sitio", dupOr(error, "No se pudo crear el sitio."));
       siteId = data.id;
       add("site", "Sitio", "created", `«${v.site.name}».`);
     }
   }
 
   // 3. Turbinas en lote (las que ya existen en el sitio se reutilizan)
-  const { data: existing, error: existingErr } = await sb.from("assets").select("id, name, kind").eq("site_id", siteId);
+  const { data: existing, error: existingErr } = await sb.from("assets").select("id, name, kind, code, lat, lon").eq("site_id", siteId);
   if (existingErr) return stop("turbines", "Turbinas", "No se pudieron leer las turbinas del sitio.");
   const byName = new Map((existing ?? []).map((a) => [a.name, a]));
   const wrongKind = v.turbines.filter((t) => byName.get(t.name) && byName.get(t.name)!.kind !== "wind_turbine");
@@ -151,7 +161,7 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
         })),
       )
       .select("id");
-    if (error || !data) return stop("turbines", "Turbinas", "No se pudieron crear las turbinas.");
+    if (error || !data) return stop("turbines", "Turbinas", dupOr(error, "No se pudieron crear las turbinas."));
     newIds.push(...data.map((r) => r.id));
   }
   // Medidas comunes: se completan solo las turbinas que aún no tienen especificaciones (no se pisan las existentes).
@@ -175,6 +185,8 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
       if (error) return stop("turbines", "Turbinas", "Las turbinas se guardaron, pero no sus especificaciones.");
     }
   }
+  const reusedWarning = reusedTurbinesWarning(v.turbines, byName);
+  if (reusedWarning) warnings.push(reusedWarning);
   add(
     "turbines",
     "Turbinas",
@@ -184,11 +196,14 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
 
   // 4. Proyecto: por código si lo hay (dentro de la organización); si no, por nombre
   const p = v.project;
-  let q = sb.from("projects").select("id, name").eq("organization_id", orgId);
+  let q = sb.from("projects").select("id, name, status").eq("organization_id", orgId);
   q = p.code ? q.eq("code", p.code) : q.eq("name", p.name);
   const { data: foundProjects, error: findErr } = await q.order("created_at").limit(1);
   if (findErr) return stop("project", "Proyecto", "No se pudo consultar el proyecto.");
   if (foundProjects?.[0]) {
+    const d = decideProject(foundProjects[0], p.status);
+    if (d.action === "stop") return stop("project", "Proyecto", d.message);
+    if (d.warning) warnings.push(d.warning);
     projectId = foundProjects[0].id;
     add("project", "Proyecto", "reused", `«${foundProjects[0].name}» ya existía; no se modificó.`);
   } else {
@@ -204,7 +219,7 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
       })
       .select("id")
       .single();
-    if (error || !data) return stop("project", "Proyecto", "No se pudo crear el proyecto.");
+    if (error || !data) return stop("project", "Proyecto", dupOr(error, "No se pudo crear el proyecto."));
     projectId = data.id;
     add("project", "Proyecto", "created", `«${p.name}».`);
   }
@@ -228,36 +243,38 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
   // 6. Técnico: cuenta existente (se activa o promueve si no tiene rol) o invitación por correo
   let technicianId: string;
   let invited = false;
-  let technicianNote: string;
+  const inviteNote =
+    "Debe abrir el correo de invitación, definir su contraseña e iniciar sesión en la app: su proyecto y sus turbinas aparecerán en la lista.";
+  let technicianNote = "Debe iniciar sesión en la app con su cuenta; su proyecto y sus turbinas aparecerán en la lista.";
+  const fullName = v.technician.full_name ?? email.split("@")[0]!;
   if (profile) {
     technicianId = profile.id;
-    if (!profile.platform_role || !profile.is_active) {
-      const patch = { ...(profile.platform_role ? {} : { platform_role: "technician" as const }), is_active: true };
+    if (plan.kind === "promote" || plan.kind === "activate") {
+      const patch = { ...(plan.kind === "promote" ? { platform_role: "technician" as const } : {}), is_active: true };
       const { data, error } = await sb.from("profiles").update(patch).eq("id", profile.id).select("id");
       if (error || !data?.length) return stop("technician", "Técnico", "No se pudo activar la cuenta del técnico.");
-      add(
-        "technician",
-        "Técnico",
-        "reused",
-        `La cuenta ${email} ya existía y se ${profile.platform_role ? "activó" : "habilitó como técnico"}.`,
-      );
+      add("technician", "Técnico", "reused", `La cuenta ${email} ya existía y se ${plan.kind === "activate" ? "activó" : "habilitó como técnico"}.`);
+    } else if (plan.kind === "resend") {
+      // Invitación pendiente: se reenvía a la misma cuenta (no se crea otro usuario).
+      const { error } = await service.auth.admin.inviteUserByEmail(email, { data: { full_name: fullName } });
+      if (error) {
+        warnings.push(`${email} aún no aceptó la invitación y no se pudo reenviar; pídele que revise su correo o reintenta más tarde.`);
+        add("technician", "Técnico", "reused", `La cuenta ${email} existe, pero aún no aceptó la invitación.`);
+      } else {
+        invited = true;
+        add("technician", "Técnico", "reused", `La cuenta ${email} aún no aceptó la invitación; se reenvió.`);
+        technicianNote = inviteNote;
+      }
     } else {
       add("technician", "Técnico", "reused", `La cuenta ${email} ya existía (${profile.platform_role === "service" ? "servicio" : "técnico"}).`);
     }
-    technicianNote = "Debe iniciar sesión en la app con su cuenta; su proyecto y sus turbinas aparecerán en la lista.";
   } else {
-    const res = await inviteWithAccess(service, sb, {
-      email,
-      full_name: v.technician.full_name ?? email.split("@")[0]!,
-      kind: "staff",
-      platform_role: "technician",
-    });
+    const res = await inviteWithAccess(service, sb, { email, full_name: fullName, kind: "staff", platform_role: "technician" });
     if (!res.ok) return stop("technician", "Técnico", res.message);
     technicianId = res.userId;
     invited = true;
     add("technician", "Técnico", "created", `Invitación enviada a ${email}.`);
-    technicianNote =
-      "Debe abrir el correo de invitación, definir su contraseña e iniciar sesión en la app: su proyecto y sus turbinas aparecerán en la lista.";
+    technicianNote = inviteNote;
   }
 
   // 7. Asignación
@@ -280,5 +297,5 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
   revalidatePath("/admin/inspecciones/sitios");
   revalidatePath("/admin/inspecciones/organizaciones");
   revalidatePath("/admin/inspecciones/usuarios");
-  return { ok: true, projectId, steps, invited, technicianEmail: email, technicianNote };
+  return { ok: true, projectId, steps, warnings, invited, technicianEmail: email, technicianNote };
 }

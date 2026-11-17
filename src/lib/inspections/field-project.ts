@@ -10,6 +10,8 @@ export type FieldProjectResult =
       ok: true;
       projectId: string;
       steps: FieldStep[];
+      /** Avisos que no detienen el alta (proyecto en otro estado, turbinas reutilizadas, invitación pendiente). */
+      warnings: string[];
       /** true si se envió (ahora) una invitación por correo al técnico. */
       invited: boolean;
       technicianEmail: string;

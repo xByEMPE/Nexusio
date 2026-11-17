@@ -99,9 +99,18 @@ export type InspectionInput = z.infer<typeof InspectionInputSchema>;
 
 export const MAX_FIELD_TURBINES = 300;
 
+/** Medidas comunes del alta de campo, con mensajes en español. */
+const FieldSpecsSchema = z.object({
+  manufacturer: z.string().trim().min(1).max(80, "El fabricante no puede pasar de 80 caracteres").optional(),
+  model: z.string().trim().min(1).max(80, "El modelo no puede pasar de 80 caracteres").optional(),
+  blade_length_m: z.number("La longitud de pala debe ser un número").min(1, "La pala mide entre 1 y 150 m").max(150, "La pala mide entre 1 y 150 m").optional(),
+  rotor_diameter_m: z.number("El diámetro de rotor debe ser un número").min(1, "El rotor mide entre 1 y 300 m").max(300, "El rotor mide entre 1 y 300 m").optional(),
+  hub_height_m: z.number("La altura de buje debe ser un número").min(1, "El buje mide entre 1 y 250 m").max(250, "El buje mide entre 1 y 250 m").optional(),
+});
+
 export const TurbineLineSchema = z.object({
-  name: z.string().trim().min(1).max(60),
-  code: z.string().trim().min(1).max(60).optional(),
+  name: z.string().trim().min(1, "Falta el nombre de la turbina").max(60, "El nombre de la turbina no puede pasar de 60 caracteres"),
+  code: z.string().trim().min(1).max(60, "El código de la turbina no puede pasar de 60 caracteres").optional(),
   lat: lat.optional(),
   lon: lon.optional(),
 });
@@ -128,25 +137,25 @@ export const FieldProjectSchema = z
         mode: z.literal("new"),
         kind: z.literal("wind_farm", "El sitio debe ser un parque eólico"),
         name: z.string().trim().min(2, "El nombre del sitio debe tener entre 2 y 120 caracteres").max(120),
-        lat: lat.optional(),
-        lon: lon.optional(),
+        lat: z.number("La latitud debe ser un número").min(-90, "La latitud va de -90 a 90").max(90, "La latitud va de -90 a 90").optional(),
+        lon: z.number("La longitud debe ser un número").min(-180, "La longitud va de -180 a 180").max(180, "La longitud va de -180 a 180").optional(),
       }),
     ]),
     turbines: z
       .array(TurbineLineSchema)
       .min(1, "Agrega al menos una turbina")
       .max(MAX_FIELD_TURBINES, `Máximo ${MAX_FIELD_TURBINES} turbinas por proyecto`),
-    specs: TurbineSpecsSchema.optional(),
+    specs: FieldSpecsSchema.optional(),
     project: z.object({
       name: z.string().trim().min(2, "El nombre del proyecto debe tener entre 2 y 160 caracteres").max(160),
-      code: z.string().trim().min(1).max(60).optional(),
-      status: z.enum(PROJECT_STATUSES).default("in_field"),
+      code: z.string().trim().min(1).max(60, "El código del proyecto no puede pasar de 60 caracteres").optional(),
+      status: z.enum(PROJECT_STATUSES, "Elige un estado válido").default("in_field"),
       start_date: isoDate.optional(),
       end_date: isoDate.optional(),
     }),
     technician: z.object({
       email: z.email("El correo del técnico no es válido"),
-      full_name: z.string().trim().min(2).max(120).optional(),
+      full_name: z.string().trim().min(2, "El nombre del técnico debe tener entre 2 y 120 caracteres").max(120, "El nombre del técnico debe tener entre 2 y 120 caracteres").optional(),
     }),
   })
   .superRefine((v, ctx) => {

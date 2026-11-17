@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { FieldProjectSchema } from "@/contracts/inspections-admin";
 import { formatContacts, optNum, optStr, parseContacts, parseTurbineList, readFieldProjectForm } from "./form";
 
 describe("form helpers", () => {
@@ -66,6 +67,19 @@ describe("parseTurbineList", () => {
     expect(r.errors).toHaveLength(1);
     expect(r.errors[0]!.line).toBe(1);
   });
+  test("coma decimal en coordenadas", () => {
+    expect(parseTurbineList("A | | 41,5 | -2,25").turbines).toEqual([{ name: "A", lat: 41.5, lon: -2.25 }]);
+  });
+  test.each([["1e1"], ["0x10"], ["1.2.3"], ["+5"]])("coordenada %s no es decimal válido", (bad) => {
+    expect(parseTurbineList(`A | | ${bad} | 10`).errors).toHaveLength(1);
+  });
+  test("código de turbina de más de 60 caracteres", () => {
+    expect(parseTurbineList(`A | ${"c".repeat(61)}`).errors).toEqual([{ line: 1, message: expect.stringContaining("60") }]);
+  });
+  test("el aviso de máximo se da una sola vez", () => {
+    const raw = Array.from({ length: 305 }, (_, i) => `T${i}`).join("\n");
+    expect(parseTurbineList(raw).errors.filter((e) => e.message.includes("300"))).toHaveLength(1);
+  });
   test("más de 300 turbinas", () => {
     const raw = Array.from({ length: 301 }, (_, i) => `T${i}`).join("\n");
     const r = parseTurbineList(raw);
@@ -116,5 +130,18 @@ describe("readFieldProjectForm", () => {
     const fd = base();
     fd.set("turbines", "A\nA");
     expect(readFieldProjectForm(fd).lineErrors).toHaveLength(1);
+  });
+  test("correo inválido y sin organización ni sitio existentes quedan para que Zod los rechace", () => {
+    const fd = new FormData();
+    fd.set("turbines", "A");
+    fd.set("project_name", "P");
+    fd.set("technician_email", "no-es-correo");
+    const { input } = readFieldProjectForm(fd);
+    expect(input).toMatchObject({
+      org: { mode: "existing", id: undefined },
+      site: { mode: "existing", id: undefined },
+      technician: { email: "no-es-correo" },
+    });
+    expect(FieldProjectSchema.safeParse(input).success).toBe(false);
   });
 });

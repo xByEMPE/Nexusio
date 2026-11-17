@@ -151,6 +151,7 @@ export function FieldProjectForm({
         <Section title="2 · Turbinas" hint="Una por línea: nombre | código | latitud | longitud. Código y coordenadas son opcionales; las líneas vacías y las que empiezan con # se ignoran.">
           <TextArea
             name="turbines"
+            aria-label="Lista de turbinas"
             rows={8}
             required
             value={turbines}
@@ -192,7 +193,7 @@ export function FieldProjectForm({
               <TextInput name="hub_height_m" inputMode="decimal" />
             </Labeled>
           </div>
-          <p className="-mt-2 text-xs text-foreground-subtle">Medidas comunes opcionales: se aplican a las turbinas nuevas que aún no tengan especificaciones.</p>
+          <p className="-mt-2 text-xs text-foreground-subtle">Medidas comunes opcionales: se aplican a las turbinas nuevas y a las ya existentes que no tengan especificaciones. Las turbinas que ya existen en el parque se reutilizan por nombre y no se modifican su código ni sus coordenadas.</p>
         </Section>
 
         <Section title="3 · Proyecto">
@@ -264,6 +265,13 @@ function ResultPanel({ result }: { result: FieldProjectResult }) {
               </span>
               <span className={`label-caps ${STATUS_STYLE[s.status]}`}>{FIELD_STEP_STATUS_LABEL[s.status]}</span>
             </li>
+          ))}
+        </ul>
+      )}
+      {result.ok && result.warnings.length > 0 && (
+        <ul className="list-disc pl-5 text-sm text-signal-caution">
+          {result.warnings.map((w) => (
+            <li key={w}>{w}</li>
           ))}
         </ul>
       )}
