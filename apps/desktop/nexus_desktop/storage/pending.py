@@ -2,7 +2,7 @@
 
 Lista pequeña por usuario para el panel «Inspecciones locales pendientes» del inicio. La escribe
 la pantalla de subida al empezar (`in_progress`) y al terminar (completa: se quita; si no,
-`cancelled`, `errors` o `interrupted`). Solo guarda la ruta de la carpeta WTG, los nombres del
+`cancelled`, `errors`, `interrupted` o `partial` si se omitieron fotos dañadas). Solo guarda la ruta de la carpeta WTG, los nombres del
 proyecto y la turbina, el estado y la fecha: nunca tokens ni datos de la sesión. El avance real
 de la subida está en el índice de la carpeta (storage/local_index.py).
 """
@@ -22,6 +22,7 @@ STATUS_TEXT = {
     "interrupted": "Subida interrumpida",
     "cancelled": "Subida cancelada",
     "errors": "Subida con errores",
+    "partial": "Algunas fotos no se subieron",
 }
 _FIELDS = ("folder", "project", "asset", "status", "updated_at")
 _lock = threading.Lock()  # la escriben el hilo de Tk y el de la subida

@@ -55,8 +55,8 @@ ERROR_TEXT: dict[str, str] = {
                        "Qué hacer: revisa que la carpeta tenga fotos legibles y vuelve a subir."),
     "bad_path": ("La ruta de un archivo no corresponde a esta inspección. "
                  "Qué hacer: vuelve a subir; si se repite, avisa a soporte con esta lista."),
-    "missing_object": ("Un archivo no está en el almacenamiento de NEXUS. "
-                       "Qué hacer: reintenta la subida; si el error se repite, avisa a soporte con esta lista."),
+    "missing_object": ("Un archivo no estaba en el almacenamiento de NEXUS (por ejemplo, se borró allí). "
+                       "Qué hacer: pulsa «Reintentar»: la app lo vuelve a enviar y registra la pala de nuevo."),
     "unknown_finding_type": ("Un daño usa un tipo que no existe en el catálogo. "
                              "Qué hacer: avisa a tu administrador para que revise el catálogo de tipos de daño."),
     "unknown_capture": ("Un daño apunta a una foto que no está en la inspección. "
@@ -198,13 +198,17 @@ class UploadScreen(Screen):
         footer.pack(side="bottom", fill="x", pady=(12, 0))
         self.cancel_button = ttk.Button(footer, text="Cancelar", style="Danger.TButton", command=self.cancel)
         self.cancel_button.pack(side="left")
+        # Con el reporte a la vista el registro se oculta (así cabe en la ventana mínima); este botón
+        # alterna entre los dos.
+        self.log_button = ttk.Button(footer, text="Ver registro", command=self._toggle_log)
         self.upload_button = ttk.Button(footer, text="Subir a NEXUS", style="Accent.TButton", command=self.start)
         self.upload_button.pack(side="right")
         self.home_button = ttk.Button(footer, text="Volver al inicio", command=self._home)
         self.back_button = ttk.Button(footer, text="Volver a verificación", command=self._back)
         self.back_button.pack(side="right", padx=(0, 8))
 
-        # Reporte final (se muestra al terminar): conteos, archivos omitidos y errores.
+        # Reporte final (se muestra al terminar, en lugar del registro): errores (si hay, primero: es
+        # lo que nunca debe quedar recortado), conteos y archivos omitidos.
         self.report_frame = ttk.Frame(self)
         self.report_tree = ttk.Treeview(self.report_frame, columns=("table", "inserted", "updated", "skipped"),
                                         show="headings", height=5, selectmode="none")
@@ -221,10 +225,10 @@ class UploadScreen(Screen):
         # El detalle (con «Qué hacer») va antes que la tabla: si falta alto, se recorta la tabla.
         self.error_detail_label = ttk.Label(self.errors_frame, text="", wraplength=900, justify="left")
         self.error_detail_label.pack(anchor="w", pady=(6, 0))
-        self.errors_tree = ttk.Treeview(self.errors_frame, columns=("blade", "path", "code", "text"),
+        self.errors_tree = ttk.Treeview(self.errors_frame, columns=("blade", "file", "path", "code", "text"),
                                         show="headings", height=3, selectmode="browse")
-        for key, title, width in (("blade", "Pala", 50), ("path", "Ruta", 220), ("code", "Código", 150),
-                                  ("text", "Qué pasó", 420)):
+        for key, title, width in (("blade", "Pala", 45), ("file", "Archivo", 170), ("path", "Ruta", 170),
+                                  ("code", "Código", 130), ("text", "Qué pasó", 330)):
             self.errors_tree.heading(key, text=title)
             self.errors_tree.column(key, width=width, minwidth=40, anchor="w", stretch=key == "text")
         errors_scroll = ttk.Scrollbar(self.errors_frame, orient="vertical", command=self.errors_tree.yview)
@@ -242,6 +246,10 @@ class UploadScreen(Screen):
         self.log_text.configure(yscrollcommand=scroll.set, state="disabled")
         scroll.pack(side="right", fill="y")
         self.log_text.pack(side="left", fill="both", expand=True)
+        # El texto se ajusta al ancho real (la ventana puede ser de 760 px).
+        self._wrapped = (self.summary_label, self.warning_label, self.status_label, self.skipped_label,
+                         self.error_detail_label)
+        self.bind("<Configure>", self._rewrap, add="+")
 
         self._set_buttons(running=False)
         self._fill_summary()
@@ -298,7 +306,8 @@ class UploadScreen(Screen):
         self.running = True
         self.completed = False
         self.report = None
-        self.report_frame.pack_forget()
+        self._show_log_panel(True)
+        self.log_button.pack_forget()
         self.progress_bar.configure(value=0)
         self._set_status("Subiendo…", TOKENS["text"])
         self._log("Inicio de la subida.")
@@ -317,6 +326,8 @@ class UploadScreen(Screen):
                 self._mark_pending(folder, names, "errors")
             elif report.cancelled:
                 self._mark_pending(folder, names, "cancelled")
+            elif report.skipped.get("local_files"):  # algunas fotos no se subieron: no se olvida
+                self._mark_pending(folder, names, "partial")
             else:
                 self._mark_pending(folder, names, None)
             return report
@@ -377,8 +388,11 @@ class UploadScreen(Screen):
         self._log(message)
         self._set_status(message, TOKENS["critical"])
         self._set_buttons(running=False)
-        self._show_upload_button("Reintentar")
         self.home_button.pack(side="right", padx=(0, 8), before=self.back_button)
+        if isinstance(exc, InspectionLocked):  # reintentar fallaría igual: solo volver
+            self.upload_button.pack_forget()
+        else:
+            self._show_upload_button("Reintentar")
 
     def cancel(self) -> None:
         if not self.running:
@@ -395,9 +409,11 @@ class UploadScreen(Screen):
         self.skipped_label.configure(text=(
             "Archivos omitidos por estar dañados o ilegibles: " + ", ".join(local_files)) if local_files else "")
         self._fill_errors(report.errors)
-        self.report_frame.pack(fill="x", pady=(12, 0), before=self.log_frame)
+        self._show_log_panel(False)
+        self.log_button.pack(side="left", padx=(8, 0))
         self._set_buttons(running=False)
         self.home_button.pack(side="right", padx=(0, 8), before=self.back_button)
+        warnings = [str(w) for w in getattr(report, "warnings", None) or []]
 
         if report.errors:
             n = len(report.errors)
@@ -406,15 +422,25 @@ class UploadScreen(Screen):
             if report.cancelled:
                 text += " Además, se canceló antes de terminar."
             self._set_status(text, TOKENS["critical"])
-            self._show_upload_button("Reintentar")
+            if all(e.get("code") == "inspection_locked" for e in report.errors):
+                self.upload_button.pack_forget()  # aprobada: reintentar fallaría igual
+            else:
+                self._show_upload_button("Reintentar")
         elif report.cancelled:
             self._set_status(f"{CANCELLED}: lo ya subido queda guardado y no se repite.", TOKENS["caution"])
             self._show_upload_button("Reanudar la subida")
-        elif local_files:
-            self._set_status(f"Subida terminada, pero se omitieron "
-                             f"{_count_label(len(local_files), 'archivo dañado', 'archivos dañados')}: "
-                             "revísalos.", TOKENS["caution"])
-            self.upload_button.state(["disabled"])
+        elif local_files or warnings:
+            notes = []
+            if local_files:
+                notes.append(f"se omitieron {_count_label(len(local_files), 'archivo dañado', 'archivos dañados')}"
+                             " (revísalos)")
+            notes += warnings
+            self._set_status("Subida terminada con avisos: " + "; ".join(notes), TOKENS["caution"])
+            if local_files:
+                self.upload_button.state(["disabled"])
+            else:  # solo avisos (p. ej. la posición no se guardó): reintentar puede arreglarlo
+                self.completed = True
+                self._show_upload_button("Reintentar")
         else:
             self.completed = True
             inserted = sum(v for v in report.inserted.values() if isinstance(v, (int, float)))
@@ -453,11 +479,11 @@ class UploadScreen(Screen):
             return
         for err in errors:
             code = str(err.get("code") or "unknown")
-            item = tree.insert("", "end", values=(err.get("blade") or "—", err.get("path") or "—", code,
-                                                  error_explanation(code)))
+            item = tree.insert("", "end", values=(err.get("blade") or "—", err.get("file") or "—",
+                                                  err.get("path") or "—", code, error_explanation(code)))
             self._error_rows[item] = code
         tree.configure(height=min(len(errors), 3))
-        self.errors_frame.pack(fill="x")
+        self.errors_frame.pack(fill="x", before=self.report_tree)
         first = tree.get_children()[0]
         tree.selection_set(first)
         self._error_selected(first)
@@ -470,6 +496,25 @@ class UploadScreen(Screen):
         self.error_detail_label.configure(text=f"{code}: {error_text(code)}" if code else "")
 
     # --- presentación ---
+
+    def _show_log_panel(self, show_log: bool) -> None:
+        """En el área de abajo va el registro (mientras sube) o el reporte (al terminar)."""
+        if show_log:
+            self.report_frame.pack_forget()
+            self.log_frame.pack(fill="both", expand=True, pady=(12, 0))
+        else:
+            self.log_frame.pack_forget()
+            self.report_frame.pack(fill="both", expand=True, pady=(12, 0))
+        self.log_button.configure(text="Ver reporte" if show_log else "Ver registro")
+
+    def _toggle_log(self) -> None:
+        if self.report is not None:
+            self._show_log_panel(not self.log_frame.winfo_manager())
+
+    def _rewrap(self, event) -> None:
+        if event.widget is self and event.width > 100:
+            for label in self._wrapped:
+                label.configure(wraplength=event.width - 60)
 
     def _show_upload_button(self, text: str) -> None:
         self.upload_button.configure(text=text)

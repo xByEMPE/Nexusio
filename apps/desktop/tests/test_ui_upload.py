@@ -123,6 +123,10 @@ def tree_rows(tree) -> list[tuple]:
     return [tuple(str(v) for v in tree.item(i, "values")) for i in tree.get_children()]
 
 
+def error_rows(tree) -> list[dict]:
+    return [dict(tree.set(i)) for i in tree.get_children()]
+
+
 def texts(app) -> str:
     return " | ".join(all_texts(app))
 
@@ -259,19 +263,30 @@ def test_damaged_local_files_listed_and_not_called_complete(app, monkeypatch):
     assert "DJI_0002.JPG" in skipped and "WTGP_A_PS.jpg" in skipped
     assert not screen.status_label.cget("text").startswith("Subida completa")
     assert str(screen.status_label.cget("foreground")) == TOKENS["caution"]
+    # no se olvida: queda en la lista local como «Algunas fotos no se subieron», y se puede quitar
+    assert [p.status for p in pending.load()] == ["partial"]
+    screen.home_button.invoke()
+    app.tasks.pump()
+    start = app.current
+    assert tree_rows(start.pending_tree)[0][2] == "Algunas fotos no se subieron"
+    start.pending_tree.selection_set(start.pending_tree.get_children()[0])
+    app.update()
+    start.remove_pending_button.invoke()
+    assert pending.load() == []
 
 
 def test_upload_screen_shows_manifest_errors_in_spanish(app, monkeypatch):
-    errors = [{"path": "/captures/0/paths/original", "code": "bad_path", "blade": "A"},
-              {"path": "/mosaics/1/path", "code": "missing_object", "blade": "A"},
+    errors = [{"path": "/captures/0/paths/original", "code": "bad_path", "blade": "A", "file": "DJI_0000.JPG"},
+              {"path": "/mosaics/1/path", "code": "missing_object", "blade": "A", "file": "WTGP_A_PS.jpg"},
               {"path": "/inspection/id", "code": "inspection_locked", "blade": "B"}]
     screen = run_upload(app, monkeypatch, FakeUpload(ok_report(errors=errors)))
-    rows = tree_rows(screen.errors_tree)
-    assert [(r[0], r[1], r[2]) for r in rows] == [("A", "/captures/0/paths/original", "bad_path"),
-                                                   ("A", "/mosaics/1/path", "missing_object"),
-                                                   ("B", "/inspection/id", "inspection_locked")]
+    rows = error_rows(screen.errors_tree)
+    assert [(r["blade"], r["file"], r["path"], r["code"]) for r in rows] == [
+        ("A", "DJI_0000.JPG", "/captures/0/paths/original", "bad_path"),
+        ("A", "WTGP_A_PS.jpg", "/mosaics/1/path", "missing_object"),
+        ("B", "—", "/inspection/id", "inspection_locked")]
     for row, err in zip(rows, errors):
-        assert row[3] == ERROR_TEXT[err["code"]].split("Qué hacer:")[0].strip()
+        assert row["text"] == ERROR_TEXT[err["code"]].split("Qué hacer:")[0].strip()
     detail = screen.error_detail_label.cget("text")
     assert "Qué hacer:" in detail
     assert screen.status_label.cget("text").startswith("La subida no se completó")
@@ -286,7 +301,7 @@ def test_any_error_is_never_presented_as_success(app, monkeypatch, code):
     screen = run_upload(app, monkeypatch, FakeUpload(ok_report(errors=[{"path": "", "code": code}])))
     assert screen.status_label.cget("text").startswith("La subida no se completó")
     assert "Subida completa" not in texts(app)
-    assert tree_rows(screen.errors_tree)[0][2] == code
+    assert error_rows(screen.errors_tree)[0]["code"] == code
     screen.home_button.invoke()  # con errores, volver al inicio NO borra el trabajo
     app.tasks.pump()
     assert isinstance(app.current, StartScreen)
@@ -448,3 +463,65 @@ def test_upload_screen_spanish_without_vnd(app, monkeypatch):
     joined = texts(app)
     for banned in ("VND", "VIND", "Hermes", "Upload", "Cancel ", "Retry", "Error:"):
         assert banned not in joined
+
+
+def test_missing_object_text_says_retry_helps():
+    assert "vuelve a enviar" in ERROR_TEXT["missing_object"].split("Qué hacer:")[1]
+
+
+def test_position_warning_is_not_plain_success(app, monkeypatch):
+    report = ok_report(warnings=["No se pudo guardar la posición de la turbina; reintenta la subida."])
+    screen = run_upload(app, monkeypatch, FakeUpload(report))
+    status = screen.status_label.cget("text")
+    assert not status.startswith("Subida completa") and "posición de la turbina" in status
+    assert str(screen.status_label.cget("foreground")) == TOKENS["caution"]
+
+
+@pytest.mark.parametrize("how", ["exception", "report"])
+def test_inspection_locked_offers_only_home(app, monkeypatch, how):
+    if how == "exception":
+        fake = FakeUpload(error=InspectionLocked("La inspección de esta turbina ya está aprobada; no se pueden "
+                                                 "subir más fotos."))
+    else:
+        fake = FakeUpload(ok_report(errors=[{"path": "/inspection/id", "code": "inspection_locked", "blade": "A"},
+                                            {"path": "/inspection/id", "code": "inspection_locked", "blade": "B"}]))
+    screen = run_upload(app, monkeypatch, fake)
+    assert screen.upload_button.winfo_manager() == ""  # sin «Reintentar»
+    assert screen.home_button.winfo_manager() != "" and screen.home_button.instate(["!disabled"])
+    assert "Reintentar" not in texts(app)
+
+
+def test_report_replaces_log_and_toggles(app, monkeypatch):
+    screen = run_upload(app, monkeypatch, FakeUpload(ok_report(errors=[{"path": "/x", "code": "bad_path"}])))
+    assert screen.report_frame.winfo_manager() != "" and screen.log_frame.winfo_manager() == ""
+    assert screen.log_button.cget("text") == "Ver registro"
+    screen.log_button.invoke()
+    assert screen.log_frame.winfo_manager() != "" and screen.report_frame.winfo_manager() == ""
+    assert screen.log_button.cget("text") == "Ver reporte"
+    screen.log_button.invoke()
+    assert screen.report_frame.winfo_manager() != ""
+
+
+def test_errors_table_visible_at_minimum_window_size(app, monkeypatch):
+    (app.state.wtg.path / ".ingest_index.json").write_text("{dañado", encoding="utf-8")  # aviso extra
+    errors = [{"path": f"/captures/{i}/paths/original", "code": "missing_object", "blade": "A",
+               "file": f"DJI_{i:04d}.JPG"} for i in range(5)]
+    report = ok_report(errors=errors, skipped={"local_files": ["DJI_0009.JPG"]})
+    screen = run_upload(app, monkeypatch, FakeUpload(report))
+    old = app.geometry()
+    try:
+        app.geometry("760x520")
+        app.deiconify()
+        app.update()
+        tree = screen.errors_tree
+        assert tree.winfo_ismapped() and tree.winfo_height() > 40
+        bottom = tree.winfo_rooty() + tree.winfo_height()
+        footer_top = screen.upload_button.winfo_rooty()
+        assert bottom <= footer_top  # no queda tapada ni recortada por el pie
+        assert screen.error_detail_label.winfo_ismapped()
+        assert screen.upload_button.winfo_ismapped() and screen.home_button.winfo_ismapped()
+        assert int(str(screen.status_label.cget("wraplength"))) < 760
+    finally:
+        app.withdraw()
+        app.geometry(old)
+        app.update()
