@@ -10,6 +10,10 @@ from pathlib import Path
 # Fotos por llamada a exiftool en `read_exif_batch`.
 BATCH_SIZE = 40
 
+# La app empaquetada no tiene consola: sin esta bandera Windows abriría una ventana de consola
+# por cada llamada a exiftool.exe. (0 fuera de Windows.)
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 
 def _exiftool(exiftool: Path, paths: list[Path], *, check: bool) -> subprocess.CompletedProcess:
     """Llama a exiftool con las rutas por la entrada estándar (`-@ -`), una por línea en UTF-8.
@@ -21,7 +25,7 @@ def _exiftool(exiftool: Path, paths: list[Path], *, check: bool) -> subprocess.C
     args = "".join(f"{p}\n" for p in paths).encode("utf-8")
     return subprocess.run(
         [str(exiftool), "-j", "-n", "-charset", "filename=utf8", "-@", "-"],
-        input=args, check=check, capture_output=True,
+        input=args, check=check, capture_output=True, creationflags=_NO_WINDOW,
     )
 
 

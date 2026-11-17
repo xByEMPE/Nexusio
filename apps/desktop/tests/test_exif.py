@@ -73,6 +73,21 @@ def test_read_exif_sends_path_on_stdin(tmp_path, monkeypatch):
     assert seen["input"].decode("utf-8").strip() == str(photo) and seen["check"] is True
 
 
+@pytest.mark.skipif(os.name != "nt", reason="solo Windows abre consolas")
+def test_exiftool_runs_without_console_window(tmp_path, monkeypatch):
+    """La app empaquetada no tiene consola: sin CREATE_NO_WINDOW cada llamada a exiftool.exe
+    abriría (y cerraría) una ventana de consola delante del técnico."""
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(cmd, 0, b"[]", b"")
+
+    monkeypatch.setattr(exif.subprocess, "run", fake_run)
+    exif.read_exif_batch([tmp_path / "a.JPG"], Path("exiftool"))
+    assert seen.get("creationflags", 0) & subprocess.CREATE_NO_WINDOW
+
+
 def test_read_exif_batch_missing_exiftool_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         exif.read_exif_batch([tmp_path / "a.JPG"], tmp_path / "no-existe" / "exiftool.exe")
