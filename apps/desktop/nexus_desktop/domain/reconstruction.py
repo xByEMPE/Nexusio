@@ -31,7 +31,7 @@ import numpy as np
 
 from .exif import num, read_exif_batch
 from .gsd import compute_gsd
-from .marking import MarkingState, SectionMarks
+from .marking import ROOT_TO_TIP_FACES, MarkingState, SectionMarks
 from .measurement import radius_from_altitude, reference_root_altitude, sequence_direction
 from .wtg_folder import BLADES, FACES, WtgFolder
 from ..vision.stitcher import (
@@ -46,7 +46,6 @@ log = logging.getLogger(__name__)
 Progress = Callable[[str, float], None]
 
 FACE_FILE_NAMES = {"LE": "LeadingEdge", "TE": "TrailingEdge", "PS": "PressureSide", "SS": "SuctionSide"}
-ROOT_TO_TIP_FACES = ("LE", "TE")  # se vuelan de la raíz a la punta: se cosen al revés
 MAX_STRIP_SIDE = 65500            # límite del formato JPEG (65535) con margen, como el original
 JPEG_QUALITY = 85                 # IMAGE_PROCESSING_CONFIG["jpeg_quality"]
 EXIF_SHARE = 0.1                  # parte de la barra de progreso para la lectura del EXIF
@@ -134,7 +133,8 @@ def strip_path(out_dir: Path, name: str, blade: str, face: str) -> Path:
 
 
 def stitch_order(face: str, count: int) -> list[int]:
-    """Índices (en el orden de la sección) en que se cosen las fotos: la punta primero."""
+    """Índices (en el orden de la sección) en que se cosen las fotos: la punta primero. Las caras
+    de `marking.ROOT_TO_TIP_FACES` (misma regla que la foto de la punta al marcar) van al revés."""
     order = list(range(count))
     return order[::-1] if face in ROOT_TO_TIP_FACES else order
 

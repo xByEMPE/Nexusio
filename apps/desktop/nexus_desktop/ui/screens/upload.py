@@ -27,6 +27,7 @@ from pathlib import Path
 from tkinter import ttk
 
 from nexus_desktop.config import resolve_exiftool
+from nexus_desktop.nexus.builder import DIRECTIONS  # "unknown" no se envía al manifiesto
 from nexus_desktop.nexus.projects import InspectionError, InspectionLocked
 from nexus_desktop.nexus.uploader import PhotoInfo, StripInput, UploadPlan, UploadReport, upload_inspection
 from nexus_desktop.storage import pending
@@ -35,7 +36,6 @@ from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
 
 POLL_MS = 100
-DIRECTIONS = ("root_to_tip", "tip_to_root")  # "unknown" no se envía al manifiesto
 
 ACTION = "Qué hacer:"
 # Un texto por código de error: explicación y, tras «Qué hacer:», la acción sugerida.

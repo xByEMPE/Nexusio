@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .files import list_jpegs
 from .position import find_id_photo
 
 BLADES = ("A", "B", "C")
@@ -14,7 +15,6 @@ _FACE_NAMES = {
     "PS": ("ps", "pressureside"), "SS": ("ss", "suctionside"),
 }
 _BLADE_DIR = re.compile(r"^(?:blade|pala)\s*([abc])$", re.IGNORECASE)
-_JPEG = (".jpg", ".jpeg")
 
 
 @dataclass
@@ -23,11 +23,6 @@ class WtgFolder:
     blades: dict[str, dict[str, list[Path]]] = field(default_factory=dict)
     id_photo: Path | None = None
     missing: list[str] = field(default_factory=list)
-
-
-def _jpegs(d: Path) -> list[Path]:
-    return sorted(p for p in d.iterdir()
-                  if p.is_file() and p.suffix.lower() in _JPEG and not p.name.startswith("."))
 
 
 def _subdirs(d: Path) -> list[Path]:
@@ -44,7 +39,7 @@ def scan_wtg(folder: Path) -> WtgFolder:
     found: dict[str, dict[str, list[Path]]] = {}
 
     def add(blade: str, face: str, d: Path) -> None:
-        files = _jpegs(d)
+        files = list_jpegs(d)
         if files and face not in found.get(blade, {}):
             found.setdefault(blade, {})[face] = files
 
@@ -63,7 +58,7 @@ def scan_wtg(folder: Path) -> WtgFolder:
 
     id_photo = find_id_photo(folder)
     if id_photo is None:
-        loose = _jpegs(folder)
+        loose = list_jpegs(folder)
         id_photo = loose[0] if loose else None
 
     missing = [f"{b}/{f}" for b in BLADES for f in FACES if f not in found.get(b, {})]

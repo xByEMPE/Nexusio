@@ -151,30 +151,6 @@ def test_root_line_matches_legacy_root_data():
     assert state.section("A", "LE").root_line() == {"x1": 5, "x2": 95, "y": 52, "width": 90}
 
 
-def test_to_dict_round_trip():
-    data = blades({"A": {"LE": 3, "PS": 2}})
-    state = MarkingState(data)
-    mark_section(state, "A", "LE")
-    state.add_root_click("A", "PS", 1, Mark(7, 8))
-    state.invert_section("A", "PS")
-    state.add_root_click("A", "PS", 1, Mark(1.5, 2.5))
-    out = state.to_dict()
-    le = out["sections"]["A"]["LE"]
-    assert le["tip_marker"] == {"x": 10, "y": 20}
-    assert le["tip_image_index"] == 2
-    assert le["tip_image"] == str(data["A"]["LE"][2])
-    assert le["root_markers"] == [{"x": 5, "y": 50}, {"x": 95, "y": 52}]
-    assert le["root_image_index"] == 0
-    assert out["inverted"] == ["A/PS"]
-
-    fresh = blades({"A": {"LE": 3, "PS": 2}})  # recién leída: orden original
-    again = MarkingState.from_dict(fresh, out)
-    assert again.to_dict() == out
-    assert fresh["A"]["PS"] == data["A"]["PS"]  # vuelve a aplicar la inversión
-
-
-# --- Conversión lienzo -> píxeles de la foto original ---------------------------------------
-
 def test_fit_image_matches_legacy_scaling():
     # Foto 4000x3000 en un lienzo 410x310: ratio = min(400/4000, 300/3000) = 0.1
     fit = fit_image(4000, 3000, 410, 310)

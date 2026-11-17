@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 from .wtg_folder import BLADES, FACES
 
@@ -36,9 +35,6 @@ def root_image_index(face: str, count: int) -> int:
 class Mark:
     x: float
     y: float
-
-    def to_dict(self) -> dict[str, float]:
-        return {"x": self.x, "y": self.y}
 
 
 @dataclass
@@ -181,40 +177,3 @@ class MarkingState:
     def is_complete(self) -> bool:
         blades = self.present_blades()
         return bool(blades) and all(self.is_blade_complete(b) for b in blades)
-
-    # --- serialización (para la reconstrucción y el manifiesto) ---
-
-    def to_dict(self) -> dict[str, Any]:
-        """{"version": 1, "sections": {pala: {cara: {...}}}, "inverted": ["A/LE", ...]}.
-        Coordenadas en píxeles de la foto original; `*_image` es la ruta de esa foto."""
-        sections: dict[str, dict[str, Any]] = {}
-        for (blade, face), s in self._sections.items():
-            images = self.blades[blade][face]
-            sections.setdefault(blade, {})[face] = {
-                "tip_marker": s.tip.to_dict() if s.tip else None,
-                "tip_image_index": s.tip_index if s.tip else None,
-                "tip_image": str(images[s.tip_index]) if s.tip else None,
-                "root_markers": [m.to_dict() for m in s.root],
-                "root_image_index": s.root_index if s.root else None,
-                "root_image": str(images[s.root_index]) if s.root else None,
-            }
-        inverted = [f"{b}/{f}" for b in BLADES for f in FACES if (b, f) in self._inverted]
-        return {"version": 1, "sections": sections, "inverted": inverted}
-
-    @classmethod
-    def from_dict(cls, blades: dict[str, dict[str, list[Path]]], data: dict[str, Any]) -> "MarkingState":
-        """Restaura las marcas sobre `blades` en el orden en que los deja `scan_wtg`: vuelve a
-        aplicar las inversiones guardadas antes de las marcas."""
-        state = cls(blades)
-        for code in data.get("inverted", []):
-            blade, face = code.split("/")
-            state.invert_section(blade, face)
-        for blade, faces in data.get("sections", {}).items():
-            for face, s in faces.items():
-                if (blade, face) not in state._sections:
-                    continue
-                if s.get("tip_marker"):
-                    state.set_tip(blade, face, s["tip_image_index"], Mark(**s["tip_marker"]))
-                for m in s.get("root_markers", []):
-                    state.add_root_click(blade, face, s["root_image_index"], Mark(**m))
-        return state

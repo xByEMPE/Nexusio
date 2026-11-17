@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "onnx", "pyinstaller"]
+dev = ["pytest", "onnx", "pyinstaller", "postgrest"]  # postgrest: las pruebas usan postgrest.exceptions
 
 [tool.setuptools.packages.find]
 include = ["nexus_desktop*"]

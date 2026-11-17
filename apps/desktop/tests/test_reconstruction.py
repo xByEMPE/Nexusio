@@ -19,7 +19,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from nexus_desktop.domain import mosaics
 from nexus_desktop.domain import reconstruction as rec
 from nexus_desktop.domain.marking import Mark, MarkingState
 from nexus_desktop.domain.wtg_folder import scan_wtg
@@ -141,9 +140,6 @@ def test_reconstruct_writes_strip_with_expected_name(tmp_path, exif_calls):
         assert im.format == "JPEG" and im.size == (le.width_px, le.height_px)
     assert le.height_px == 2 * STEP_PX + 600
     assert le.warnings == [] and results[1].warnings == []
-    # `mosaics.scan` (la subida) reconoce los nombres
-    found = {(s.blade, s.face): s.path for s in mosaics.scan(out)}
-    assert found == {("A", "LE"): le.strip_path, ("A", "PS"): results[1].strip_path}
 
 
 def test_reconstruct_without_model_still_produces_strips_and_warns(tmp_path, exif_calls):
