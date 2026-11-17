@@ -28,11 +28,11 @@ from nexus_desktop.domain.marking import (
 )
 from nexus_desktop.domain.wtg_folder import FACES
 from nexus_desktop.ui import thumbnails
+from nexus_desktop.ui.labels import FACE_NAMES
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
 
 KINDS = ("tip", "root")
-FACE_NAMES = {"LE": "Borde de ataque", "TE": "Borde de salida", "PS": "Intradós", "SS": "Extradós"}
 ROW_NAMES = {"tip": "Punta", "root": "Raíz"}
 HINTS = {
     None: "Elige «Marcar punta» o «Marcar raíz» y haz clic en la foto.",

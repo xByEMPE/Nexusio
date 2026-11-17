@@ -19,6 +19,7 @@ from nexus_desktop.domain.marking import Fit, fit_image
 from nexus_desktop.domain.reconstruction import SectionResult
 from nexus_desktop.domain.wtg_folder import BLADES, FACES
 from nexus_desktop.ui import thumbnails
+from nexus_desktop.ui.labels import FACE_NAMES
 from nexus_desktop.ui.screens.base import Screen
 from nexus_desktop.ui.theme import TOKENS, font
 
@@ -29,7 +30,6 @@ def _load_strip(path: Path, cache: Path) -> thumbnails.DisplayImage:
         return thumbnails.load_display(path, cache)
 
 
-FACE_NAMES = {"LE": "Borde de ataque", "TE": "Borde de salida", "PS": "Intradós", "SS": "Extradós"}
 FALLBACK_CANVAS = 200
 NO_STRIP = "Sin tira"
 
