@@ -471,7 +471,7 @@ def test_error_file_names_resolved_from_manifest(tmp_path):
     assert "file" not in errs[2] and "file" not in errs[3]  # sin archivo o fuera de rango
 
 
-@pytest.mark.parametrize("case", ["update_fails", "no_position", "no_id"])
+@pytest.mark.parametrize("case", ["update_fails", "zero_rows", "no_position", "no_id"])
 def test_position_not_saved_is_reported_as_warning(tmp_path, monkeypatch, case):
     photos = {k: v for k, v in PHOTOS.items() if case != "no_id" or "_ID" not in k}
     root, plan, client, tus = setup(tmp_path, photos=photos)
@@ -490,11 +490,28 @@ def test_position_not_saved_is_reported_as_warning(tmp_path, monkeypatch, case):
             return q
 
         client.table = table
+    if case == "zero_rows":  # RLS: el update no falla pero no toca ninguna fila
+        original_table = client.table
+
+        def table(name):
+            q = original_table(name)
+            if name == "inspections":
+                real_update = q.update
+
+                def update(row):
+                    real_update(row)
+                    q.filters.append(lambda r: False)
+                    return q
+                q.update = update
+            return q
+
+        client.table = table
     report = run(plan, client, tus)
     assert report.errors == []
     assert len(report.warnings) == 1 and "posición" in report.warnings[0]
     # solo el fallo al guardar se arregla reintentando; la falta de _ID o de posición, no
-    assert report.retryable_warnings == (report.warnings if case == "update_fails" else [])
+    retryable = case in ("update_fails", "zero_rows")
+    assert report.retryable_warnings == (report.warnings if retryable else [])
 
 
 def test_position_saved_has_no_warning(tmp_path):

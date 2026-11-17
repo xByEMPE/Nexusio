@@ -418,11 +418,14 @@ class _Run:
             lat, lon, source = self.id_pos
             self.session.access_token()  # SessionLost se propaga
             try:
-                (self.session.client.table("inspections")
-                 .update({"asset_lat": lat, "asset_lon": lon, "asset_position_source": source})
-                 .eq("id", self.insp_id).execute())
-                self.say(f"Posición de la turbina: {lat}, {lon} ({source}).")
+                res = (self.session.client.table("inspections")
+                       .update({"asset_lat": lat, "asset_lon": lon, "asset_position_source": source})
+                       .eq("id", self.insp_id).execute())
             except Exception:
+                res = None
+            if res is not None and getattr(res, "data", None):
+                self.say(f"Posición de la turbina: {lat}, {lon} ({source}).")
+            else:  # fallo, o 0 filas actualizadas (RLS): no se guardó
                 self.warn(POSITION_NOT_SAVED, retryable=True)
         elif self.id_read:
             self.warn("La foto _ID no tiene láser ni GPS válidos: sin posición de la turbina.")
