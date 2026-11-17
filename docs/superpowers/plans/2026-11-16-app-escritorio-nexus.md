@@ -6,7 +6,7 @@
 
 **Architecture:** Paquete Python modular (`domain/`, `vision/`, `nexus/`, `storage/`, `ui/`). La capa `nexus/` **no se escribe de cero**: se promueve `scripts/ingest_demo` (ya implementa EXIF, GSD, derivados WebP, TUS, manifiesto v1, tiras, posición `_ID` e índice idempotente, con pruebas). La lógica de reconstrucción se extrae del monolito con pruebas de caracterización antes de moverla. La interfaz se reescribe pantalla a pantalla sobre Tkinter/ttk con un tema único.
 
-**Tech Stack:** Python 3.12, Tkinter/ttk, OpenCV, NumPy, ONNX Runtime, Pillow, openpyxl, supabase-py, tuspy, jsonschema, pytest, PyInstaller.
+**Tech Stack:** Python 3.12, Tkinter/ttk, OpenCV, NumPy, ONNX Runtime, Pillow, supabase-py, tuspy, jsonschema, pytest, PyInstaller (sin openpyxl: el Excel del original se sustituye por `{wtg}_reconstruction.json`).
 
 **Spec:** `docs/superpowers/specs/2026-11-16-app-escritorio-nexus-design.md` (contrato de subida: `docs/superpowers/specs/2026-11-11-inspecciones-fase1-base-design.md` §8; esquema: `src/contracts/ingest-manifest.v1.schema.json`).
 

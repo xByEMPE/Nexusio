@@ -40,7 +40,7 @@ Después de esto viene la detección de daños con IA en Hugging Face (fuera de 
 
 ## 3. Restricciones
 
-- Python 3.12, Tkinter/ttk, OpenCV, ONNX Runtime, Pillow, `supabase`, `tuspy`, `pydantic`, `openpyxl`.
+- Python 3.12, Tkinter/ttk, OpenCV, ONNX Runtime, Pillow, `supabase`, `tuspy`, `jsonschema` (sin `pydantic` ni `openpyxl`: el manifiesto se valida con jsonschema y el Excel del original se sustituye por `{wtg}_reconstruction.json`).
 - La app contiene solo la URL de Supabase y la llave **pública**. Nada de `service_role`.
 - El modelo `blade_unet_512.onnx` (23 MB), `EXIF/`, `WTG*/` y datos de clientes quedan **fuera de git**; el modelo se coloca en una carpeta `models/` ignorada y el instalador lo incluye.
 - La subida es **idempotente**: los UUID se guardan en el índice local, y reintentar produce lo mismo (`ingest_manifest` hace upsert por `id`).
@@ -78,7 +78,7 @@ apps/desktop/
       auth.py                # login/refresh con Supabase Auth
       projects.py            # proyectos y activos asignados
       uploader.py            # TUS a Storage
-      manifest.py            # manifiesto v1 (modelos pydantic)
+      manifest.py            # manifiesto v1 (validado con jsonschema)
     storage/
       local_index.py         # índice local de inspecciones y UUID
   tests/
@@ -97,7 +97,9 @@ apps/desktop/
 
 ### 5.3 Qué se conserva (lógica, no el código tal cual)
 
-Validación de carpeta WTG (reconocimiento START/INTERVAL/END y estructura A/B/C/LE/TE/PS/SS), lectura de EXIF, `BladeMeasurementLogic`, segmentación y costura de `blade_reconstruction_test.py`, marcado de punta y raíz, índice local. Cada pieza se mueve a su módulo con pruebas que fijan el resultado actual (mismos números para la carpeta de ejemplo) antes de cambiar nada.
+Estructura de la carpeta WTG (A/B/C/LE/TE/PS/SS y detección de `_ID`), lectura de EXIF, `BladeMeasurementLogic`, segmentación y costura de `blade_reconstruction_test.py`, marcado de punta y raíz, índice local. Cada pieza se mueve a su módulo con pruebas que fijan el resultado actual (mismos números para la carpeta de ejemplo) antes de cambiar nada.
+
+La validación START/INTERVAL/END del original **no** se conserva: `scan_wtg` acepta cualquier carpeta con JPEG en las caras que reconoce y la pantalla de importación informa de las caras que faltan (se puede continuar con las que haya).
 
 ### 5.4 Correspondencia con el contrato v1
 
@@ -105,13 +107,17 @@ Validación de carpeta WTG (reconocimiento START/INTERVAL/END y estructura A/B/C
 |---|---|
 | Foto del dron, EXIF, GPS, gimbal, LRF | `captures[]` (con `sha256`, `paths`, `gps`, `gimbal`, `gsd`) |
 | Foto `_ID` | `inspection.id_capture_id` |
-| Pala y cara, radio, dirección de secuencia, cuerda | `captures[].blade` |
+| Pala y cara, radio, dirección de secuencia | `captures[].blade` |
 | Tiras reconstruidas + punta/raíz/longitud | `mosaics[]` + `calibration` |
 | Posición de la turbina (láser o GPS de `_ID`) | columnas `asset_lat/lon/source` de `inspections` |
 | Térmicas | `captures[].thermal` (matriz 16 bits PNG) |
 | Daños | no se suben desde la app en esta etapa |
 
-Se genera un manifiesto por pala (el contrato es acumulativo). Antes de subir, la app valida el manifiesto con pydantic contra el mismo esquema que usa el portal (`ingest-manifest.v1.schema.json`).
+La cuerda (`chord_length_mm`) **no** se envía: queda solo en el JSON local `{wtg}_reconstruction.json`.
+
+Orden de las fotos tras «Invertir»: `captures[].sequence_index` es la posición de la foto en la lista de su sección **después** de las inversiones del marcado (el orden que se ve al marcar y del que sale la costura; LE y TE se cosen recorriendo esa lista al revés para que la punta quede primero). `captures[].blade.sequence_direction`, en cambio, sale del orden de captura (nombre de archivo) y de los radios (`measurement.sequence_direction`), así que no cambia al invertir; si no se puede decidir (`unknown`) no se envía.
+
+Se genera un manifiesto por pala (el contrato es acumulativo). Antes de subir, la app valida el manifiesto con jsonschema contra el mismo esquema que usa el portal (`ingest-manifest.v1.schema.json`).
 
 ### 5.5 Subida
 

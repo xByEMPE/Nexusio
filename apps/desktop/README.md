@@ -54,7 +54,7 @@ Otras variables (opcionales, sobre todo para desarrollo):
 | `NEXUS_SAMPLE_WTG` | Carpeta WTG de ejemplo para las pruebas lentas (por defecto la carpeta `WTG 25` junto al repositorio principal; ver `tests/`). |
 
 Datos locales del usuario en `%APPDATA%\NEXUS`: `config.json`, `pending.json` (subidas sin
-terminar), `thumbs\` (caché de miniaturas) y `logs\nexus-desktop.log` (registro rotativo,
+terminar), `thumbs\` (caché de miniaturas; se recorta sola a 500 MB) y `logs\nexus-desktop.log` (registro rotativo,
 5 copias de 2 MB, sin tokens, llaves ni contraseñas: es lo que se envía a soporte si algo
 falla). Junto a las fotos de la carpeta WTG la app deja
 `.ingest_index.json` (ids ya creados y archivos ya subidos), la carpeta
@@ -172,6 +172,22 @@ apps/desktop/
 - **Posición de la turbina**: de la foto `_ID` (láser `lrf_target` si es válido; si no, GPS del
   dron) en `inspections.asset_lat/asset_lon/asset_position_source`.
 - **Idempotencia**: `.ingest_index.json` guarda los ids por `sha256` y lo ya subido; repetir la
-  subida no vuelve a subir nada y `ingest_manifest` responde 0 insertados. Una prueba verifica
-  que la copia del esquema coincide con `src/contracts/`.
+  subida no vuelve a subir nada y `ingest_manifest` responde 0 insertados. Una tira reprocesada
+  (mismo nombre, otro contenido) sí se reenvía: el índice guarda la huella de cada tira subida.
+  Los ids del índice deben ser UUID; si no, el índice se respalda y se empieza uno nuevo. Una
+  prueba verifica que la copia del esquema coincide con `src/contracts/`.
 - La versión de la app (`config.VERSION`) va en `manifest.app.version` y en el ejecutable.
+
+## Límites conocidos
+
+- **Palas con la punta arriba.** La reconstrucción, los radios y la calibración suponen que la
+  punta está más alta que la raíz. Si las marcas dicen lo contrario (la foto de la punta está más
+  baja que la de la raíz) la app muestra un aviso en Resultados, pero no corrige nada: una pala
+  apuntando hacia abajo da radios invertidos. Soportarlas queda pendiente de una decisión de
+  producto.
+- **Las marcas no se guardan.** La punta y la raíz marcadas viven solo en memoria: si la app se
+  cierra antes de procesar, hay que volver a marcar. Lo ya subido sí se conserva (índice local) y
+  la subida se reanuda sin duplicar.
+- **La app escribe dentro de la carpeta WTG**: `<WTG>_img_stitched\` (las tiras),
+  `<WTG>_reconstruction.json` (radios, GSD, calibración y cuerda) y `.ingest_index.json`. Nunca
+  borra fotos; reprocesar sobrescribe las tiras y el JSON.
