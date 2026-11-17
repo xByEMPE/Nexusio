@@ -39,3 +39,34 @@ def test_sequence_direction_detects_both_ways_and_unknown():
     assert sequence_direction([1.0, 9.0, 5.0]) == "unknown"
     assert sequence_direction([3.0]) == "unknown"
     assert sequence_direction([]) == "unknown"
+
+
+# --- Decisiones de la Task 13 (datos reales de WTG 25) ------------------------------------------
+
+def test_radius_with_tip_below_root_altitude_is_zero_not_mirrored():
+    # WTG 25 C/SS: la última foto (102,07 m) queda bajo la raíz de referencia (102,78 m, mínima
+    # LE/TE). Con |alt − raíz| salía radio 0,71 m y una vuelta atrás falsa de 0,62 m.
+    assert radius_from_altitude(102.07, 102.78, 139.55, 37.0) == 0.0
+
+
+def test_radius_blade_pointing_down_scales_by_signed_ratio():
+    # Pala hacia abajo (punta bajo la raíz): radio = (raíz − alt) / (raíz − punta) · longitud.
+    assert radius_from_altitude(90.0, 100.0, 60.0, 40.0) == 10.0
+    assert radius_from_altitude(105.0, 100.0, 60.0, 40.0) == 0.0  # por encima de la raíz
+
+
+def test_radius_degenerate_tip_uses_legacy_threshold():
+    # Punta a menos de 0,1 m de la raíz (umbral de interpolate_radius): no se escala.
+    assert radius_from_altitude(15.0, 5.0, 5.05, 60.0) == 10.0
+    assert radius_from_altitude(15.0, 5.0, 5.2, 60.0) == 60.0  # 0,2 m sí escala (y se acota)
+
+
+def test_sequence_direction_tolerates_gps_jitter():
+    # Saltos atrás de pocos centímetros (WTG 25: máx. 0,047 m en altitud) no anulan el sentido.
+    assert sequence_direction([0.0, 3.0, 2.9, 6.0, 9.0]) == "root_to_tip"
+    assert sequence_direction([37.0, 33.9, 34.2, 30.0, 0.0]) == "tip_to_root"
+    # Un retroceso real (más que la tolerancia) sigue siendo "unknown".
+    assert sequence_direction([0.0, 5.0, 3.0, 9.0]) == "unknown"
+    # Sin cambio neto apreciable: "unknown".
+    assert sequence_direction([5.0, 5.2, 5.1]) == "unknown"
+    assert sequence_direction([0.0, 1.0, 0.0], tolerance_m=0.0) == "unknown"
