@@ -27,7 +27,10 @@ from nexus_desktop.domain.wtg_folder import BLADES, FACES, scan_wtg
 
 log = logging.getLogger(__name__)
 
-VERSION = 1
+VERSION = 2            # 2: por foto gsd_source / gsd_confidence / gsd_estimated (GSD estimado)
+SUPPORTED_VERSIONS = (1, VERSION)  # la 1 (sin esos campos) se sigue leyendo
+GSD_SOURCES = ("lrf", "altitude", "focus", "mosaic_calibration")
+GSD_CONFIDENCES = ("high", "medium", "low")
 FILE_SUFFIX = "_inspeccion_lista.json"
 STATUS_READY = "ready"
 STATUS_UPLOADED = "uploaded"
@@ -154,8 +157,9 @@ def save_ready(state) -> Path:
             "blade": s.blade, "face": s.face, "strip": _rel(folder, s.strip_path),
             "width_px": s.width_px, "height_px": s.height_px, "direction": s.direction,
             "calibration": s.calibration, "warnings": list(s.warnings),
-            "photos": [{"file": _rel(folder, p.path), "radius_m": p.radius_m, "gsd_mm_px": p.gsd_mm_px}
-                       for p in s.photos],
+            "photos": [{"file": _rel(folder, p.path), "radius_m": p.radius_m, "gsd_mm_px": p.gsd_mm_px,
+                        "gsd_source": p.gsd_source, "gsd_confidence": p.gsd_confidence,
+                        "gsd_estimated": bool(p.gsd_estimated)} for p in s.photos],
         } for s in state.sections],
     }
     path = ready_path(folder)
@@ -217,10 +221,15 @@ def _safe_relative(text: object) -> PurePosixPath:
 
 def _parse_photo(folder: Path, item) -> PhotoResult:
     if not (isinstance(item, dict) and _optional_number(item.get("radius_m"))
-            and _optional_number(item.get("gsd_mm_px"))):
+            and _optional_number(item.get("gsd_mm_px"))
+            and item.get("gsd_source") in (None, *GSD_SOURCES)
+            and item.get("gsd_confidence") in (None, *GSD_CONFIDENCES)
+            and isinstance(item.get("gsd_estimated", False), bool)):  # versión 1: sin estos campos
         raise ValueError
     rel = _safe_relative(item.get("file"))
-    return PhotoResult(folder.joinpath(*rel.parts), item.get("radius_m"), item.get("gsd_mm_px"))
+    return PhotoResult(folder.joinpath(*rel.parts), item.get("radius_m"), item.get("gsd_mm_px"),
+                       gsd_source=item.get("gsd_source"), gsd_confidence=item.get("gsd_confidence"),
+                       gsd_estimated=item.get("gsd_estimated", False))
 
 
 def _parse_section(folder: Path, item) -> SectionResult:
@@ -262,10 +271,10 @@ def load_ready(folder: Path) -> ReadyInspection:
     if not isinstance(data, dict):
         raise ReadyError(CORRUPT.format(name=path.name))
     version = data.get("version")
-    if _is_int(version) and version != VERSION:
+    if _is_int(version) and version not in SUPPORTED_VERSIONS:
         raise ReadyError(BAD_VERSION.format(version=version))
     try:
-        if version != VERSION or not isinstance(data.get("turbine_name"), str):
+        if version not in SUPPORTED_VERSIONS or not isinstance(data.get("turbine_name"), str):
             raise ValueError
         length = data.get("blade_length_m")
         sections_raw = data.get("sections")

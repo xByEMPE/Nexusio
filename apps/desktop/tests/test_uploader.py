@@ -623,3 +623,22 @@ def test_photo_bomb_is_skipped_but_big_strip_is_uploaded(tmp_path, monkeypatch):
     assert report.skipped["local_files"] == ["bomba.jpg"] and report.errors == []
     assert len(tus.calls) == N_OBJECTS  # todas las demás fotos y la tira de 60x400
     assert Image.MAX_IMAGE_PIXELS == 1600
+
+
+def test_estimated_gsd_goes_to_the_manifest_only_for_photos_without_laser(tmp_path, monkeypatch):
+    laser = {"LRFTargetDistance": 4.5, "LRFStatus": "Normal", "CalibratedFocalLength": 3725.0}
+
+    def read(path, exiftool):
+        if path.parent.name.endswith("_ID"):
+            return {"GPSLatitude": 40.5, "GPSLongitude": -3.5}
+        return dict(laser) if path.name == "a2.jpg" else {}
+
+    monkeypatch.setattr(uploader, "read_exif", read)
+    root, plan, client, tus = setup(tmp_path)
+    plan.photo_info = {root / "Blade A/LE/a1.jpg": PhotoInfo(1.0, "root_to_tip", 1.7),
+                       root / "Blade A/LE/a2.jpg": PhotoInfo(2.0, "root_to_tip", 9.9)}  # a2 tiene láser
+    run(plan, client, tus)  # FakeIngest valida cada manifiesto contra el esquema
+    caps = {c["file_name"]: c for m in manifests(client) for c in m["captures"]}
+    assert caps["a1.jpg"]["gsd"] == {"mm_px": 1.7, "source": "mosaic_calibration", "confidence": "low"}
+    assert caps["a2.jpg"]["gsd"] == {"mm_px": pytest.approx(4500 / 3725.0), "source": "lrf", "confidence": "high"}
+    assert caps["a3.jpg"]["gsd"] is None

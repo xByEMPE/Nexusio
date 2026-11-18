@@ -133,3 +133,25 @@ def test_blade_manifest_keeps_id_photo_given_by_caller():
 def test_blade_manifest_invalid_rejected():
     with pytest.raises(ValidationError):
         build_blade_manifest(PROJECT, INSP, "A", [], [])
+
+
+def test_estimated_gsd_fills_only_captures_without_measured_gsd():
+    d = deriv(100, 100)
+    cap = build_capture(Path("a.jpg"), "A", "LE", 0, {}, "a" * 64, "id", "pre/", d, estimated_gsd_mm_px=1.75)
+    assert cap["gsd"] == {"mm_px": 1.75, "source": "mosaic_calibration", "confidence": "low"}
+    meta = load("m4e_wide_exif.json")
+    measured = build_capture(Path("x.JPG"), "A", "LE", 3, meta, "a" * 64, uid(1), PREFIX, deriv())
+    assert measured["gsd"]["source"] != "mosaic_calibration"
+    with_estimate = build_capture(Path("x.JPG"), "A", "LE", 3, meta, "a" * 64, uid(1), PREFIX, deriv(),
+                                  estimated_gsd_mm_px=9.99)
+    # no regresión: con GSD medido el manifiesto es idéntico byte a byte, lleve o no un estimado
+    assert json.dumps(with_estimate, sort_keys=True) == json.dumps(measured, sort_keys=True)
+
+
+def test_estimated_gsd_capture_validates_against_the_schema():
+    d = deriv(100, 100)
+    cap = build_capture(Path("a.jpg"), "A", "LE", 0, {}, "a" * 64, uid(1), PREFIX, d, estimated_gsd_mm_px=1.75)
+    validate(build_blade_manifest(PROJECT, INSP, "A", [cap], []))
+    cap["gsd"]["source"] = "inventado"
+    with pytest.raises(ValidationError):
+        validate(build_blade_manifest(PROJECT, INSP, "A", [cap], []))

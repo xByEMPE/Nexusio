@@ -31,6 +31,7 @@ import numpy as np
 
 from .exif import num, read_exif_batch
 from .gsd import compute_gsd
+from .gsd_fill import GsdSample, fill_missing_gsd
 from .marking import ROOT_TO_TIP_FACES, MarkingState, SectionMarks
 from .measurement import radius_from_altitude, reference_root_altitude, sequence_direction
 from .wtg_folder import BLADES, FACES, WtgFolder
@@ -59,7 +60,12 @@ NO_MODEL_WARNING = ("Aviso: no se encontró el modelo de segmentación (blade_un
 class PhotoResult:
     path: Path
     radius_m: float | None    # radio al centro de la foto (domain/measurement)
-    gsd_mm_px: float | None   # domain/gsd.compute_gsd (el mismo que va al manifiesto)
+    # GSD final de la foto: el medido (domain/gsd.compute_gsd, el que va al manifiesto) o, si la
+    # foto no tiene láser, el estimado por domain/gsd_fill (gsd_estimated=True, confianza «low»).
+    gsd_mm_px: float | None
+    gsd_source: str | None = None       # lrf / altitude / focus / mosaic_calibration
+    gsd_confidence: str | None = None   # high / medium / low
+    gsd_estimated: bool = False
 
 
 @dataclass
@@ -76,6 +82,16 @@ class SectionResult:
     # Avisos de la sección (EXIF ilegible, sin altitud, punta más baja que la raíz): la tira y
     # los radios pueden no ser fiables. También se envían por `progress`.
     warnings: list[str] = field(default_factory=list)
+
+    @property
+    def gsd_estimated_count(self) -> int:
+        """Fotos de la sección con GSD estimado (sin láser)."""
+        return sum(1 for p in self.photos if p.gsd_estimated)
+
+    @property
+    def gsd_missing_count(self) -> int:
+        """Fotos de la sección que se quedaron sin GSD (sin escala: no se pueden medir)."""
+        return sum(1 for p in self.photos if p.gsd_mm_px is None)
 
 
 # --- utilidades de imagen -------------------------------------------------------------------
@@ -381,7 +397,18 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
     root_row = chord["chord_end_root"]["y"] * factor if chord and root is not None else None
     calibration = build_section_calibration(tip_row, root_row, height, blade_length_m)
 
-    photos = _photo_results(paths, section, exif, root_alt, blade_length_m)
+    # GSD que implica la escala de la tira, en píxeles de la foto completa: mm/px de la tira
+    # guardada → foto reducida (· factor de clamp_strip) → foto original (· factor de reducción
+    # de resize_for_processing, el mismo que usó el cosedor).
+    strip_gsd = None
+    if calibration.get("mm_per_px") and loaded.scales:
+        strip_gsd = calibration["mm_per_px"] * factor * float(np.median([sx for sx, _sy in loaded.scales]))
+    photos = _photo_results(paths, section, exif, root_alt, blade_length_m, strip_gsd)
+    gsd_warnings = _gsd_warnings(photos)
+    for warning in gsd_warnings:
+        log.warning(warning)
+        progress(warning, 0.9)
+    warnings.extend(gsd_warnings)
     by_name = sorted(zip(paths, photos), key=lambda pair: pair[0].name)
     direction = sequence_direction([ph.radius_m for _p, ph in by_name if ph.radius_m is not None])
     if chord is not None:
@@ -394,21 +421,40 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
                          warnings=warnings)
 
 
+def _gsd_warnings(photos: list[PhotoResult]) -> list[str]:
+    """Avisos del relleno del GSD: fotos estimadas y fotos que siguen sin escala."""
+    out = []
+    estimated = sum(1 for p in photos if p.gsd_estimated)
+    missing = sum(1 for p in photos if p.gsd_mm_px is None)
+    if estimated:
+        out.append(f"{estimated} {'foto sin láser' if estimated == 1 else 'fotos sin láser'}: GSD estimado "
+                   "por interpolación; mediciones en ellas son aproximadas.")
+    if missing:
+        out.append(f"{missing} {'foto sin GSD' if missing == 1 else 'fotos sin GSD'}: no hay láser, ni "
+                   "vecinas, ni escala de la tira para estimarlo; no se pueden medir en ellas.")
+    return out
+
+
 def _photo_results(paths: list[Path], section: SectionMarks, exif: dict[Path, dict | None], root_alt: float,
-                   blade_length_m: float) -> list[PhotoResult]:
-    """Radio y GSD de cada foto. La altitud de la punta es la de la foto donde se marcó."""
+                   blade_length_m: float, strip_gsd_mm_px: float | None = None) -> list[PhotoResult]:
+    """Radio y GSD de cada foto. La altitud de la punta es la de la foto donde se marcó.
+
+    El GSD medido por láser no se toca; las fotos sin él se rellenan con `gsd_fill`
+    (`strip_gsd_mm_px`: GSD de la escala de la tira en píxeles de foto completa, o None)."""
     tip_alt = None
     if section.tip is not None and section.tip_index is not None and 0 <= section.tip_index < len(paths):
         tip_alt = _altitude(_meta(exif, paths[section.tip_index]))
-    out = []
+    radii, samples = [], []
     for path in paths:
         meta = _meta(exif, path)
         alt = _altitude(meta)
-        radius = radius_from_altitude(alt, root_alt, tip_alt, blade_length_m) if alt is not None else None
+        radii.append(radius_from_altitude(alt, root_alt, tip_alt, blade_length_m) if alt is not None else None)
         width = num(meta.get("ImageWidth")) or num(meta.get("ExifImageWidth")) or 0
-        gsd = compute_gsd(meta, int(width)) if meta else None
-        out.append(PhotoResult(path=path, radius_m=radius, gsd_mm_px=gsd.mm_px if gsd else None))
-    return out
+        samples.append(GsdSample(compute_gsd(meta, int(width)) if meta else None, alt))
+    final = fill_missing_gsd(samples, strip_gsd_mm_px)
+    return [PhotoResult(path=path, radius_m=radius, gsd_mm_px=g.mm_px, gsd_source=g.source,
+                        gsd_confidence=g.confidence, gsd_estimated=g.estimated)
+            for path, radius, g in zip(paths, radii, final)]
 
 
 def _write_summary(path: Path, blade_length_m: float, results: list[SectionResult]) -> None:
@@ -420,8 +466,9 @@ def _write_summary(path: Path, blade_length_m: float, results: list[SectionResul
             "blade": r.blade, "face": r.face, "strip": r.strip_path.name,
             "width_px": r.width_px, "height_px": r.height_px, "calibration": r.calibration,
             "direction": r.direction, "chord": r.chord, "warnings": r.warnings,
-            "photos": [{"file": p.path.name, "radius_m": p.radius_m, "gsd_mm_px": p.gsd_mm_px}
-                       for p in r.photos],
+            "photos": [{"file": p.path.name, "radius_m": p.radius_m, "gsd_mm_px": p.gsd_mm_px,
+                        "gsd_source": p.gsd_source, "gsd_confidence": p.gsd_confidence,
+                        "gsd_estimated": p.gsd_estimated} for p in r.photos],
         } for r in results],
     }
     path.parent.mkdir(parents=True, exist_ok=True)

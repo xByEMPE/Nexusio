@@ -6,6 +6,8 @@ from pathlib import Path
 
 from ..domain.exif import num
 from ..domain.gsd import compute_gsd
+from ..domain.gsd_fill import ESTIMATED_CONFIDENCE as ESTIMATED_GSD_CONFIDENCE
+from ..domain.gsd_fill import ESTIMATED_SOURCE as ESTIMATED_GSD_SOURCE
 from .manifest import build_manifest, validate
 
 DIRECTIONS = ("root_to_tip", "tip_to_root")
@@ -30,9 +32,12 @@ def exif_datetime(meta: dict) -> str | None:
 
 
 def build_capture(path: Path, blade: str | None, face: str | None, seq: int, meta: dict, sha: str, cap_id: str,
-                  prefix: str, deriv, radius_m: float | None = None, direction: str | None = None) -> dict:
+                  prefix: str, deriv, radius_m: float | None = None, direction: str | None = None,
+                  estimated_gsd_mm_px: float | None = None) -> dict:
     """Captura del manifiesto. `radius_m` y `direction` vienen de `domain.measurement`;
-    la dirección solo se escribe si es root_to_tip o tip_to_root (nunca "unknown")."""
+    la dirección solo se escribe si es root_to_tip o tip_to_root (nunca "unknown").
+    `estimated_gsd_mm_px` (domain.gsd_fill) solo se usa si la foto no tiene GSD medido: va como
+    source="mosaic_calibration", confidence="low". El GSD medido nunca se sustituye."""
     base = f"{prefix}captures/{cap_id}/"
     gsd = compute_gsd(meta, deriv.width_px)
     lrf = num(meta.get("LRFTargetDistance"))
@@ -40,6 +45,9 @@ def build_capture(path: Path, blade: str | None, face: str | None, seq: int, met
     if lat == 0 and lon == 0:  # sin fijación GPS
         lat = lon = None
     gsd_json = {"mm_px": gsd.mm_px, "source": gsd.source, "confidence": gsd.confidence} if gsd else None
+    if gsd is None and estimated_gsd_mm_px is not None:
+        gsd_json = {"mm_px": estimated_gsd_mm_px, "source": ESTIMATED_GSD_SOURCE,
+                    "confidence": ESTIMATED_GSD_CONFIDENCE}
     blade_json = None  # la foto `_ID` no lleva datos de pala
     if blade and face:
         blade_json = {"position": blade, "face": face}

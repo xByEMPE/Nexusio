@@ -154,6 +154,17 @@ def test_build_upload_plan_keeps_calibration_and_filters_direction(app):
     assert plan.photo_info[b_te.photos[1].path].direction == "tip_to_root"
 
 
+def test_build_upload_plan_sends_estimated_gsd_only_for_estimated_photos(app):
+    state = app.state
+    state.sections = make_sections(state.wtg)
+    estimated, measured = state.sections[0].photos[1], state.sections[0].photos[0]
+    estimated.gsd_mm_px, estimated.gsd_source = 1.3, "mosaic_calibration"
+    estimated.gsd_confidence, estimated.gsd_estimated = "low", True
+    plan = build_upload_plan(state)
+    assert plan.photo_info[estimated.path].estimated_gsd_mm_px == 1.3
+    assert plan.photo_info[measured.path].estimated_gsd_mm_px is None  # medido: no se reenvía
+
+
 @pytest.mark.parametrize("cal", [
     {"tip_row_px": None, "root_row_px": None, "blade_length_m": 40.0, "mm_per_px": None, "root_at_top": None},
     {"tip_row_px": 400, "root_row_px": 400, "blade_length_m": 40.0, "mm_per_px": None, "root_at_top": False},

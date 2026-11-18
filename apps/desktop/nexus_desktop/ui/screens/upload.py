@@ -140,7 +140,7 @@ def usable_calibration(calibration: dict | None) -> dict | None:
 def build_upload_plan(state) -> UploadPlan:
     """`AppState` -> `UploadPlan`: una StripInput por sección (calibración tal cual, en píxeles de
     la tira guardada: el orquestador la escala, R5) y PhotoInfo por foto (radio y, si se conoce,
-    el sentido de captura de su sección)."""
+    el sentido de captura de su sección y, si su GSD es estimado, ese valor)."""
     if state.wtg is None or state.project is None or state.asset is None or not state.sections:
         raise ValueError(MISSING_STATE)
     strips: list[StripInput] = []
@@ -150,7 +150,8 @@ def build_upload_plan(state) -> UploadPlan:
                                  usable_calibration(section.calibration)))
         direction = section.direction if section.direction in DIRECTIONS else None
         for photo in section.photos:
-            photo_info[photo.path] = PhotoInfo(photo.radius_m, direction)
+            estimated = photo.gsd_mm_px if photo.gsd_estimated else None
+            photo_info[photo.path] = PhotoInfo(photo.radius_m, direction, estimated)
     return UploadPlan(folder=state.wtg, project=state.project, asset=state.asset,
                       blade_length_m=state.blade_length_m, strips=strips, photo_info=photo_info)
 

@@ -70,7 +70,7 @@ def test_calibration_is_stored_in_original_strip_pixels(tmp_path):
     state = make_state(tmp_path)
     path = ready.save_ready(state)
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["version"] == 1 and data["status"] == "ready"
+    assert data["version"] == 2 and data["status"] == "ready"
     assert data["turbine_name"] == "WTG 25" and data["blade_length_m"] == 61.5
     for stored, section in zip(data["sections"], state.sections):
         assert stored["calibration"] == section.calibration  # sin pre-escalar
@@ -140,7 +140,7 @@ def test_corrupt_file_gives_clear_spanish_message(tmp_path, content):
 
 
 @pytest.mark.parametrize("change", [
-    lambda d: d.update(version=2),
+    lambda d: d.update(version=3),
     lambda d: d.update(version="1"),
     lambda d: d.pop("version"),
     lambda d: d.update(blade_length_m="61,5"),
@@ -159,6 +159,9 @@ def test_corrupt_file_gives_clear_spanish_message(tmp_path, content):
     lambda d: d["sections"][0]["photos"][0].update(radius_m="2"),
     lambda d: d["sections"][0]["photos"][0].update(file=None),
     lambda d: d["sections"][0]["photos"][0].update(gsd_mm_px=True),
+    lambda d: d["sections"][0]["photos"][0].update(gsd_estimated="si"),
+    lambda d: d["sections"][0]["photos"][0].update(gsd_source="gps"),
+    lambda d: d["sections"][0]["photos"][0].update(gsd_confidence="alta"),
 ])
 def test_invalid_content_is_refused_with_clear_message(tmp_path, change):
     state = make_state(tmp_path)
@@ -320,3 +323,48 @@ def test_mark_uploaded_logs_a_warning_when_it_cannot_write(tmp_path, monkeypatch
         ready.mark_uploaded(state.wtg.path)
     assert any("subida" in r.getMessage() for r in caplog.records)
     assert str(tmp_path) not in caplog.text
+
+
+# --- GSD estimado (versión 2 del archivo) -------------------------------------------------------
+
+def mark_estimated(state):
+    """Deja la 2.ª foto de la primera sección con GSD estimado (como lo dejaría gsd_fill)."""
+    photo = state.sections[0].photos[1]
+    photo.gsd_mm_px, photo.gsd_source = 1.2345, "mosaic_calibration"
+    photo.gsd_confidence, photo.gsd_estimated = "low", True
+    return photo
+
+
+def test_estimated_gsd_round_trips_and_reaches_the_upload_plan(tmp_path):
+    state = make_state(tmp_path)
+    photo = mark_estimated(state)
+    ready.save_ready(state)
+    stored = json.loads(ready.find_file(state.wtg.path).read_text(encoding="utf-8"))
+    entry = stored["sections"][0]["photos"][1]
+    assert (entry["gsd_source"], entry["gsd_confidence"], entry["gsd_estimated"]) == ("mosaic_calibration", "low", True)
+    loaded = load_state(state.wtg.path)
+    back = loaded.sections[0].photos[1]
+    assert (back.gsd_mm_px, back.gsd_source, back.gsd_confidence, back.gsd_estimated) == (
+        1.2345, "mosaic_calibration", "low", True)
+    assert plan_of(loaded) == plan_of(state)  # igualdad real, con los campos nuevos
+    assert plan_of(loaded).photo_info[photo.path].estimated_gsd_mm_px == 1.2345
+    measured = plan_of(loaded).photo_info[loaded.sections[0].photos[0].path]
+    assert measured.estimated_gsd_mm_px is None  # lo medido no se reenvía como estimado
+
+
+def test_version_1_file_without_new_fields_still_loads(tmp_path):
+    state = make_state(tmp_path)
+    ready.save_ready(state)
+
+    def to_v1(d):
+        d["version"] = 1
+        for section in d["sections"]:
+            for p in section["photos"]:
+                for key in ("gsd_source", "gsd_confidence", "gsd_estimated"):
+                    p.pop(key)
+    rewrite(state.wtg.path, to_v1)
+    loaded = load_state(state.wtg.path)
+    photos = loaded.sections[0].photos
+    assert [p.gsd_mm_px for p in photos] == [p.gsd_mm_px for p in state.sections[0].photos]
+    assert not any(p.gsd_estimated for s in loaded.sections for p in s.photos)
+    assert all(i.estimated_gsd_mm_px is None for i in plan_of(loaded).photo_info.values())

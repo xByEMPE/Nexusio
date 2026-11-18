@@ -46,6 +46,8 @@ POSITION_NOT_SAVED = "No se pudo guardar la posición de la turbina; reintenta l
 class PhotoInfo:
     radius_m: float | None
     direction: str | None
+    # GSD estimado (sin láser: domain/gsd_fill). Solo se usa si la foto no tiene GSD medido.
+    estimated_gsd_mm_px: float | None = None
 
 
 @dataclass
@@ -288,7 +290,8 @@ class _Run:
         with im:
             size = _Size(*im.size)  # tamaño del original, como make_derivatives
             cap = build_capture(ph.path, ph.blade, ph.face, seq, meta, ph.sha, cap_id, self.prefix, size,
-                                info.radius_m if info else None, info.direction if info else None)
+                                info.radius_m if info else None, info.direction if info else None,
+                                info.estimated_gsd_mm_px if info else None)
             pending = [k for k in ("original", "preview", "thumb") if not self.index.is_uploaded(cap["paths"][k])]
             need_deriv = bool({"preview", "thumb"} & set(pending))
             if need_deriv:

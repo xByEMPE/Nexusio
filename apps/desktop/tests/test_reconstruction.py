@@ -352,9 +352,11 @@ def test_photo_without_altitude_has_no_radius(tmp_path, exif_calls):
     exif_calls.metas[first] = {}
     mark_standard(marks)
     (le,) = run(wtg, marks, tmp_path / "out")
-    assert le.photos[0].radius_m is None and le.photos[0].gsd_mm_px is None
+    assert le.photos[0].radius_m is None
+    # sin EXIF legible tampoco hay GSD propio: se estima (extremo de la cara: vecina + tira)
+    assert le.photos[0].gsd_estimated and le.photos[0].gsd_source == "mosaic_calibration"
     assert le.photos[2].radius_m is not None
-    assert le.warnings == []  # 1 de 3 sin altitud: no es la mayoría
+    assert not any("altitud" in w for w in le.warnings)  # 1 de 3 sin altitud: no es la mayoría
 
 
 def test_section_mostly_without_altitude_is_flagged(tmp_path, exif_calls):
@@ -471,6 +473,68 @@ def test_wtg25_a_le_strip_matches_task5_golden(tmp_path):
     # GSD solo donde el LRF midió (8 de 18 fotos dicen LRFStatus=TooFar: sin GSD, no se inventa)
     gsds = [p.gsd_mm_px for p in le.photos if p.gsd_mm_px is not None]
     assert len(gsds) == 10 and all(1.0 < g < 1.4 for g in gsds)
+
+
+# --- Relleno del GSD de las fotos sin láser ---------------------------------------------------
+
+LE_FIVE = [100.0, 102.0, 104.0, 106.0, 108.0]
+NO_LRF = {"LRFTargetDistance": 0.0, "LRFStatus": "TooFar"}
+
+
+def set_lrf(exif_calls, wtg, distances, face="LE"):
+    """Distancia del láser por foto (None: sin blanco, TooFar)."""
+    for path, d in zip(wtg.blades["A"][face], distances):
+        exif_calls.metas[path] = {**exif_calls.metas[path],
+                                  **(NO_LRF if d is None else {"LRFTargetDistance": d})}
+
+
+def test_missing_gsd_in_the_interior_is_interpolated_and_flagged(tmp_path, exif_calls):
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_FIVE}})
+    set_lrf(exif_calls, wtg, [4.0, 4.5, None, 5.5, 6.0])
+    mark_standard(marks)
+    (le,) = run(wtg, marks, tmp_path / "out")
+    gsd = [p.gsd_mm_px for p in le.photos]
+    assert gsd[0] == pytest.approx(4000 / 3725.0) and gsd[3] == pytest.approx(5500 / 3725.0)
+    assert gsd[2] == pytest.approx(5000 / 3725.0)  # a medio camino por altitud
+    assert [p.gsd_estimated for p in le.photos] == [False, False, True, False, False]
+    mid = le.photos[2]
+    assert (mid.gsd_source, mid.gsd_confidence) == ("mosaic_calibration", "low")
+    assert (le.photos[0].gsd_source, le.photos[0].gsd_confidence) == ("lrf", "high")
+    assert le.gsd_estimated_count == 1 and le.gsd_missing_count == 0
+    assert any("1 foto sin láser: GSD estimado por interpolación" in w for w in le.warnings)
+
+
+def test_missing_gsd_at_the_extreme_averages_neighbour_and_strip_scale(tmp_path, exif_calls):
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_FIVE}})
+    set_lrf(exif_calls, wtg, [4.5, 4.5, 4.5, 4.5, None])  # la punta (última foto de LE) sin láser
+    mark_standard(marks)
+    (le,) = run(wtg, marks, tmp_path / "out")
+    factor = le.chord["scale_to_strip"]
+    # mm/px de la tira -> foto reducida (·factor) -> foto completa (800/1600 = 0,5)
+    strip_gsd = le.calibration["mm_per_px"] * factor * (800 / W)
+    assert le.photos[4].gsd_mm_px == pytest.approx((4500 / 3725.0 + strip_gsd) / 2)
+    assert le.photos[4].gsd_estimated and le.photos[4].gsd_confidence == "low"
+
+
+def test_section_without_any_gsd_or_strip_scale_stays_without_gsd(tmp_path, exif_calls):
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_UP}})
+    set_lrf(exif_calls, wtg, [None, None, None])  # y sin marcas: sin calibración
+    (le,) = run(wtg, marks, tmp_path / "out")
+    assert [p.gsd_mm_px for p in le.photos] == [None] * 3
+    assert le.gsd_missing_count == 3 and le.gsd_estimated_count == 0
+    assert any("3 fotos sin GSD" in w for w in le.warnings)
+
+
+def test_summary_json_has_gsd_provenance(tmp_path, exif_calls):
+    wtg, marks = setup(tmp_path, exif_calls, {"A": {"LE": LE_FIVE}})
+    set_lrf(exif_calls, wtg, [4.0, 4.5, None, 5.5, 6.0])
+    mark_standard(marks)
+    run(wtg, marks, tmp_path / "out")
+    data = json.loads((tmp_path / "out" / "WTGM_reconstruction.json").read_text(encoding="utf-8"))
+    photos = data["sections"][0]["photos"]
+    assert photos[2]["gsd_estimated"] is True and photos[2]["gsd_source"] == "mosaic_calibration"
+    assert photos[2]["gsd_confidence"] == "low"
+    assert photos[0] == {**photos[0], "gsd_estimated": False, "gsd_source": "lrf", "gsd_confidence": "high"}
 
 
 def test_exif_batches_receive_the_cancel_event(tmp_path, exif_calls):
