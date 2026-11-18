@@ -112,6 +112,8 @@ def run(wtg, marks, out_dir, *, segmenter=None, cancel=None, msgs=None, length=L
                            lambda m, f: msgs.append((m, f)), cancel or threading.Event())
 
 
+EXTREME_WARNING_1 = ("1 foto sin láser en el extremo de la cara: GSD estimado con la vecina más cercana "
+                     "y la escala de la tira; mediciones en ella son aproximadas.")
 LE_UP = [100.0, 102.0, 104.0]   # LE se vuela de la raíz a la punta (alt. creciente)
 PS_DOWN = [104.0, 102.0, 100.0]  # PS de la punta a la raíz
 
@@ -356,7 +358,8 @@ def test_photo_without_altitude_has_no_radius(tmp_path, exif_calls):
     # sin EXIF legible tampoco hay GSD propio: se estima (extremo de la cara: vecina + tira)
     assert le.photos[0].gsd_estimated and le.photos[0].gsd_source == "mosaic_calibration"
     assert le.photos[2].radius_m is not None
-    assert not any("altitud" in w for w in le.warnings)  # 1 de 3 sin altitud: no es la mayoría
+    # 1 de 3 sin altitud no es la mayoría: el único aviso es el del GSD estimado en el extremo
+    assert le.warnings == [EXTREME_WARNING_1]
 
 
 def test_section_mostly_without_altitude_is_flagged(tmp_path, exif_calls):
@@ -503,7 +506,8 @@ def test_missing_gsd_in_the_interior_is_interpolated_and_flagged(tmp_path, exif_
     assert (mid.gsd_source, mid.gsd_confidence) == ("mosaic_calibration", "low")
     assert (le.photos[0].gsd_source, le.photos[0].gsd_confidence) == ("lrf", "high")
     assert le.gsd_estimated_count == 1 and le.gsd_missing_count == 0
-    assert any("1 foto sin láser: GSD estimado por interpolación" in w for w in le.warnings)
+    assert le.warnings == ["1 foto sin láser: GSD estimado por interpolación entre fotos vecinas; "
+                           "mediciones en ella son aproximadas."]
 
 
 def test_missing_gsd_at_the_extreme_averages_neighbour_and_strip_scale(tmp_path, exif_calls):
@@ -524,7 +528,34 @@ def test_section_without_any_gsd_or_strip_scale_stays_without_gsd(tmp_path, exif
     (le,) = run(wtg, marks, tmp_path / "out")
     assert [p.gsd_mm_px for p in le.photos] == [None] * 3
     assert le.gsd_missing_count == 3 and le.gsd_estimated_count == 0
-    assert any("3 fotos sin GSD" in w for w in le.warnings)
+    assert le.warnings == ["3 fotos sin GSD: ninguna foto de la cara tiene láser y no hay escala de la "
+                           "tira; no se pueden medir en ellas."]
+
+
+def test_gsd_warnings_distinguish_the_kind_of_fill_and_the_reason_for_no_gsd():
+    from nexus_desktop.domain import gsd_fill as gf
+
+    def photo(detail, estimated):
+        g = gf.PhotoGsd(1.0 if estimated else None, "mosaic_calibration" if estimated else None,
+                        "low" if estimated else None, estimated, detail)
+        return g
+    texts = {
+        gf.NEIGHBOUR: "2 fotos sin láser en el extremo de la cara: GSD estimado con la vecina más cercana "
+                      "(no hay escala de la tira); mediciones en ellas son aproximadas.",
+        gf.STRIP: "2 fotos sin láser ni vecinas con láser cercanas: GSD estimado solo con la escala de la "
+                  "tira; mediciones en ellas son aproximadas.",
+        gf.TOO_FAR: "2 fotos sin GSD: las fotos con láser quedan demasiado lejos y no hay escala de la tira; "
+                    "no se pueden medir en ellas.",
+        gf.OUT_OF_RANGE: "2 fotos sin GSD: la escala de la tira da un GSD fuera de 0,01–100 mm/px; "
+                         "no se pueden medir en ellas.",
+        gf.NO_NEIGHBOURS: "2 fotos sin GSD: ninguna foto de la cara tiene láser y no hay escala de la tira; "
+                          "no se pueden medir en ellas.",
+    }
+    for detail, text in texts.items():
+        finals = [photo(detail, detail in (gf.NEIGHBOUR, gf.STRIP))] * 2
+        assert rec._gsd_warnings(finals) == [text], detail
+    mixed = [photo(gf.INTERPOLATION, True), photo(gf.STRIP, True), photo(gf.TOO_FAR, False)]
+    assert len(rec._gsd_warnings(mixed)) == 3  # un aviso por tipo, cada uno con su conteo
 
 
 def test_summary_json_has_gsd_provenance(tmp_path, exif_calls):

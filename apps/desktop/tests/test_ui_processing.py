@@ -15,7 +15,7 @@ from nexus_desktop.ui.screens import processing as processing_module
 from nexus_desktop.ui.screens.login import LoginScreen
 from nexus_desktop.ui.screens.marking import MarkingScreen
 from nexus_desktop.ui.screens.processing import ProcessingScreen, load_segmenter
-from nexus_desktop.ui.screens.results import ResultsScreen
+from nexus_desktop.ui.screens.results import ESTIMATED_LEGEND, ResultsScreen
 from nexus_desktop.ui.screens.upload import UploadScreen
 from nexus_desktop.ui.screens.verification import VerificationScreen
 from nexus_desktop.ui.theme import TOKENS
@@ -333,6 +333,8 @@ def test_verification_marks_estimated_gsd_and_counts_per_section(app, tmp_path):
     est, missing = le.photos[-1], le.photos[0]  # la última se ve la primera (punta arriba)
     est.gsd_mm_px, est.gsd_source, est.gsd_confidence, est.gsd_estimated = 1.12, "mosaic_calibration", "low", True
     missing.gsd_mm_px = None
+    le.warnings = ["1 foto sin láser: GSD estimado por interpolación entre fotos vecinas; "
+                   "mediciones en ella son aproximadas."]
     screen = app.show(VerificationScreen, blade="A")
     app.tasks.pump()
     tree = screen.trees["LE"]
@@ -340,10 +342,13 @@ def test_verification_marks_estimated_gsd_and_counts_per_section(app, tmp_path):
     assert rows[0][2] == "≈1,12"       # estimado
     assert rows[-1][2] == "—"          # sin escala
     assert not any(r[2].startswith("≈") for r in rows[1:])
+    # el conteo se dice una sola vez: el aviso de la sección (no una línea extra)
     info = screen.info_labels["LE"].cget("text")
-    assert "1 foto con escala estimada, 1 sin escala" in info
-    assert "estimado" in screen.gsd_legend.cget("text")
-    assert screen.info_labels["PS"].cget("text").count("escala estimada") == 0
+    assert info.count("sin láser") == 1 and "con escala estimada" not in info
+    assert screen.gsd_legend.cget("text") == ESTIMATED_LEGEND  # hay fotos estimadas a la vista
+    screen.select_blade("B")
+    app.tasks.pump()
+    assert screen.gsd_legend.cget("text") == ""  # la pala B no tiene estimadas: sin leyenda
 
 
 def test_verification_strip_shows_calibration_marks(app, tmp_path):

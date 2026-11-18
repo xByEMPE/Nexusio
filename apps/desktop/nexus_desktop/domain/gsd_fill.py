@@ -5,10 +5,13 @@ la punta de la pala y en las caras de canto; `domain/gsd.compute_gsd` devuelve N
 quedaba sin escala. Aquí se estima, SIN tocar nunca un GSD medido:
 
 * INTERIOR (hay foto con GSD a ambos lados): interpolación lineal entre las dos vecinas válidas
-  más cercanas, según la altitud de la foto (error medio 3,7 % con 1 foto, 6,2 % con 5 seguidas).
+  más cercanas, según la altitud de la foto. Error medido por la prueba lenta
+  test_wtg25_real_exif_fill_matches_the_investigation (ocultando fotos reales de WTG 25, sin tira):
+  3,5 % medio con 1 foto, 4,4 % con 3 seguidas y 4,4 % con 5 seguidas (máx. 23-28 %).
 * EXTREMO (sin vecina válida por un lado, típicamente la punta): promedio entre el GSD de la
   vecina válida más cercana y el GSD derivado de la escala de la tira (calibración punta/raíz,
-  ya convertida a píxeles de foto completa por quien llama). Error medio ≈ 8,7 %.
+  ya convertida a píxeles de foto completa por quien llama). Error medio ≈ 8,7 % (máx. 41 %):
+  medición puntual de la investigación, no la cubre ninguna prueba.
 * Sin vecinas utilizables pero con tira: solo la tira. Sin vecinas ni tira: se queda sin GSD.
 
 Todo lo rellenado va con source="mosaic_calibration" y confidence="low".
@@ -27,7 +30,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Sequence
 
 from .gsd import MAX_MM_PX, MIN_MM_PX, GsdResult
@@ -54,8 +57,13 @@ class PhotoGsd:
     source: str | None
     confidence: str | None
     estimated: bool
+    # Cómo se obtuvo (solo informativo, no cuenta en la igualdad): INTERPOLATION / NEIGHBOUR_STRIP /
+    # NEIGHBOUR / STRIP si se estimó; NO_NEIGHBOURS / TOO_FAR (sin tira) u OUT_OF_RANGE (el GSD de la tira es inválido) si se quedó sin GSD.
+    detail: str | None = field(default=None, compare=False)
 
 
+INTERPOLATION, NEIGHBOUR_STRIP, NEIGHBOUR, STRIP = "interpolation", "neighbour_strip", "neighbour", "strip"
+NO_NEIGHBOURS, TOO_FAR, OUT_OF_RANGE = "no_neighbours", "too_far", "out_of_range"  # sin tira
 NO_GSD = PhotoGsd(None, None, None, False)
 
 
@@ -114,15 +122,19 @@ def fill_missing_gsd(samples: Sequence[GsdSample], strip_gsd_mm_px: float | None
         if p is not None and n is not None:
             t = _fraction(samples, i, p, n)
             vp, vn = samples[p].gsd.mm_px, samples[n].gsd.mm_px
-            value = vp + t * (vn - vp)
+            value, kind = vp + t * (vn - vp), INTERPOLATION
         elif p is not None or n is not None:
             a = p if p is not None else n
             neighbour = samples[a].gsd.mm_px
-            value = (neighbour + strip) / 2 if strip is not None else neighbour
+            value, kind = ((neighbour + strip) / 2, NEIGHBOUR_STRIP) if strip is not None else (neighbour, NEIGHBOUR)
         else:
-            value = strip
-        if value is None or not _valid_mm_px(value):
-            out.append(NO_GSD)
+            value, kind = strip, STRIP
+        if value is None:
+            if _finite(strip_gsd_mm_px):  # había tira, pero su GSD no es válido (fuera de 0,01–100)
+                reason = OUT_OF_RANGE
+            else:
+                reason = TOO_FAR if anchors else NO_NEIGHBOURS
+            out.append(PhotoGsd(None, None, None, False, reason))
         else:
-            out.append(PhotoGsd(float(value), ESTIMATED_SOURCE, ESTIMATED_CONFIDENCE, True))
+            out.append(PhotoGsd(float(value), ESTIMATED_SOURCE, ESTIMATED_CONFIDENCE, True, kind))
     return out

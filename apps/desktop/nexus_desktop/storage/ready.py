@@ -226,6 +226,11 @@ def _parse_photo(folder: Path, item) -> PhotoResult:
             and item.get("gsd_confidence") in (None, *GSD_CONFIDENCES)
             and isinstance(item.get("gsd_estimated", False), bool)):  # versión 1: sin estos campos
         raise ValueError
+    if item.get("gsd_estimated", False):  # un GSD estimado es siempre de la tira y de confianza baja
+        gsd = item.get("gsd_mm_px")
+        if not (_is_number(gsd) and gsd > 0 and item.get("gsd_source") == "mosaic_calibration"
+                and item.get("gsd_confidence") == "low"):
+            raise ValueError
     rel = _safe_relative(item.get("file"))
     return PhotoResult(folder.joinpath(*rel.parts), item.get("radius_m"), item.get("gsd_mm_px"),
                        gsd_source=item.get("gsd_source"), gsd_confidence=item.get("gsd_confidence"),

@@ -196,17 +196,19 @@ apps/desktop/
   apunta de frente (gimbal ≈ 0°), la altura de vuelo tampoco sirve de respaldo. Sin GSD la foto no
   tendría escala ni mediciones en el visor. Por eso `domain/gsd_fill.py` estima el GSD de esas fotos
   (nunca toca uno medido): en el **interior** de la cara (hay fotos medidas a ambos lados) interpola
-  por altitud entre las dos vecinas más cercanas (error medio 3,5–4,4 % medido en WTG 25 ocultando
-  fotos reales; hasta 5 seguidas); en el **extremo** (típicamente la punta, sin vecina por un lado)
-  promedia el GSD de la vecina más cercana con el que implica la escala de la tira (calibración
-  punta/raíz), con un error medio ≈ 9 % (máx. ≈ 41 %). Si no hay vecinas ni tira queda sin GSD.
+  por altitud entre las dos vecinas más cercanas (error medio 3,5 % con 1 foto oculta, 4,4 % con 3 y
+  4,4 % con 5 seguidas, máximos de 23-28 %: lo mide la prueba lenta
+  `test_wtg25_real_exif_fill_matches_the_investigation` ocultando fotos reales de WTG 25); en el
+  **extremo** (típicamente la punta, sin vecina por un lado) promedia el GSD de la vecina más
+  cercana con el que implica la escala de la tira (calibración punta/raíz); su error (≈ 8,7 % medio,
+  41 % máx.) es una **medición puntual de la investigación**, no la cubre ninguna prueba. Si no hay vecinas ni tira queda sin GSD.
   No se usa una vecina a más de 10 fotos ni 30 m de altitud, ni un GSD medido que difiera más de 3×
   de la mediana de la cara. Lo estimado se sube con `gsd.source = "mosaic_calibration"` y
   `confidence = "low"`; en el portal el visor lo muestra como «escala estimada». En la
   verificación se ve como «≈1,12» (medido: «1,12»; sin escala: «—») y cada sección indica cuántas
   fotos tienen escala estimada o ninguna. Las mediciones sobre una foto estimada son aproximadas.
 - **Paso entre fotos al coser sin láser.** El cosedor usa 4,5 m de distancia por defecto cuando la
-  foto no tiene láser; en la punta eso da un error medio de −9,4 % en el paso entre fotos. No se ha
+  foto no tiene láser; en la punta eso da un error medio de −9,4 % en el paso entre fotos (medición puntual de la investigación). No se ha
   cambiado (mejora posible aparte: usar el GSD estimado).
 
 - **Palas con la punta arriba.** La reconstrucción, los radios y la calibración suponen que la

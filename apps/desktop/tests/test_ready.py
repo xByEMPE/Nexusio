@@ -368,3 +368,22 @@ def test_version_1_file_without_new_fields_still_loads(tmp_path):
     assert [p.gsd_mm_px for p in photos] == [p.gsd_mm_px for p in state.sections[0].photos]
     assert not any(p.gsd_estimated for s in loaded.sections for p in s.photos)
     assert all(i.estimated_gsd_mm_px is None for i in plan_of(loaded).photo_info.values())
+
+
+@pytest.mark.parametrize("change", [
+    {"gsd_mm_px": None},                         # estimado sin valor
+    {"gsd_mm_px": 0},
+    {"gsd_mm_px": -1.0},
+    {"gsd_source": "lrf"},                       # estimado con origen medido
+    {"gsd_source": None},
+    {"gsd_confidence": "high"},
+    {"gsd_confidence": None},
+], ids=lambda c: next(iter(c)) + "=" + str(next(iter(c.values()))))
+def test_estimated_photo_with_inconsistent_gsd_fields_is_refused(tmp_path, change):
+    state = make_state(tmp_path)
+    mark_estimated(state)
+    ready.save_ready(state)
+    rewrite(state.wtg.path, lambda d: d["sections"][0]["photos"][1].update(change))
+    with pytest.raises(ReadyError) as err:
+        ready.load_ready(state.wtg.path)
+    assert "Traceback" not in str(err.value) and str(err.value).strip()

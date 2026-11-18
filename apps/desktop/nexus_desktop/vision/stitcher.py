@@ -53,15 +53,10 @@ class StripResult:
     kept_indices: list[int] = field(default_factory=list)
 
 
-def processing_scale(w: int, h: int, max_w: int = MAX_WIDTH, max_h: int = MAX_HEIGHT) -> float:
-    """Factor (≤ 1) con que `resize_for_processing` reduce una foto de w x h píxeles."""
-    return min(max_w / w, max_h / h, 1.0)
-
-
 def resize_for_processing(img: np.ndarray, max_w: int = MAX_WIDTH, max_h: int = MAX_HEIGHT) -> np.ndarray:
     """Reduce la foto para caber en max_w x max_h (INTER_AREA); si ya cabe, la devuelve tal cual."""
     h, w = img.shape[:2]
-    scale = processing_scale(w, h, max_w, max_h)
+    scale = min(max_w / w, max_h / h)
     if scale < 1.0:
         return cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     return img

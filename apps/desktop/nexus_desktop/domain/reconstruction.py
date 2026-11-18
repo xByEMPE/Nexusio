@@ -31,6 +31,7 @@ import numpy as np
 
 from .exif import num, read_exif_batch
 from .gsd import compute_gsd
+from . import gsd_fill
 from .gsd_fill import GsdSample, fill_missing_gsd
 from .marking import ROOT_TO_TIP_FACES, MarkingState, SectionMarks
 from .measurement import radius_from_altitude, reference_root_altitude, sequence_direction
@@ -403,8 +404,8 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
     strip_gsd = None
     if calibration.get("mm_per_px") and loaded.scales:
         strip_gsd = calibration["mm_per_px"] * factor * float(np.median([sx for sx, _sy in loaded.scales]))
-    photos = _photo_results(paths, section, exif, root_alt, blade_length_m, strip_gsd)
-    gsd_warnings = _gsd_warnings(photos)
+    photos, finals = _photo_results(paths, section, exif, root_alt, blade_length_m, strip_gsd)
+    gsd_warnings = _gsd_warnings(finals)
     for warning in gsd_warnings:
         log.warning(warning)
         progress(warning, 0.9)
@@ -421,22 +422,40 @@ def _section(blade: str, face: str, paths: list[Path], section: SectionMarks, ex
                          warnings=warnings)
 
 
-def _gsd_warnings(photos: list[PhotoResult]) -> list[str]:
-    """Avisos del relleno del GSD: fotos estimadas y fotos que siguen sin escala."""
+_ESTIMATED_TEXT = {
+    gsd_fill.INTERPOLATION: "sin láser: GSD estimado por interpolación entre fotos vecinas",
+    gsd_fill.NEIGHBOUR_STRIP: ("sin láser en el extremo de la cara: GSD estimado con la vecina más cercana "
+                               "y la escala de la tira"),
+    gsd_fill.NEIGHBOUR: ("sin láser en el extremo de la cara: GSD estimado con la vecina más cercana "
+                         "(no hay escala de la tira)"),
+    gsd_fill.STRIP: "sin láser ni vecinas con láser cercanas: GSD estimado solo con la escala de la tira",
+}
+_MISSING_TEXT = {
+    gsd_fill.NO_NEIGHBOURS: "ninguna foto de la cara tiene láser y no hay escala de la tira",
+    gsd_fill.TOO_FAR: "las fotos con láser quedan demasiado lejos y no hay escala de la tira",
+    gsd_fill.OUT_OF_RANGE: "la escala de la tira da un GSD fuera de 0,01–100 mm/px",
+}
+
+
+def _gsd_warnings(finals: list[gsd_fill.PhotoGsd]) -> list[str]:
+    """Avisos del relleno del GSD, uno por tipo de relleno y por motivo de «sin GSD», con su conteo."""
     out = []
-    estimated = sum(1 for p in photos if p.gsd_estimated)
-    missing = sum(1 for p in photos if p.gsd_mm_px is None)
-    if estimated:
-        out.append(f"{estimated} {'foto sin láser' if estimated == 1 else 'fotos sin láser'}: GSD estimado "
-                   "por interpolación; mediciones en ellas son aproximadas.")
-    if missing:
-        out.append(f"{missing} {'foto sin GSD' if missing == 1 else 'fotos sin GSD'}: no hay láser, ni "
-                   "vecinas, ni escala de la tira para estimarlo; no se pueden medir en ellas.")
+    for kind, text in _ESTIMATED_TEXT.items():
+        n = sum(1 for g in finals if g.estimated and g.detail == kind)
+        if n:
+            noun, them = ("foto", "ella") if n == 1 else ("fotos", "ellas")
+            out.append(f"{n} {noun} {text}; mediciones en {them} son aproximadas.")
+    for reason, text in _MISSING_TEXT.items():
+        n = sum(1 for g in finals if g.mm_px is None and g.detail == reason)
+        if n:
+            noun, them = ("foto", "ella") if n == 1 else ("fotos", "ellas")
+            out.append(f"{n} {noun} sin GSD: {text}; no se pueden medir en {them}.")
     return out
 
 
 def _photo_results(paths: list[Path], section: SectionMarks, exif: dict[Path, dict | None], root_alt: float,
-                   blade_length_m: float, strip_gsd_mm_px: float | None = None) -> list[PhotoResult]:
+                   blade_length_m: float, strip_gsd_mm_px: float | None = None
+                   ) -> tuple[list[PhotoResult], list[gsd_fill.PhotoGsd]]:
     """Radio y GSD de cada foto. La altitud de la punta es la de la foto donde se marcó.
 
     El GSD medido por láser no se toca; las fotos sin él se rellenan con `gsd_fill`
@@ -452,9 +471,10 @@ def _photo_results(paths: list[Path], section: SectionMarks, exif: dict[Path, di
         width = num(meta.get("ImageWidth")) or num(meta.get("ExifImageWidth")) or 0
         samples.append(GsdSample(compute_gsd(meta, int(width)) if meta else None, alt))
     final = fill_missing_gsd(samples, strip_gsd_mm_px)
-    return [PhotoResult(path=path, radius_m=radius, gsd_mm_px=g.mm_px, gsd_source=g.source,
-                        gsd_confidence=g.confidence, gsd_estimated=g.estimated)
-            for path, radius, g in zip(paths, radii, final)]
+    photos = [PhotoResult(path=path, radius_m=radius, gsd_mm_px=g.mm_px, gsd_source=g.source,
+                          gsd_confidence=g.confidence, gsd_estimated=g.estimated)
+              for path, radius, g in zip(paths, radii, final)]
+    return photos, final
 
 
 def _write_summary(path: Path, blade_length_m: float, results: list[SectionResult]) -> None:

@@ -20,8 +20,7 @@ from tkinter import ttk
 from nexus_desktop.domain.reconstruction import SectionResult, stitch_order
 from nexus_desktop.domain.wtg_folder import FACES
 from nexus_desktop.storage import ready
-from nexus_desktop.ui.screens.results import (ESTIMATED_LEGEND, ESTIMATED_MARK, StripGridScreen, decimal,
-                                               gsd_counts_text)
+from nexus_desktop.ui.screens.results import (ESTIMATED_LEGEND, ESTIMATED_MARK, StripGridScreen, decimal)
 from nexus_desktop.ui import theme
 from nexus_desktop.ui.theme import TOKENS
 
@@ -74,7 +73,7 @@ class VerificationScreen(StripGridScreen):
         ttk.Label(footer, text="Raíz", foreground=ROOT_COLOR).pack(side="left", padx=(12, 0))
         ttk.Label(footer, text="Foto elegida", foreground=PHOTO_COLOR).pack(side="left", padx=(12, 0))
         ttk.Label(footer, text="Radio en m · GSD en mm/px", style="Muted.TLabel").pack(side="left", padx=(16, 0))
-        self.gsd_legend = ttk.Label(footer, text=ESTIMATED_LEGEND, style="Muted.TLabel")
+        self.gsd_legend = ttk.Label(footer, text="", style="Muted.TLabel")
         self.gsd_legend.pack(side="left", padx=(12, 0))
         if not self.sections:
             self.continue_button.state(["disabled"])
@@ -126,6 +125,10 @@ class VerificationScreen(StripGridScreen):
     # --- pala ---
 
     def _blade_changed(self) -> None:
+        # La leyenda solo se muestra si hay fotos con GSD estimado en las caras visibles.
+        visible = [self.section(face) for face in FACES]
+        self.gsd_legend.configure(text=ESTIMATED_LEGEND if any(
+            sec is not None and sec.gsd_estimated_count for sec in visible) else "")
         for face in FACES:
             tree = self.trees[face]
             tree.delete(*tree.get_children())
@@ -146,9 +149,6 @@ class VerificationScreen(StripGridScreen):
 
     def _info_text(self, section: SectionResult) -> str:
         text = super()._info_text(section)
-        counts = gsd_counts_text([section])
-        if counts:
-            text += f"\n{counts}"
         cal = section.calibration or {}
         if cal.get("mm_per_px"):
             text += (f"\nPunta: fila {cal['tip_row_px']} · Raíz: fila {cal['root_row_px']}"

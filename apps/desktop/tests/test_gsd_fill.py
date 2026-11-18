@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nexus_desktop.domain.gsd import GsdResult
+from nexus_desktop.domain import gsd_fill as gf
 from nexus_desktop.domain.gsd_fill import (MAX_NEIGHBOR_PHOTOS, GsdSample, PhotoGsd, fill_missing_gsd)
 
 SOURCE = "mosaic_calibration"
@@ -112,6 +113,18 @@ def test_equal_unordered_or_missing_altitudes_fall_back_to_index():
     assert missing[1].mm_px == pytest.approx(1.5)
 
 
+def test_detail_tells_how_each_photo_was_estimated_or_why_it_has_no_gsd():
+    assert fill_missing_gsd(face([1.0, None, 2.0]), None)[1].detail == gf.INTERPOLATION
+    assert fill_missing_gsd(face([None, 2.0]), 1.0)[0].detail == gf.NEIGHBOUR_STRIP
+    assert fill_missing_gsd(face([None, 2.0]), None)[0].detail == gf.NEIGHBOUR
+    assert fill_missing_gsd(face([None]), 1.0)[0].detail == gf.STRIP
+    assert fill_missing_gsd(face([None]), None)[0].detail == gf.NO_NEIGHBOURS
+    far = fill_missing_gsd(face([1.0] + [None] * (MAX_NEIGHBOR_PHOTOS + 2)), None)
+    assert far[-1].detail == gf.TOO_FAR
+    assert fill_missing_gsd(face([None]), 500.0)[0].detail == gf.OUT_OF_RANGE  # la tira da un valor absurdo
+    assert fill_missing_gsd(face([None, 2.0]), 500.0)[0].detail == gf.NEIGHBOUR  # y se usa solo la vecina
+
+
 def test_empty_input():
     assert fill_missing_gsd([], 1.0) == []
 
@@ -182,21 +195,34 @@ def test_wtg25_real_exif_fill_matches_the_investigation(capsys):
                     d_val = out[i].mm_px - out[j].mm_px
                     assert d_val * d_alt * (vn - vp) * (an - ap) >= -1e-9, (name, i, j)
 
-    # (c) ocultar un GSD medido del interior, rellenarlo y compararlo con el real
-    errors = []
-    for name, samples in faces:
-        anchors = [i for i, x in enumerate(samples) if x.gsd is not None]
-        for i in anchors[1:-1]:
-            hidden = list(samples)
-            hidden[i] = GsdSample(None, samples[i].altitude_m)
-            got = fill_missing_gsd(hidden, None)[i]
-            assert got.estimated
-            errors.append(abs(got.mm_px - samples[i].gsd.mm_px) / samples[i].gsd.mm_px)
-    mean_err = statistics.mean(errors)
+    # lo rellenado es exactamente lo que no tiene láser (sin tira, todas tienen vecina utilizable)
+    assert filled_total == total - measured
+
+    # (c) ocultar 1, 3 y 5 fotos seguidas con GSD real del interior (medidas a ambos lados),
+    # rellenarlas y compararlas con el valor real
+    stats = {}
+    for k in (1, 3, 5):
+        errors = []
+        for _name, samples in faces:
+            for start in range(1, len(samples) - k):
+                window = range(start, start + k)
+                if not all(samples[i].gsd for i in window) or not samples[start - 1].gsd or not samples[start + k].gsd:
+                    continue
+                hidden = [GsdSample(None, x.altitude_m) if i in window else x for i, x in enumerate(samples)]
+                got = fill_missing_gsd(hidden, None)
+                for i in window:
+                    assert got[i].estimated
+                    errors.append(abs(got[i].mm_px - samples[i].gsd.mm_px) / samples[i].gsd.mm_px)
+        stats[k] = (len(errors), statistics.mean(errors), max(errors))
     with capsys.disabled():
         print(f"\nWTG real: {total} fotos, {measured} con láser, {total - measured} sin; "
-              f"rellenadas sin tira: {filled_total} (interior {interior_total}); "
-              f"ocultar 1 foto del interior: n={len(errors)} error medio {mean_err:.1%}, máx {max(errors):.1%}")
-    assert errors and mean_err < 0.10
-    if SAMPLE_WTG.name == "WTG 25":
-        assert (total, measured) == (212, 161)
+              f"rellenadas sin tira: {filled_total} (interior {interior_total})")
+        for k, (n, mean, worst) in stats.items():
+            print(f"  ocultar {k} seguidas: n={n} error medio {mean:.1%}, máx {worst:.1%}")
+    assert all(mean < 0.10 for _n, mean, _w in stats.values())
+    # cifras citadas en el README y el docstring de gsd_fill (con tolerancia: dependen de la carpeta)
+    if (total, measured) == (212, 161):
+        n1, m1, w1 = stats[1]
+        assert 120 <= n1 <= 135 and 0.030 <= m1 <= 0.040 and 0.20 <= w1 <= 0.26
+        assert 0.035 <= stats[3][1] <= 0.050 and 0.035 <= stats[5][1] <= 0.050
+        assert 280 <= stats[3][0] <= 310 and 355 <= stats[5][0] <= 385
