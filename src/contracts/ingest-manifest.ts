@@ -192,6 +192,7 @@ export const INGEST_ERROR_CODES = [
   "unsupported_version",
   "forbidden_project",
   "inspection_locked",
+  "inspection_deleting",
   "asset_other_org",
   "empty_manifest",
   "bad_path",
