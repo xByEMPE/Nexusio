@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -63,6 +64,8 @@ def _read_user_config() -> dict[str, str]:
 
 def _is_public_key(key: str) -> bool:
     """True si `key` puede ser la llave pública: sb_publishable_… o un JWT de rol anon."""
+    if re.search(r"\s", key):  # espacios o saltos de línea internos: no es una llave
+        return False
     if key.startswith("sb_secret_"):
         return False
     parts = key.split(".")
@@ -83,9 +86,19 @@ def _is_safe_url(url: str) -> bool:
     except ValueError:
         return False
     scheme = parts.scheme.lower()
-    if not host:
+    if not host or "@" in parts.netloc:  # sin servidor, o con usuario:clave@ en la dirección
         return False
     return scheme == "https" or (scheme == "http" and host.lower() in LOCAL_HOSTS)
+
+
+def user_config_invalid() -> bool:
+    """True si config.json existe pero no sirve (no es JSON, no es un objeto o no trae una llave
+    pública válida). No devuelve ni imprime su contenido."""
+    path = user_config_path()
+    if not path.is_file():
+        return False
+    key = _read_user_config().get("supabase_publishable_key", "")
+    return not key or not _is_public_key(key)
 
 
 def _load_supabase() -> tuple[str, str, str | None]:

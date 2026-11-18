@@ -17,7 +17,7 @@ la subida»); el técnico puede procesar varias carpetas en el campo y subirlas 
    acceso «NEXUS Importador de palas» en el menú Inicio. Se desinstala desde
    *Configuración → Aplicaciones*.
 2. Si el instalador se compiló con la URL y la llave pública (ver «Compilar el instalador»),
-   deja solo `%APPDATA%\NEXUS\config.json`. Si no, copia ahí el archivo de configuración que te dé el
+   ya deja `%APPDATA%\NEXUS\config.json`. Si no, copia ahí el archivo de configuración que te dé el
    administrador (ver abajo). Sin él, la pantalla de inicio de sesión dice qué falta y dónde
    ponerlo.
 
@@ -148,13 +148,20 @@ icono de escritorio opcional y desinstalador.
 `NEXUS_SUPABASE_URL` y `NEXUS_PUBLISHABLE_KEY`). Los valida antes de compilar con las mismas
 reglas que `config.py` (llave `sb_secret_…` o JWT que no sea de rol `anon`, URL que no sea
 `https://` salvo `http://` a `localhost`/`127.0.0.1`/`[::1]` y valores vacíos son un error) y deja
-`apps/desktop/build/config.json` (UTF-8 sin BOM, solo esas dos claves; `build/` está ignorada en
+`apps/desktop/build/config.json` (UTF-8 sin BOM, solo esas dos claves; se rechazan llaves con espacios y URLs con usuario:clave@; `build/` está ignorada en
 git). `installer.iss` lo empaqueta si existe y lo instala en `%APPDATA%\NEXUS\config.json`.
 
+Forma preferida (variables de entorno: la llave no queda en el historial de PowerShell; es
+pública, pero es mejor práctica):
+
 ```
-powershell -ExecutionPolicy Bypass -File apps/desktop/packaging/build.ps1 -ExiftoolDir <carpeta de exiftool> -SupabaseUrl <URL> -PublishableKey <llave pública>
+$env:NEXUS_SUPABASE_URL = "<URL>"
+$env:NEXUS_PUBLISHABLE_KEY = "<llave pública>"
+powershell -ExecutionPolicy Bypass -File apps/desktop/packaging/build.ps1 -ExiftoolDir <carpeta de exiftool>
 "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" apps\desktop\packaging\installer.iss
 ```
+
+Alternativa con parámetros: `... build.ps1 -ExiftoolDir <carpeta> -SupabaseUrl <URL> -PublishableKey <llave pública>`.
 
 - **La llave es pública** (la que ya viaja en cualquier cliente web; los permisos los
   imponen las políticas RLS), pero aun así nunca se escribe en el repositorio ni se imprime

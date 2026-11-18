@@ -22,7 +22,7 @@ POWERSHELL = shutil.which("powershell.exe") or shutil.which("powershell")
 def _jwt(role: str) -> str:
     def seg(obj) -> str:
         return base64.urlsafe_b64encode(json.dumps(obj).encode()).decode().rstrip("=")
-    return f"{seg({'alg': 'HS256'})}.{seg({'role': role})}.firma"
+    return f"{seg({'alg': 'HS256'})}.{seg({'role': role})}.firmafirmafirma"
 
 
 # (nombre, url, llave)
@@ -36,6 +36,11 @@ CASES = [
     ("http localhost", "http://localhost:54321", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
     ("http 127.0.0.1", "http://127.0.0.1:54321", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
     ("http ipv6 local", "http://[::1]:54321", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
+    ("jwt ANON en mayúsculas", "https://ejemplo.invalid", _jwt("ANON")),
+    ("url con usuario y clave", "https://usuario:clave@ejemplo.invalid", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
+    ("url con usuario sin clave", "https://usuario@ejemplo.invalid", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
+    ("llave con espacio interno", "https://ejemplo.invalid", "sb_publishable_" + "abcdefghij klmnopqrstuvwx"),
+    ("llave con salto de línea", "https://ejemplo.invalid", "sb_publishable_" + "abcdefghij" + chr(10) + "klmnopqrstuvwx"),
     ("sin esquema", "ejemplo.invalid", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
 ]
 
@@ -59,29 +64,57 @@ _KEY_PATTERNS = [
 ]
 
 
-# Fixture ficticio ya existente (JWT inventado sin firma real) que comprueba que el registro lo oculta.
-_KNOWN_FAKE_FIXTURES = ["eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYXV0aGVudGljYXRlZCJ9.c2VjcmV0b2Zpcm1h"]
+# Fixture ficticio ya existente (JWT inventado sin firma real) que comprueba que el registro lo
+# oculta: solo se admite en ESTE archivo y con ESTE valor exacto.
+_KNOWN_FAKE_FIXTURES = {
+    "apps/desktop/tests/test_applog.py":
+        ["eyJhbGciOiJIUzI1NiJ9." + "eyJyb2xlIjoiYXV0aGVudGljYXRlZCJ9." + "c2VjcmV0b2Zpcm1h"],
+}
+
+
+def scan_for_keys(files, allowed=None):
+    """Rutas (relativas) de `files` = [(ruta relativa, Path)] con aspecto de llave real."""
+    allowed = allowed or {}
+    offenders = []
+    for rel, path in files:
+        if not path.is_file():
+            continue
+        text = path.read_bytes().decode("utf-8", errors="ignore")
+        for fake in allowed.get(rel, []):
+            text = text.replace(fake, "")
+        if any(p.search(text) for p in _KEY_PATTERNS):
+            offenders.append(rel)
+    return offenders
 
 
 def test_no_real_looking_keys_in_versioned_desktop_tree():
     root = DESKTOP.parent.parent
     out = subprocess.run(["git", "ls-files", "apps/desktop"], cwd=root, capture_output=True,
-                         text=True, check=True).stdout.split("\n")
+                         text=True, check=True).stdout.splitlines()
     assert BUILD_PS1.name in " ".join(out)
-    offenders = []
-    for rel in filter(None, out):
-        path = root / rel
-        if not path.is_file():
-            continue
-        try:
-            text = path.read_bytes().decode("utf-8", errors="ignore")
-        except OSError:
-            continue
-        for fake in _KNOWN_FAKE_FIXTURES:  # token de rol «authenticated» inventado de test_applog
-            text = text.replace(fake, "")
-        if any(p.search(text) for p in _KEY_PATTERNS):
-            offenders.append(rel)
-    assert offenders == [], f"patrones de llave real en: {offenders}"
+    files = [(rel, root / rel) for rel in out if rel]
+    assert scan_for_keys(files, _KNOWN_FAKE_FIXTURES) == []
+
+
+def test_key_scan_detects_real_looking_keys_and_exception_is_narrow(tmp_path):
+    pub = tmp_path / "a.txt"
+    pub.write_text("k = sb_publishable_" + "A1b2C3d4E5f6G7h8I9j0K1", encoding="utf-8")
+    sec = tmp_path / "b.txt"
+    sec.write_text("sb_secret_" + "A1b2C3d4E5f6G7h8I9j0K1", encoding="utf-8")
+    jwt = tmp_path / "c.txt"
+    jwt.write_text(_jwt("service_role"), encoding="utf-8")
+    ok = tmp_path / "d.txt"
+    ok.write_text("sb_publishable_prueba y sb_secret_x", encoding="utf-8")
+    files = [("a.txt", pub), ("b.txt", sec), ("c.txt", jwt), ("d.txt", ok)]
+    assert scan_for_keys(files) == ["a.txt", "b.txt", "c.txt"]
+    # la excepción vale solo para su ruta y su valor exacto
+    fake = _KNOWN_FAKE_FIXTURES["apps/desktop/tests/test_applog.py"][0]
+    other = tmp_path / "e.txt"
+    other.write_text(fake, encoding="utf-8")
+    assert scan_for_keys([("e.txt", other)], _KNOWN_FAKE_FIXTURES) == ["e.txt"]
+    assert scan_for_keys([("apps/desktop/tests/test_applog.py", other)], _KNOWN_FAKE_FIXTURES) == []
+    other.write_text(_jwt("anon"), encoding="utf-8")
+    assert scan_for_keys([("apps/desktop/tests/test_applog.py", other)], _KNOWN_FAKE_FIXTURES) != []
 
 
 def _run_script(tmp_path, url, key):
@@ -135,3 +168,50 @@ def test_build_script_reads_environment_fallback(tmp_path, monkeypatch):
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert json.loads((out / "config.json").read_text(encoding="utf-8"))["supabase_url"] == "https://ejemplo.invalid"
+
+
+FAKE_SECRET = "sb_secret_" + "ZXCVBNMASDFGHJKLQWERTYUIOP1234567890"
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="sin powershell.exe")
+@pytest.mark.parametrize("url,key", [
+    (FAKE_SECRET, "https://x.invalid"),  # parámetros cruzados
+    ("https://usuario:" + "claveMuySecreta987@ejemplo.invalid/ruta", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
+    ("https://ejemplo.invalid", FAKE_SECRET),
+    ("http://ejemplo.invalid/algo?token=" + "abcdef123456", "sb_publishable_" + "abcdefghijklmnopqrstuvwx"),
+], ids=["cruzados", "url con clave", "llave secreta", "http remoto con ruta"])
+def test_build_script_never_echoes_rejected_values(tmp_path, url, key):
+    proc, _ = _run_script(tmp_path, url, key)
+    assert proc.returncode != 0
+    shown = proc.stdout + proc.stderr
+    for secret in (FAKE_SECRET, "claveMuySecreta987", "abcdef123456", key, url):
+        assert secret not in shown
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="sin powershell.exe")
+def test_build_script_valid_run_prints_only_scheme_and_host(tmp_path):
+    key = "sb_publishable_" + "abcdefghijklmnopqrstuvwx"
+    proc, _ = _run_script(tmp_path, "https://ejemplo.invalid/ruta/larga", key)
+    assert proc.returncode == 0
+    assert "https://ejemplo.invalid" in proc.stdout and "ruta" not in proc.stdout
+    assert key not in proc.stdout
+
+
+def test_missing_key_message_mentions_existing_file_and_invalid_file_is_distinguished(
+        tmp_path, monkeypatch):
+    from nexus_desktop import config
+    from nexus_desktop.ui import app as app_module
+
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setattr(config, "SUPABASE_PUBLISHABLE_KEY", "")
+    monkeypatch.setattr(config, "CONFIG_ERROR", None)
+    assert "no lo reemplaza" in app_module.MISSING_KEY
+    _, error = app_module.create_session()  # sin archivo
+    assert error.startswith("Falta la llave")
+    path = tmp_path / "NEXUS" / "config.json"
+    path.parent.mkdir()
+    for content in ("{no es json: sb_secret_" + "AAAAAAAAAAAAAAAAAAAAAAAA", '{"supabase_url": "https://x.invalid"}'):
+        path.write_text(content, encoding="utf-8")
+        _, error = app_module.create_session()
+        assert "existe pero no es válido" in error and str(path) in error
+        assert "sb_secret_" not in error and "x.invalid" not in error

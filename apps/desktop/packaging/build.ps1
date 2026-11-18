@@ -41,6 +41,7 @@ function Fail([string]$Message) {
 
 function Test-PublicKey([string]$Key) {
     # Misma regla que config._is_public_key: ni sb_secret_ ni un JWT cuyo rol no sea anon.
+    if ($Key -match "\s") { return $false }  # espacios o saltos de línea internos
     if ($Key.StartsWith("sb_secret_")) { return $false }
     $parts = $Key.Split(".")
     if ($parts.Count -eq 3 -and $Key.StartsWith("eyJ")) {
@@ -49,7 +50,7 @@ function Test-PublicKey([string]$Key) {
             $b = $b.PadRight($b.Length + ((4 - $b.Length % 4) % 4), "=")
             $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))
             $payload = $json | ConvertFrom-Json
-            return ($payload.role -eq "anon")
+            return ($payload.role -ceq "anon")
         } catch { return $false }
     }
     return $true
@@ -59,6 +60,7 @@ function Test-SafeUrl([string]$Url) {
     # Misma regla que config._is_safe_url: https://<servidor>, o http:// solo a un servidor local.
     $uri = $null
     if (-not [System.Uri]::TryCreate($Url, [System.UriKind]::Absolute, [ref]$uri)) { return $false }
+    if ($Url -match "^[^:/?#]+://[^/?#]*@") { return $false }  # credenciales en la URL (usuario:clave@)
     $hostName = $uri.Host.ToLowerInvariant()
     # .NET expande IPv6 (0000:…:0001); config.py solo reconoce la forma literal [::1].
     if ($uri.HostNameType -eq [System.UriHostNameType]::IPv6) {
@@ -88,15 +90,17 @@ if (-not $SupabaseUrl -and -not $PublishableKey) {
     $PublishableKey = $PublishableKey.Trim()
     if (-not (Test-SafeUrl $SupabaseUrl)) {
         Fail ("La URL de Supabase no es válida: debe ser https://<servidor> (http:// solo para localhost, " +
-              "127.0.0.1 o [::1]). Recibido: $SupabaseUrl")
+              "127.0.0.1 o [::1]), sin usuario ni clave en la dirección. (valor no mostrado)")
     }
     if (-not (Test-PublicKey $PublishableKey)) {
         Fail ("La llave indicada (" + (Mask-Key $PublishableKey) + ") no es una llave pública: se rechazan " +
               "las llaves sb_secret_… y los JWT cuyo rol no sea anon. Usa la «Publishable key» del panel de Supabase.")
     }
+    $parsed = [System.Uri]$SupabaseUrl
+    $ShownUrl = $parsed.Scheme + "://" + $parsed.Host  # solo esquema y servidor
     $ConfigJson = ([ordered]@{ supabase_url = $SupabaseUrl; supabase_publishable_key = $PublishableKey } |
                    ConvertTo-Json)
-    Write-Host ("Configuración pública: {0}, llave {1}" -f $SupabaseUrl, (Mask-Key $PublishableKey))
+    Write-Host ("Configuración pública: {0}, llave {1}" -f ($ShownUrl), (Mask-Key $PublishableKey))
 }
 
 function Write-ConfigJson([string]$Dir) {

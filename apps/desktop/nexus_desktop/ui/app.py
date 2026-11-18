@@ -23,7 +23,11 @@ MISSING_KEY = ("Falta la llave pública de NEXUS. Debe estar en el archivo {path
                "(claves supabase_url y supabase_publishable_key) o en la variable de entorno "
                "NEXUS_PUBLISHABLE_KEY. Ese archivo lo crea el instalador si se compiló con la URL y "
                "la llave; si no, pide a tu administrador el archivo o un instalador nuevo, y vuelve "
-               "a abrir la app.")
+               "a abrir la app. Si ya existía ese archivo, el instalador no lo reemplaza: bórralo "
+               "o corrígelo.")
+INVALID_CONFIG = ("El archivo {path} existe pero no es válido: no es un JSON correcto o le falta "
+                  "(o no es pública) la llave supabase_publishable_key. Corrígelo o bórralo (el "
+                  "instalador no lo reemplaza si ya existe) y vuelve a abrir la app.")
 CLIENT_ERROR = ("No se pudo preparar la conexión con NEXUS. Revisa la configuración "
                 "({path}, o NEXUS_SUPABASE_URL y NEXUS_PUBLISHABLE_KEY) y vuelve a abrir la app.")
 UNEXPECTED_ERROR = ("Ocurrió un error inesperado. Lo ya subido y la carpeta WTG no se pierden; si algo "
@@ -77,6 +81,8 @@ def create_session() -> tuple[Session | None, str | None]:
     if config.CONFIG_ERROR:  # URL que falta o insegura: ya es un mensaje en español
         return None, config.CONFIG_ERROR
     if not config.SUPABASE_PUBLISHABLE_KEY:
+        if config.user_config_invalid():
+            return None, INVALID_CONFIG.format(path=path)
         return None, MISSING_KEY.format(path=path)
     try:
         return Session(), None
