@@ -470,9 +470,11 @@ def test_wtg25_a_le_strip_matches_task5_golden(tmp_path):
     assert le.direction == "root_to_tip"
     assert le.photos[0].radius_m == 0.0  # solo A/LE: la raíz de referencia es su primera foto
     assert le.photos[-1].radius_m == pytest.approx(37.0)
-    # GSD solo donde el LRF midió (8 de 18 fotos dicen LRFStatus=TooFar: sin GSD, no se inventa)
-    gsds = [p.gsd_mm_px for p in le.photos if p.gsd_mm_px is not None]
+    # GSD medido solo donde el LRF midió (8 de 18 fotos dicen LRFStatus=TooFar); el resto se estima
+    gsds = [p.gsd_mm_px for p in le.photos if not p.gsd_estimated]
     assert len(gsds) == 10 and all(1.0 < g < 1.4 for g in gsds)
+    estimated = [p for p in le.photos if p.gsd_estimated]
+    assert len(estimated) == 8 and all(p.gsd_confidence == "low" and 0.3 < p.gsd_mm_px < 3 for p in estimated)
 
 
 # --- Relleno del GSD de las fotos sin láser ---------------------------------------------------

@@ -61,8 +61,8 @@ Datos locales del usuario en `%APPDATA%\NEXUS`: `config.json`, `pending.json` (i
 falla). Junto a las fotos de la carpeta WTG la app deja
 `.ingest_index.json` (ids ya creados y archivos ya subidos), la carpeta
 `<WTG>_img_stitched\` con las tiras, `<WTG>_reconstruction.json` y, al terminar el procesado,
-`<WTG>_inspeccion_lista.json` (versión 1: nombre de la turbina, longitud de pala y, por sección,
-cara, pala, tira, tamaño, calibración en píxeles de la tira original y fotos con radio y GSD;
+`<WTG>_inspeccion_lista.json` (versión 2; se sigue leyendo la 1: nombre de la turbina, longitud de pala y, por sección,
+cara, pala, tira, tamaño, calibración en píxeles de la tira original y fotos con radio, GSD y su origen);
 todas las rutas son relativas a la carpeta WTG, así que sobrevive a moverla). Con él «Subir» en
 el Inicio reconstruye la subida aunque se haya cerrado la app; se valida al cargar y, si falta una
 foto o una tira o está dañado, la app lo dice en español sin borrar nada.
@@ -187,6 +187,27 @@ apps/desktop/
 - La versión de la app (`config.VERSION`) va en `manifest.app.version` y en el ejecutable.
 
 ## Límites conocidos
+
+- **GSD (mm/px) de cada foto: medido o estimado.** El GSD sale de la distancia del láser del dron
+  (`LRFTargetDistance`). En una inspección típica (WTG 25: 212 fotos) el láser no encuentra blanco
+  (`LRFStatus=TooFar`, distancia 0) en cerca de una de cada cuatro fotos, sobre todo en la punta de
+  la pala (a más de 30 m de la raíz) y en las caras de canto (LE/TE), y a veces mide el fondo
+  (456 m) en vez de la pala; ese GSD se descarta por estar fuera de 0,01–100 mm/px. Como la cámara
+  apunta de frente (gimbal ≈ 0°), la altura de vuelo tampoco sirve de respaldo. Sin GSD la foto no
+  tendría escala ni mediciones en el visor. Por eso `domain/gsd_fill.py` estima el GSD de esas fotos
+  (nunca toca uno medido): en el **interior** de la cara (hay fotos medidas a ambos lados) interpola
+  por altitud entre las dos vecinas más cercanas (error medio 3,5–4,4 % medido en WTG 25 ocultando
+  fotos reales; hasta 5 seguidas); en el **extremo** (típicamente la punta, sin vecina por un lado)
+  promedia el GSD de la vecina más cercana con el que implica la escala de la tira (calibración
+  punta/raíz), con un error medio ≈ 9 % (máx. ≈ 41 %). Si no hay vecinas ni tira queda sin GSD.
+  No se usa una vecina a más de 10 fotos ni 30 m de altitud, ni un GSD medido que difiera más de 3×
+  de la mediana de la cara. Lo estimado se sube con `gsd.source = "mosaic_calibration"` y
+  `confidence = "low"`; en el portal el visor lo muestra como «escala estimada». En la
+  verificación se ve como «≈1,12» (medido: «1,12»; sin escala: «—») y cada sección indica cuántas
+  fotos tienen escala estimada o ninguna. Las mediciones sobre una foto estimada son aproximadas.
+- **Paso entre fotos al coser sin láser.** El cosedor usa 4,5 m de distancia por defecto cuando la
+  foto no tiene láser; en la punta eso da un error medio de −9,4 % en el paso entre fotos. No se ha
+  cambiado (mejora posible aparte: usar el GSD estimado).
 
 - **Palas con la punta arriba.** La reconstrucción, los radios y la calibración suponen que la
   punta está más alta que la raíz. Si las marcas dicen lo contrario (la foto de la punta está más
