@@ -16,9 +16,10 @@ la subida»); el técnico puede procesar varias carpetas en el campo y subirlas 
    (sin permisos de administrador) en `%LOCALAPPDATA%\Programs\NEXUS Importador` y crea el
    acceso «NEXUS Importador de palas» en el menú Inicio. Se desinstala desde
    *Configuración → Aplicaciones*.
-2. Copia el archivo de configuración que te dé el administrador en
-   `%APPDATA%\NEXUS\config.json` (ver abajo). Sin él, la pantalla de inicio de sesión dice qué
-   falta y dónde ponerlo.
+2. Si el instalador se compiló con la URL y la llave pública (ver «Compilar el instalador»),
+   deja solo `%APPDATA%\NEXUS\config.json`. Si no, copia ahí el archivo de configuración que te dé el
+   administrador (ver abajo). Sin él, la pantalla de inicio de sesión dice qué falta y dónde
+   ponerlo.
 
 El instalador ya trae exiftool y el modelo de segmentación; no hace falta instalar nada más.
 
@@ -31,8 +32,8 @@ servicio ni secreta: config.py descarta las llaves `sb_secret_…` y los JWT que
 La URL y la llave se buscan en este orden:
 
 1. Variables de entorno `NEXUS_SUPABASE_URL` y `NEXUS_PUBLISHABLE_KEY` (desarrollo).
-2. `%APPDATA%\NEXUS\config.json` (equipo instalado; lo deja el despliegue, no va en el
-   instalador ni en el repositorio):
+2. `%APPDATA%\NEXUS\config.json` (equipo instalado; lo crea el instalador si se compiló con
+   la URL y la llave públicas, o se copia a mano; nunca va en el repositorio):
 
    ```json
    {
@@ -139,8 +140,34 @@ Con [Inno Setup 6](https://jrsoftware.org/isinfo.php) y después de `build.ps1`:
 
 Genera `apps/desktop/dist/installer/NEXUS-Importador-<versión>-instalador.exe` (la versión se
 lee del ejecutable). Instalación por usuario, sin administrador, con acceso en el menú Inicio,
-icono de escritorio opcional y desinstalador. **No incluye `config.json` ni ninguna llave**: se
-entrega aparte a cada equipo, con la URL y la llave pública de producción.
+icono de escritorio opcional y desinstalador.
+
+### Que el instalador cree `config.json`
+
+`build.ps1` acepta `-SupabaseUrl` y `-PublishableKey` (o las variables de entorno
+`NEXUS_SUPABASE_URL` y `NEXUS_PUBLISHABLE_KEY`). Los valida antes de compilar con las mismas
+reglas que `config.py` (llave `sb_secret_…` o JWT que no sea de rol `anon`, URL que no sea
+`https://` salvo `http://` a `localhost`/`127.0.0.1`/`[::1]` y valores vacíos son un error) y deja
+`apps/desktop/build/config.json` (UTF-8 sin BOM, solo esas dos claves; `build/` está ignorada en
+git). `installer.iss` lo empaqueta si existe y lo instala en `%APPDATA%\NEXUS\config.json`.
+
+```
+powershell -ExecutionPolicy Bypass -File apps/desktop/packaging/build.ps1 -ExiftoolDir <carpeta de exiftool> -SupabaseUrl <URL> -PublishableKey <llave pública>
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" apps\desktop\packaging\installer.iss
+```
+
+- **La llave es pública** (la que ya viaja en cualquier cliente web; los permisos los
+  imponen las políticas RLS), pero aun así nunca se escribe en el repositorio ni se imprime
+  completa en la consola del script. Se obtiene en el panel de Supabase → *Project Settings* →
+  *API Keys* → «Publishable key». No uses nunca la «Secret key» ni la `service_role`.
+- Sin esos parámetros, `build.ps1` no falla: avisa de que el instalable **no creará
+  `config.json`** y habrá que crearlo a mano o recompilar con ellos.
+- Si el equipo ya tiene un `config.json` (por ejemplo apuntando a otro proyecto), la
+  instalación **no lo cambia** (`onlyifdoesntexist`) y desinstalar tampoco lo borra
+  (`uninsneveruninstall`). Para forzar el nuevo, borra `%APPDATA%\NEXUS\config.json` y reinstala, o
+  edítalo a mano. El instalador sigue sin pedir administrador y no toca nada más de
+  `%APPDATA%\NEXUS`.
+- `build.ps1 -ValidateOnly -OutDir <carpeta> …` solo valida y escribe `config.json`, sin compilar.
 
 ## Estructura
 

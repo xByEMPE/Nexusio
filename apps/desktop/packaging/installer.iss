@@ -8,9 +8,13 @@
 ; Resultado: apps/desktop/dist/installer/NEXUS-Importador-<versión>-instalador.exe
 ;
 ; Instala por usuario, sin permisos de administrador, en %LOCALAPPDATA%\Programs.
-; NO incluye configuración ni llaves: el despliegue deja la URL y la llave PÚBLICA en
-; %APPDATA%\NEXUS\config.json (claves supabase_url y supabase_publishable_key). Al desinstalar
-; se conserva %APPDATA%\NEXUS (configuración y subidas pendientes).
+; Configuración: si build.ps1 se ejecutó con -SupabaseUrl y -PublishableKey, deja
+; apps/desktop/build/config.json (solo la URL y la llave PÚBLICA) y este instalador lo copia a
+; %APPDATA%\NEXUS\config.json. Con "onlyifdoesntexist" NO pisa un config.json que ya exista (por
+; ejemplo uno que apunta a otro proyecto): para forzar el nuevo, borra ese archivo y reinstala,
+; o edítalo a mano. Con "uninsneveruninstall" tampoco se borra al desinstalar. Si build\config.json
+; no existe (compilación sin parámetros) el instalador compila igual y no instala configuración.
+; No se toca nada más de %APPDATA%\NEXUS (subidas pendientes, registro).
 
 #define AppName "NEXUS Importador de palas"
 #define AppExeName "NEXUS-Importador.exe"
@@ -52,6 +56,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+#if FileExists(AddBackslash(SourcePath) + "..\build\config.json")
+Source: "..\build\config.json"; DestDir: "{userappdata}\NEXUS"; Flags: onlyifdoesntexist uninsneveruninstall
+#endif
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

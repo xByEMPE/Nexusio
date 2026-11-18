@@ -21,8 +21,9 @@ WINDOW_TITLE = "NEXUS · Importador de palas"
 SESSION_EXPIRED = "La sesión caducó; inicia sesión de nuevo."
 MISSING_KEY = ("Falta la llave pública de NEXUS. Debe estar en el archivo {path} "
                "(claves supabase_url y supabase_publishable_key) o en la variable de entorno "
-               "NEXUS_PUBLISHABLE_KEY. Pide la configuración a tu administrador y vuelve a "
-               "abrir la app.")
+               "NEXUS_PUBLISHABLE_KEY. Ese archivo lo crea el instalador si se compiló con la URL y "
+               "la llave; si no, pide a tu administrador el archivo o un instalador nuevo, y vuelve "
+               "a abrir la app.")
 CLIENT_ERROR = ("No se pudo preparar la conexión con NEXUS. Revisa la configuración "
                 "({path}, o NEXUS_SUPABASE_URL y NEXUS_PUBLISHABLE_KEY) y vuelve a abrir la app.")
 UNEXPECTED_ERROR = ("Ocurrió un error inesperado. Lo ya subido y la carpeta WTG no se pierden; si algo "

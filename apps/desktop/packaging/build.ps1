@@ -8,15 +8,24 @@
   - el modelo apps/desktop/models/blade_unet_512.onnx (se copia a mano);
   - la carpeta de exiftool para Windows (exiftool.exe + exiftool_files), indicada con
     -ExiftoolDir o con la variable de entorno NEXUS_EXIFTOOL_DIR.
-  No incluye ninguna llave: la URL y la llave pública van en %APPDATA%\NEXUS\config.json
-  del equipo donde se instala.
+  La URL de Supabase y la llave PÚBLICA (publishable; nunca la secreta ni la de servicio) se
+  indican con -SupabaseUrl y -PublishableKey (o con las variables de entorno NEXUS_SUPABASE_URL
+  y NEXUS_PUBLISHABLE_KEY). Se validan con las mismas reglas que nexus_desktop/config.py antes
+  de compilar y se escriben en apps/desktop/build/config.json, que el instalador
+  (installer.iss) deja en %APPDATA%\NEXUS\config.json del equipo donde se instala. Sin ellas el
+  script no falla: avisa de que el instalable no creará config.json. La llave nunca se imprime
+  completa. -ValidateOnly solo valida y escribe config.json en -OutDir (sin compilar nada).
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File apps/desktop/packaging/build.ps1 -ExiftoolDir C:\ruta\exiftool-13.42_64
 #>
 param(
     [string]$ExiftoolDir = $env:NEXUS_EXIFTOOL_DIR,
-    [string]$Python = ""
+    [string]$Python = "",
+    [string]$SupabaseUrl = $env:NEXUS_SUPABASE_URL,
+    [string]$PublishableKey = $env:NEXUS_PUBLISHABLE_KEY,
+    [switch]$ValidateOnly,
+    [string]$OutDir = ""
 )
 
 # "Continue": en Windows PowerShell 5.1, con "Stop", lo que un programa externo escribe en
@@ -28,6 +37,80 @@ function Fail([string]$Message) {
     Write-Host ""
     Write-Host "ERROR: $Message" -ForegroundColor Red
     exit 1
+}
+
+function Test-PublicKey([string]$Key) {
+    # Misma regla que config._is_public_key: ni sb_secret_ ni un JWT cuyo rol no sea anon.
+    if ($Key.StartsWith("sb_secret_")) { return $false }
+    $parts = $Key.Split(".")
+    if ($parts.Count -eq 3 -and $Key.StartsWith("eyJ")) {
+        try {
+            $b = $parts[1].Replace("-", "+").Replace("_", "/")
+            $b = $b.PadRight($b.Length + ((4 - $b.Length % 4) % 4), "=")
+            $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))
+            $payload = $json | ConvertFrom-Json
+            return ($payload.role -eq "anon")
+        } catch { return $false }
+    }
+    return $true
+}
+
+function Test-SafeUrl([string]$Url) {
+    # Misma regla que config._is_safe_url: https://<servidor>, o http:// solo a un servidor local.
+    $uri = $null
+    if (-not [System.Uri]::TryCreate($Url, [System.UriKind]::Absolute, [ref]$uri)) { return $false }
+    $hostName = $uri.Host.ToLowerInvariant()
+    # .NET expande IPv6 (0000:…:0001); config.py solo reconoce la forma literal [::1].
+    if ($uri.HostNameType -eq [System.UriHostNameType]::IPv6) {
+        $hostName = if ($Url -match "^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*\[::1\]") { "::1" } else { "ipv6" }
+    }
+    if (-not $hostName) { return $false }
+    if ($uri.Scheme -eq "https") { return $true }
+    return ($uri.Scheme -eq "http" -and @("localhost", "127.0.0.1", "::1") -contains $hostName)
+}
+
+function Mask-Key([string]$Key) {
+    if ($Key.Length -le 12) { return "…" }
+    return $Key.Substring(0, 12) + "…"
+}
+
+# --- Configuración pública para el instalador (se valida antes de compilar) ---------------
+$ConfigJson = $null
+if (-not $SupabaseUrl -and -not $PublishableKey) {
+    Write-Host ("AVISO: no se indicó -SupabaseUrl ni -PublishableKey (ni NEXUS_SUPABASE_URL / NEXUS_PUBLISHABLE_KEY): " +
+                "el instalable no creará config.json. Habrá que crearlo a mano en %APPDATA%\NEXUS\config.json " +
+                "o recompilar con esos parámetros.") -ForegroundColor Yellow
+} else {
+    if (-not $SupabaseUrl -or -not $PublishableKey) {
+        Fail "Indica la URL y la llave pública juntas (-SupabaseUrl y -PublishableKey): falta una de las dos."
+    }
+    $SupabaseUrl = $SupabaseUrl.Trim()
+    $PublishableKey = $PublishableKey.Trim()
+    if (-not (Test-SafeUrl $SupabaseUrl)) {
+        Fail ("La URL de Supabase no es válida: debe ser https://<servidor> (http:// solo para localhost, " +
+              "127.0.0.1 o [::1]). Recibido: $SupabaseUrl")
+    }
+    if (-not (Test-PublicKey $PublishableKey)) {
+        Fail ("La llave indicada (" + (Mask-Key $PublishableKey) + ") no es una llave pública: se rechazan " +
+              "las llaves sb_secret_… y los JWT cuyo rol no sea anon. Usa la «Publishable key» del panel de Supabase.")
+    }
+    $ConfigJson = ([ordered]@{ supabase_url = $SupabaseUrl; supabase_publishable_key = $PublishableKey } |
+                   ConvertTo-Json)
+    Write-Host ("Configuración pública: {0}, llave {1}" -f $SupabaseUrl, (Mask-Key $PublishableKey))
+}
+
+function Write-ConfigJson([string]$Dir) {
+    if ($null -eq $ConfigJson) { return }
+    New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+    $target = Join-Path (Resolve-Path -LiteralPath $Dir).Path "config.json"
+    [System.IO.File]::WriteAllText($target, $ConfigJson + "`n", (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "config.json: $target"
+}
+
+if ($ValidateOnly) {
+    if (-not $OutDir) { Fail "-ValidateOnly necesita -OutDir <carpeta> donde escribir config.json." }
+    Write-ConfigJson $OutDir
+    exit 0
 }
 
 $Packaging = $PSScriptRoot
@@ -84,6 +167,11 @@ $env:NEXUS_EXIFTOOL_DIR = (Resolve-Path -LiteralPath $ExiftoolDir).Path
 & $Python -m PyInstaller --noconfirm --clean --distpath $DistPath --workpath $WorkPath $Spec
 if ($LASTEXITCODE -ne 0) { Fail "PyInstaller terminó con errores (código $LASTEXITCODE)." }
 if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) { Fail "No se generó $Exe." }
+
+# config.json va después de PyInstaller porque --clean vacía la carpeta de trabajo (build).
+$ConfigOut = Join-Path $WorkPath "config.json"
+if (Test-Path -LiteralPath $ConfigOut) { Remove-Item -LiteralPath $ConfigOut -Force }  # nunca uno de otra compilación
+Write-ConfigJson $WorkPath
 
 $Folder = Split-Path -Parent $Exe
 $Bytes = (Get-ChildItem -LiteralPath $Folder -Recurse -File | Measure-Object -Property Length -Sum).Sum
