@@ -134,8 +134,8 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
     });
     map.on("error", (ev) => {
       console.error("[mapa] error de MapLibre", ev.error ?? ev);
-      // Los fallos de tiles sueltos o posteriores al arranque no deben tapar el mapa.
-      if (loaded || dead || !isFatalMapError(ev)) return;
+      // Solo el worker que no carga o WebGL (antes de `load`) tapan el mapa; el resto solo se registra.
+      if (dead || !isFatalMapError(ev, { loaded })) return;
       dead = true;
       setFailure(mapErrorDetail(ev));
       map.remove();

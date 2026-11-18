@@ -1,17 +1,17 @@
+const FATAL = /worker failed to load|webgl/i;
+
 /**
- * Decide si un evento "error" de MapLibre impide arrancar el mapa. Los errores de tiles, fuentes o
- * recursos sueltos (con sourceId, tile, o estado/URL HTTP) no deben tapar el mapa; los demás
- * (worker que no carga, falta de WebGL) sí son fatales.
+ * Decide si un evento "error" de MapLibre impide arrancar el mapa. Lista blanca: solo es fatal
+ * el worker que no carga o un fallo de WebGL, y solo antes del evento `load`. Todo lo demás
+ * (tiles, capas de estilo, source layers inexistentes...) se registra pero no toca el mapa.
  */
-export function isFatalMapError(event: unknown): boolean {
-  if (typeof event !== "object" || event === null) return true;
+export function isFatalMapError(event: unknown, state: { loaded?: boolean } = {}): boolean {
+  if (state.loaded) return false;
+  if (typeof event !== "object" || event === null) return false;
   const e = event as { sourceId?: unknown; tile?: unknown; error?: unknown };
   if (e.sourceId != null || e.tile != null) return false;
-  if (typeof e.error === "object" && e.error !== null) {
-    const inner = e.error as { status?: unknown; url?: unknown };
-    if (inner.status != null || inner.url != null) return false;
-  }
-  return true;
+  const msg = e.error instanceof Error ? e.error.message : typeof e.error === "string" ? e.error : "";
+  return FATAL.test(msg);
 }
 
 /** Detalle técnico breve (máx. 200 caracteres) para mostrar al usuario o a soporte. */

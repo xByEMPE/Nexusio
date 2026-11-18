@@ -9,15 +9,26 @@ const HEADERS = {
   "X-Content-Type-Options": "nosniff",
 } as const;
 
+export type WorkerFsDeps = {
+  cwd: string;
+  readFile: (path: string) => string;
+  /** Ruta de dist/maplibre-gl-worker.mjs dentro de node_modules; lanza si no se resuelve. */
+  resolveDist: () => string;
+};
+
+const realDeps = (): WorkerFsDeps => ({
+  cwd: process.cwd(),
+  readFile: (p) => readFileSync(p, "utf8"),
+  resolveDist: () =>
+    join(dirname(createRequire(join(process.cwd(), "package.json")).resolve("maplibre-gl/package.json")), "dist", "maplibre-gl-worker.mjs"),
+});
+
 /** Lee el worker: primero la copia de public/maplibre y, si falta, la de node_modules. Devuelve null si no existe. */
-export function readWorkerFile(): string | null {
-  const candidates: Array<() => string> = [
-    () => join(process.cwd(), "public", "maplibre", "maplibre-gl-worker.mjs"),
-    () => join(dirname(createRequire(join(process.cwd(), "package.json")).resolve("maplibre-gl/package.json")), "dist", "maplibre-gl-worker.mjs"),
-  ];
+export function readWorkerFile(deps: WorkerFsDeps = realDeps()): string | null {
+  const candidates = [() => join(deps.cwd, "public", "maplibre", "maplibre-gl-worker.mjs"), deps.resolveDist];
   for (const path of candidates) {
     try {
-      return readFileSync(path(), "utf8");
+      return deps.readFile(path());
     } catch {
       // Se prueba el siguiente origen.
     }

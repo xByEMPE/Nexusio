@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWorkerHandler } from "./worker-source";
+import { createWorkerHandler, readWorkerFile } from "./worker-source";
 import { WORKER_URL_PATH } from "./worker-url";
 
 const JS = "export default 1;";
@@ -54,11 +54,28 @@ describe("createWorkerHandler", () => {
   });
 });
 
-describe("readWorkerFile", () => {
-  it("encuentra el worker real de maplibre-gl (public/maplibre o node_modules)", async () => {
-    const { readWorkerFile } = await import("./worker-source");
-    const src = readWorkerFile();
-    expect(typeof src).toBe("string");
-    expect((src ?? "").length).toBeGreaterThan(1000);
+describe("readWorkerFile (hermética)", () => {
+  const deps = (files: Record<string, string>) => ({
+    cwd: "/app",
+    readFile: (p: string) => {
+      const k = p.replaceAll("\\", "/");
+      if (k in files) return files[k] as string;
+      throw new Error("ENOENT");
+    },
+    resolveDist: () => "/nm/maplibre-gl/dist/maplibre-gl-worker.mjs",
+  });
+
+  it("prefiere la copia de public/maplibre", () => {
+    const src = readWorkerFile(deps({ "/app/public/maplibre/maplibre-gl-worker.mjs": "A", "/nm/maplibre-gl/dist/maplibre-gl-worker.mjs": "B" }));
+    expect(src).toBe("A");
+  });
+  it("usa node_modules si falta la copia", () => {
+    expect(readWorkerFile(deps({ "/nm/maplibre-gl/dist/maplibre-gl-worker.mjs": "B" }))).toBe("B");
+  });
+  it("devuelve null si no hay ninguno", () => {
+    expect(readWorkerFile(deps({}))).toBeNull();
+  });
+  it("devuelve null si no se resuelve maplibre-gl", () => {
+    expect(readWorkerFile({ ...deps({}), resolveDist: () => { throw new Error("no"); } })).toBeNull();
   });
 });

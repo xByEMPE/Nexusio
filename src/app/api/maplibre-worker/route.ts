@@ -1,6 +1,8 @@
 import { createWorkerHandler } from "@/lib/maplibre/worker-source";
 
 export const runtime = "nodejs";
+// Nunca se prerenderiza en el build: se lee el archivo al atender la petición.
+export const dynamic = "force-dynamic";
 
 /**
  * Sirve el worker de MapLibre con tipo JavaScript. El servidor estático del hosting entregaba
