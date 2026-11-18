@@ -39,6 +39,22 @@ def decimal(value: float, digits: int = 2) -> str:
     return f"{value:.{digits}f}".replace(".", ",")
 
 
+ESTIMATED_MARK = "≈"
+ESTIMATED_LEGEND = "≈ GSD estimado por interpolación (sin láser) · — sin escala"
+
+
+def gsd_counts_text(sections) -> str:
+    """«3 fotos con escala estimada, 1 sin escala» para una o varias secciones ("" si no hay nada)."""
+    estimated = sum(s.gsd_estimated_count for s in sections)
+    missing = sum(s.gsd_missing_count for s in sections)
+    parts = []
+    if estimated:
+        parts.append(f"{estimated} {'foto' if estimated == 1 else 'fotos'} con escala estimada")
+    if missing:
+        parts.append(f"{missing} sin escala")
+    return ", ".join(parts)
+
+
 class StripGridScreen(Screen):
     """Base de resultados y verificación: botones de pala y una columna por cara con su tira."""
 

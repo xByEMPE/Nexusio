@@ -20,7 +20,8 @@ from tkinter import ttk
 from nexus_desktop.domain.reconstruction import SectionResult, stitch_order
 from nexus_desktop.domain.wtg_folder import FACES
 from nexus_desktop.storage import ready
-from nexus_desktop.ui.screens.results import StripGridScreen, decimal
+from nexus_desktop.ui.screens.results import (ESTIMATED_LEGEND, ESTIMATED_MARK, StripGridScreen, decimal,
+                                               gsd_counts_text)
 from nexus_desktop.ui import theme
 from nexus_desktop.ui.theme import TOKENS
 
@@ -44,6 +45,14 @@ def short_name(file_name: str) -> str:
     return m.group(1) if m else stem
 
 
+def gsd_text(photo) -> str:
+    """GSD de la foto para la tabla: «1,12» medido, «≈1,12» estimado, «—» sin escala."""
+    if photo.gsd_mm_px is None:
+        return "—"
+    mark = ESTIMATED_MARK if getattr(photo, "gsd_estimated", False) else ""
+    return f"{mark}{decimal(photo.gsd_mm_px)}"
+
+
 class VerificationScreen(StripGridScreen):
     TITLE = "Verificación"
     CANVAS_HEIGHT = 200
@@ -65,6 +74,8 @@ class VerificationScreen(StripGridScreen):
         ttk.Label(footer, text="Raíz", foreground=ROOT_COLOR).pack(side="left", padx=(12, 0))
         ttk.Label(footer, text="Foto elegida", foreground=PHOTO_COLOR).pack(side="left", padx=(12, 0))
         ttk.Label(footer, text="Radio en m · GSD en mm/px", style="Muted.TLabel").pack(side="left", padx=(16, 0))
+        self.gsd_legend = ttk.Label(footer, text=ESTIMATED_LEGEND, style="Muted.TLabel")
+        self.gsd_legend.pack(side="left", padx=(12, 0))
         if not self.sections:
             self.continue_button.state(["disabled"])
         self._build_finish_dialog()
@@ -128,13 +139,16 @@ class VerificationScreen(StripGridScreen):
                 item = tree.insert("", "end", values=(
                     short_name(photo.path.name),
                     decimal(photo.radius_m) if photo.radius_m is not None else "—",
-                    decimal(photo.gsd_mm_px) if photo.gsd_mm_px is not None else "—",
+                    gsd_text(photo),
                     photo.path.name,
                 ))
                 self._rows[face][item] = photo.path.name
 
     def _info_text(self, section: SectionResult) -> str:
         text = super()._info_text(section)
+        counts = gsd_counts_text([section])
+        if counts:
+            text += f"\n{counts}"
         cal = section.calibration or {}
         if cal.get("mm_per_px"):
             text += (f"\nPunta: fila {cal['tip_row_px']} · Raíz: fila {cal['root_row_px']}"

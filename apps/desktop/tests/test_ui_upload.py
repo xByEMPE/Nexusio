@@ -233,6 +233,18 @@ def test_upload_screen_shows_summary_and_waits_for_button(app, monkeypatch):
     assert fake.calls == []  # no sube hasta que se pulsa el botón
 
 
+def test_upload_summary_counts_estimated_and_missing_gsd(app, monkeypatch):
+    app.state.sections = make_sections(app.state.wtg)
+    app.state.sections[0].photos[0].gsd_estimated = True
+    app.state.sections[0].photos[1].gsd_estimated = True
+    app.state.sections[1].photos[0].gsd_mm_px = None
+    monkeypatch.setattr(upload_module, "upload_inspection", FakeUpload())
+    screen = app.show(UploadScreen)
+    app.tasks.pump()
+    summary = screen.summary_label.cget("text")
+    assert "2 fotos con escala estimada" in summary and "1 sin escala" in summary
+
+
 def test_upload_runs_off_tk_thread_with_index_exiftool_and_progress(app, monkeypatch):
     fake = FakeUpload()
     screen = run_upload(app, monkeypatch, fake)

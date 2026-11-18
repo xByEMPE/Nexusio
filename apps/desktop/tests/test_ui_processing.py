@@ -327,6 +327,25 @@ def test_verification_lists_photos_with_radius_and_gsd_tip_on_top(app, tmp_path)
     assert screen.trees["TE"].get_children() == ()
 
 
+def test_verification_marks_estimated_gsd_and_counts_per_section(app, tmp_path):
+    app.state.sections = make_sections(app, tmp_path)
+    le = next(s for s in app.state.sections if (s.blade, s.face) == ("A", "LE"))
+    est, missing = le.photos[-1], le.photos[0]  # la última se ve la primera (punta arriba)
+    est.gsd_mm_px, est.gsd_source, est.gsd_confidence, est.gsd_estimated = 1.12, "mosaic_calibration", "low", True
+    missing.gsd_mm_px = None
+    screen = app.show(VerificationScreen, blade="A")
+    app.tasks.pump()
+    tree = screen.trees["LE"]
+    rows = [tree.item(i, "values") for i in tree.get_children()]
+    assert rows[0][2] == "≈1,12"       # estimado
+    assert rows[-1][2] == "—"          # sin escala
+    assert not any(r[2].startswith("≈") for r in rows[1:])
+    info = screen.info_labels["LE"].cget("text")
+    assert "1 foto con escala estimada, 1 sin escala" in info
+    assert "estimado" in screen.gsd_legend.cget("text")
+    assert screen.info_labels["PS"].cget("text").count("escala estimada") == 0
+
+
 def test_verification_strip_shows_calibration_marks(app, tmp_path):
     screen = show_verification(app, tmp_path)
     canvas = screen.canvases["LE"]

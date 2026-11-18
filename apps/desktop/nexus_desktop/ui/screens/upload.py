@@ -35,6 +35,7 @@ from nexus_desktop.nexus.uploader import PhotoInfo, StripInput, UploadPlan, Uplo
 from nexus_desktop.storage import pending, ready
 from nexus_desktop.storage.local_index import LocalIndex
 from nexus_desktop.ui.screens.base import Screen
+from nexus_desktop.ui.screens.results import gsd_counts_text
 from nexus_desktop.ui.theme import TOKENS, font
 
 POLL_MS = 100
@@ -283,7 +284,8 @@ class UploadScreen(Screen):
         self.summary_label.configure(text=(
             f"Proyecto: {state.project.name} · Turbina: {state.asset.name}\n"
             f"Carpeta: {short_path(wtg.path)}\n"
-            f"Se suben {photos} ({detail}) y {_count_label(len(state.sections), 'tira', 'tiras')}{length}"))
+            f"Se suben {photos} ({detail}) y {_count_label(len(state.sections), 'tira', 'tiras')}{length}"
+            + (f"\nEscala (GSD): {counts}" if (counts := gsd_counts_text(state.sections)) else "")))
         missing = [Path(s.strip_path).name for s in state.sections if not Path(s.strip_path).is_file()]
         if missing:
             self._add_warning("No se encontraron estas tiras (se omitirán; vuelve a procesar si las "
