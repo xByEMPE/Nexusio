@@ -132,3 +132,38 @@ para invalidar cachés al actualizar. Opcional: `NEXT_PUBLIC_ESRI_API_KEY` (púb
 El borrado de inspecciones, máquinas y proyectos (solo admin) se controla con la variable de servidor `INSPECTIONS_DELETE_ENABLED`. Está **activo** salvo que valga `false`, `0`, `off` o `no` (sin distinguir mayúsculas ni espacios); cualquier otro valor o su ausencia lo deja activo.
 
 **Para desactivar el borrado en producción pon `INSPECTIONS_DELETE_ENABLED=false` en Hostinger y redespliega (o reinicia).** Con el borrado desactivado no se muestran los botones «Eliminar», las Server Actions de borrado responden «El borrado está desactivado en este entorno.» antes de leer o escribir nada, y las inspecciones ya marcadas «en eliminación» no se tocan (la página de la inspección avisa al admin de que hay una eliminación pendiente). No cambia la base de datos.
+
+
+---
+
+## Caché de imágenes (egress en caché de Supabase)
+
+Objetivo: que las imágenes consultadas se sirvan desde caché al menos 6 meses y reducir el *uncached egress* de Supabase, **sin volver público** el bucket privado `inspection-media`.
+
+**Diseño**
+
+- Las miniaturas, vistas previas, tiras de pala y la miniatura `_ID` del mapa ya no se firman en cada render. El visor y el mapa entregan URLs del propio portal: `/api/media/<tipo>/<id>?v=<versión>` con `tipo` = `thumb`, `preview`, `idthumb` (miniatura o, si no hay, vista previa de la foto `_ID`) o `strip`. La versión `?v=` es la `updated_at` de la fila y solo sirve para romper la caché si la imagen cambia; no interviene en la autorización.
+- `src/app/api/media/[kind]/[id]/route.ts` lee la fila (`captures` o `mosaics`) con la **sesión del usuario** (RLS: respeta rol, organización, proyecto y `deleting_at`), así que la ruta de Storage sale siempre de la base, nunca del cliente. Sin sesión responde 401; sin fila visible, 404 (no distingue inexistente de sin permiso).
+- Firma la ruta con una **URL firmada estable** (`MEDIA_URL_TTL_DAYS`, por defecto 7 días, renovada cuando falta menos de 1 día) que se reutiliza desde una caché en memoria del proceso (hasta 5.000 rutas). Así el CDN de Supabase (Smart CDN trata cada token distinto como otra clave de caché) sirve siempre la misma copia. Esa URL **nunca llega al navegador**.
+- Reenvía la imagen en streaming con `Cache-Control: private, max-age=15552000, immutable` (6 meses), `ETag` (si coincide `If-None-Match` responde 304 sin tocar Storage), `Vary: Cookie` y `X-Content-Type-Options: nosniff`. Los errores (401, 404, 502, 503) llevan `Cache-Control: no-store`, sin rutas ni detalles.
+- Los originales y las matrices térmicas se siguen firmando bajo demanda con vida corta (10 min): pesan mucho y se piden poco, no se cachean 6 meses.
+- Al subir objetos, la app de escritorio y `scripts/ingest_demo` usan `cacheControl` de 6 meses (`15552000` s) para que el propio objeto de Storage lo declare. Las tiras nuevas se escriben como `mosaics/{id}/strip-{sha8}.webp`; el portal solo lee `mosaics.path`, así que cualquier nombre bajo `mosaics/{id}/` sirve (el borrado por prefijo y las políticas de Storage tampoco dependen del nombre).
+
+**Qué NO garantiza**
+
+- Que el usuario vacíe la caché de su navegador, use navegación privada o cambie de dispositivo: volverá a descargar.
+- Que el CDN conserve el objeto 6 meses: puede expulsarlo antes y entonces se paga ese acceso como no cacheado. Sin Smart CDN (plan Free) la invalidación no es automática.
+- Tras **borrar una inspección**, los navegadores que ya vieron sus imágenes conservan una copia local hasta 6 meses (el servidor ya no las entrega, pero el navegador no invalida su caché). Es una consecuencia aceptada de usar `immutable`.
+- Es una caché privada de navegador (por usuario): no reduce el egress de usuarios distintos que ven lo mismo la primera vez; eso lo cubre el CDN con la URL estable.
+
+**Cómo comprobar**
+
+Con una sesión iniciada, copia la cookie de sesión y pide una imagen (la URL sale del HTML del visor):
+
+    curl -I -H "Cookie: <cookies de sesión>" "https://<dominio>/api/media/thumb/<id-de-captura>"
+
+Esperado: `200`, `Cache-Control: private, max-age=15552000, immutable`, `ETag`, `Vary: Cookie`, `X-Content-Type-Options: nosniff`. Repite con `-H 'If-None-Match: <el ETag>'` y debe dar `304`. Sin cookie: `401`. Con un id inexistente o de otra organización: `404` con `Cache-Control: no-store`.
+
+**Cómo medir**
+
+En el panel de Supabase, *Usage* → egress: compara *cached* y *uncached egress* antes y después. Para el detalle por objeto y por estado de caché (hit/miss) usa las consultas de <https://supabase.com/docs/guides/storage/cdn/metrics>.
