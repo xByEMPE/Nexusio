@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { FieldProjectSchema, type FieldProjectInput } from "@/contracts/inspections-admin";
-import { CONCURRENT_MESSAGE, decideOrganization, decideProject, isUniqueViolation, planTechnician, reusedTurbinesWarning } from "@/lib/inspections/field-project-rules";
+import { CONCURRENT_MESSAGE, decideOrganization, decideProject, existingAccountNote, isUniqueViolation, planTechnician, reusedTurbinesWarning } from "@/lib/inspections/field-project-rules";
 import { requireAdminAction } from "@/lib/inspections/admin-action";
 import type { FieldProjectResult, FieldStep, FieldStepKey } from "@/lib/inspections/field-project";
 import { readFieldProjectForm } from "@/lib/inspections/form";
@@ -292,6 +292,9 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
     if (error) return stop("assignment", "Asignación", "No se pudo asignar al técnico al proyecto.");
     add("assignment", "Asignación", "created", "Técnico asignado al proyecto.");
   }
+
+  const accountNote = existingAccountNote(plan.kind);
+  if (accountNote) technicianNote = `${technicianNote} ${accountNote}`;
 
   revalidatePath("/admin/inspecciones/proyectos");
   revalidatePath("/admin/inspecciones/sitios");

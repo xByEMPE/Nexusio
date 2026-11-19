@@ -5,6 +5,7 @@ import {
   isUniqueViolation,
   normalizeName,
   planTechnician,
+  existingAccountNote,
   reusedTurbinesWarning,
 } from "./field-project-rules";
 
@@ -84,4 +85,14 @@ test("isUniqueViolation", () => {
   expect(isUniqueViolation({ code: "23505" })).toBe(true);
   expect(isUniqueViolation({ code: "42501" })).toBe(false);
   expect(isUniqueViolation(null)).toBe(false);
+});
+
+describe("existingAccountNote", () => {
+  const note = "La cuenta ya existía: si necesita crear o recuperar su contraseña, usa «Reenviar acceso» en Usuarios o en el proyecto.";
+  test.each(["reuse", "activate", "promote"] as const)("cuenta existente (%s): avisa de «Reenviar acceso»", (k) => {
+    expect(existingAccountNote(k)).toBe(note);
+  });
+  test.each(["invite", "resend", "stop"] as const)("%s: sin nota (ya se envió invitación o no aplica)", (k) => {
+    expect(existingAccountNote(k)).toBeNull();
+  });
 });

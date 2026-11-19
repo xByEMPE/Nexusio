@@ -11,6 +11,7 @@ export const metadata = { title: "Acceso" };
 const ERRORS: Record<string, string> = {
   forbidden: "Esta cuenta no tiene acceso al portal.",
   invite: "El enlace de invitación no es válido o venció. Pide uno nuevo.",
+  recovery: "El enlace de recuperación no es válido o venció. Solicita uno nuevo con «¿Olvidaste tu contraseña?».",
   config: "El portal no está configurado: faltan las variables de Supabase.",
 };
 

@@ -55,3 +55,7 @@ secure_password_change = true
 [auth.email.template.invite]
 subject = "Invitación a NEXUS"
 content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña de NEXUS"
+content_path = "./supabase/templates/recovery.html"

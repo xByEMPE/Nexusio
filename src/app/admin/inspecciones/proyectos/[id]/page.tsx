@@ -20,6 +20,7 @@ import {
   unlinkProjectSite,
   upsertProject,
 } from "../../actions/projects";
+import { resendAccess } from "../../actions/users";
 
 export const metadata = { title: "Proyecto" };
 
@@ -240,10 +241,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </div>
                 {isAdmin && (
-                  <ActionForm action={unassignUser} submitLabel="Quitar" successMessage="Asignación quitada." variant="secondary" inline>
-                    <input type="hidden" name="project_id" value={project.id} />
-                    <input type="hidden" name="user_id" value={a.user_id} />
-                  </ActionForm>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ActionForm action={resendAccess} submitLabel="Reenviar acceso" variant="secondary" inline>
+                      <input type="hidden" name="user_id" value={a.user_id} />
+                    </ActionForm>
+                    <ActionForm action={unassignUser} submitLabel="Quitar" successMessage="Asignación quitada." variant="secondary" inline>
+                      <input type="hidden" name="project_id" value={project.id} />
+                      <input type="hidden" name="user_id" value={a.user_id} />
+                    </ActionForm>
+                  </div>
                 )}
               </li>
             ))}

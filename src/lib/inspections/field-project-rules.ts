@@ -71,6 +71,13 @@ export function planTechnician(
   return confirmed === false ? { kind: "resend" } : { kind: "reuse" };
 }
 
+/** Nota para cuentas que ya existían (no se les envió correo): cómo darles acceso a su contraseña. */
+export function existingAccountNote(kind: TechnicianPlan["kind"]): string | null {
+  return kind === "reuse" || kind === "activate" || kind === "promote"
+    ? "La cuenta ya existía: si necesita crear o recuperar su contraseña, usa «Reenviar acceso» en Usuarios o en el proyecto."
+    : null;
+}
+
 /** Aviso cuando hay turbinas que ya existían en el sitio (no se modifican sus datos). */
 export function reusedTurbinesWarning(
   requested: { name: string; code?: string; lat?: number; lon?: number }[],

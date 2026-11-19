@@ -8,6 +8,7 @@ import { inspectionsEnabled } from "@/lib/inspections/flag";
 const ERRORS: Record<string, string> = {
   forbidden: "Esta cuenta no tiene acceso al panel.",
   invite: "El enlace de invitación no es válido o venció. Pide uno nuevo.",
+  recovery: "El enlace de recuperación no es válido o venció. Solicita uno nuevo con «¿Olvidaste tu contraseña?».",
   config: "El panel no está configurado: faltan las variables de Supabase.",
 };
 

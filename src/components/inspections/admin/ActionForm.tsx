@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
 
-type Result = { ok: true } | { ok: false; message: string };
+/** `message` en el éxito (opcional) sustituye a `successMessage` cuando el texto depende del resultado. */
+type Result = { ok: true; message?: string } | { ok: false; message: string };
 
 /** Formulario que llama una acción de servidor y muestra el resultado en español. */
 export function ActionForm({
@@ -51,7 +52,7 @@ export function ActionForm({
         </Button>
         {result && (
           <p role={result.ok ? "status" : "alert"} className={result.ok ? "text-xs text-foreground-muted" : "text-xs text-signal-critical"}>
-            {result.ok ? successMessage : result.message}
+            {result.ok ? (result.message ?? successMessage) : result.message}
           </p>
         )}
       </div>

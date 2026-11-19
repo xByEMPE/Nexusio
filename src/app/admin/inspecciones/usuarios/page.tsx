@@ -4,7 +4,7 @@ import { InviteKindFields } from "@/components/inspections/admin/InviteKindField
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
-import { inviteUser, setUserActive } from "../actions/users";
+import { inviteUser, resendAccess, setUserActive } from "../actions/users";
 
 export const metadata = { title: "Usuarios" };
 
@@ -46,7 +46,12 @@ export default async function UsersPage() {
                   {u.email} · {u.platform_role ? PLATFORM_LABEL[u.platform_role] : ""} · {u.is_active ? "activo" : "inactivo"}
                 </div>
               </div>
-              {isAdmin && u.id !== viewer.user.id && <ToggleActive userId={u.id} active={u.is_active} />}
+              {isAdmin && u.id !== viewer.user.id && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {u.is_active && <ResendAccess userId={u.id} />}
+                  <ToggleActive userId={u.id} active={u.is_active} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -69,7 +74,12 @@ export default async function UsersPage() {
                     {m.profiles?.is_active ? "activo" : "inactivo"}
                   </div>
                 </div>
-                {m.profiles && <ToggleActive userId={m.profiles.id} active={m.profiles.is_active} />}
+                {m.profiles && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {m.profiles.is_active && <ResendAccess userId={m.profiles.id} />}
+                    <ToggleActive userId={m.profiles.id} active={m.profiles.is_active} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -134,6 +144,14 @@ function ToggleActive({ userId, active }: { userId: string; active: boolean }) {
     >
       <input type="hidden" name="user_id" value={userId} />
       <input type="hidden" name="active" value={active ? "false" : "true"} />
+    </ActionForm>
+  );
+}
+
+function ResendAccess({ userId }: { userId: string }) {
+  return (
+    <ActionForm action={resendAccess} submitLabel="Reenviar acceso" variant="secondary" inline>
+      <input type="hidden" name="user_id" value={userId} />
     </ActionForm>
   );
 }

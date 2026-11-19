@@ -122,6 +122,19 @@ Ver [`docs/backend-blueprint.md`](docs/backend-blueprint.md). Resumen:
 
 Detrás del proxy de Hostinger el proceso Node escucha en `0.0.0.0:3000`; esa dirección interna no debe llegar al navegador. Define en Hostinger `SITE_URL=https://nexusio.com.mx` (sin barra final). Las redirecciones de `/auth/confirm` (enlace de invitación → `/auth/set-password`, o `/admin/login?error=invite` si el enlace falla) usan el origen público calculado por `src/lib/http/public-origin.ts`: primero `SITE_URL`; si no está definida, `x-forwarded-host`/`x-forwarded-proto` y luego `host`. El parámetro `next` solo admite rutas relativas del mismo sitio. En local deja `SITE_URL` sin definir (o apunta a `http://localhost:3000`).
 
+## Correos de acceso: invitación y recuperación de contraseña
+
+Los correos salen por el SMTP propio de Supabase Auth (configurado en el panel, no en el repo). En producción las plantillas hay que pegarlas a mano en el panel de Supabase (en local las toma `supabase/config.toml`):
+
+| Plantilla del panel (Authentication → Emails → Templates) | Asunto | Contenido (pestaña **Source**) | Enlace que genera |
+| --- | --- | --- | --- |
+| **Invite user** | `Invitación a NEXUS` | `supabase/templates/invite.html` | `/auth/confirm?token_hash=…&type=invite&next=/auth/set-password` |
+| **Reset Password** | `Restablece tu contraseña de NEXUS` | `supabase/templates/recovery.html` | `/auth/confirm?token_hash=…&type=recovery&next=/auth/set-password%3Fmodo%3Drecuperar` |
+
+En el proyecto Supabase de producción el `site_url` (Authentication → URL Configuration) debe ser `https://nexusio.com.mx`: las plantillas arman el enlace con `{{ .SiteURL }}`; no hacen falta Redirect URLs adicionales. Tras canjear el token, `/auth/confirm` cierra la sesión y manda a `/admin/login?error=forbidden` si la cuenta no tiene acceso (perfil inactivo, sin rol ni membresía).
+
+Flujo de recuperación: «¿Olvidaste tu contraseña?» (en `/admin/login` y `/portal/login`) lleva a `/auth/forgot-password`, que pide el correo con un cliente anónimo (nunca la llave de servicio) y responde siempre lo mismo exista o no la cuenta: ni los errores de Supabase (incluido el 429, que GoTrue solo da si la cuenta existe) ni el tiempo de respuesta lo revelan (el envío corre con `after()` y la respuesta espera un retardo fijo). Límites propios en memoria, por instancia: 10 por hora por IP, tope global por hora (`RESET_GLOBAL_LIMIT_PER_HOUR`, 1000 por defecto) y 5 por hora por correo (trade-off: cualquiera puede agotar el cupo de un correo ajeno y bloquearle la recuperación una hora; no se evita del todo sin cuenta). La IP sale de `x-forwarded-for` contando desde el final: `TRUSTED_PROXY_HOPS` (por defecto 1, un solo proxy de confianza): hay que verificarlo con el número real de saltos de Hostinger, no darlo por supuesto (un valor mal puesto permite saltar el límite por IP o agrupar a todos bajo la IP del proxy). Se quita el puerto y las IPv6 se agrupan por /64; sin cabecera se usa una clave global. El enlace del correo entra por `/auth/confirm?type=recovery`, que canjea el token (un solo uso), abre sesión y envía a `/auth/set-password?modo=recuperar`; al guardar la contraseña se redirige por rol. Si el enlace falla, vuelve a `/admin/login?error=recovery`. Un administrador también puede pulsar **Reenviar acceso** en *Usuarios* o en el personal asignado de un proyecto: manda la invitación si la cuenta nunca se confirmó, o el correo de recuperación si ya está confirmada (máximo un envío por usuario cada 5 minutos; no a cuentas inactivas).
+
 ## Mapa del parque (MapLibre): worker
 
 `scripts/copy-maplibre-worker.mjs` copia el worker de `maplibre-gl` a `public/maplibre/` (ignorado por git).

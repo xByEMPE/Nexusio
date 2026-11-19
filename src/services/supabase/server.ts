@@ -38,3 +38,15 @@ export function createServiceClient(): SupabaseClient<Database> | null {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
+
+/**
+ * Cliente anónimo (clave publicable, sin sesión ni cookies): para acciones previas al inicio de
+ * sesión, como pedir el correo de recuperación. No omite RLS ni usa la llave de servicio.
+ */
+export function createAnonClient(): SupabaseClient<Database> | null {
+  const env = readPublicEnv();
+  if (!env) return null;
+  return createClient<Database>(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}

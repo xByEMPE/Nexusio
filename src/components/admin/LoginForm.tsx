@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { TextInput } from "@/components/assessment/fields";
@@ -64,6 +65,9 @@ export function LoginForm({ area }: { area: "admin" | "portal" }) {
       <Button type="submit" disabled={loading || !email || !password} className="mt-2 w-full">
         {loading ? "Entrando…" : "Entrar"}
       </Button>
+      <Link href="/auth/forgot-password" className="text-center text-sm text-accent-primary underline-offset-4 hover:underline">
+        ¿Olvidaste tu contraseña?
+      </Link>
     </form>
   );
 }

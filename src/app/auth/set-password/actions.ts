@@ -15,7 +15,7 @@ const PasswordSchema = z
 
 type SetPasswordResult = { error: string } | { path: string };
 
-/** Guarda la contraseña del usuario invitado y devuelve su destino. */
+/** Guarda la contraseña (invitación o recuperación; ambas dejan una sesión) y devuelve el destino por rol. */
 export async function setPassword(password: string): Promise<SetPasswordResult> {
   if (!inspectionsEnabled()) return { error: "Este acceso no está disponible." };
   const parsed = PasswordSchema.safeParse(password);
@@ -26,12 +26,13 @@ export async function setPassword(password: string): Promise<SetPasswordResult> 
   const {
     data: { user },
   } = await sb.auth.getUser();
-  if (!user) return { error: "El enlace de invitación venció. Pide uno nuevo." };
+  if (!user) return { error: "El enlace venció. Pide uno nuevo." };
+
+  // Antes de cambiar nada: una cuenta inactiva o sin acceso cierra sesión y no fija contraseña.
+  const dest = await resolveLoginDestination();
+  if ("error" in dest) return { error: "Esta cuenta no tiene acceso." };
 
   const { error } = await sb.auth.updateUser({ password: parsed.data });
   if (error) return { error: "No se pudo guardar la contraseña. Inténtalo de nuevo." };
-
-  const dest = await resolveLoginDestination();
-  if ("error" in dest) return { error: "Esta cuenta no tiene acceso." };
   return { path: dest.path };
 }
