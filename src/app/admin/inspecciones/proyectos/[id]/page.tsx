@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, SelectField } from "@/components/inspections/admin/ActionForm";
+import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
 import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { ProjectFields } from "@/components/inspections/admin/ProjectFields";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -44,7 +45,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     sb.from("project_assignments").select("user_id, profiles!project_assignments_user_id_fkey(email, full_name, platform_role)").eq("project_id", id),
     sb
       .from("inspections")
-      .select("id, kind, status, asset_id, assets(name, code), captures!captures_inspection_id_fkey(count)")
+      .select("id, kind, status, asset_id, deleting_at, assets(name, code), captures!captures_inspection_id_fkey(count)")
       .eq("project_id", id)
       .order("created_at"),
     isAdmin ? sb.from("sites").select("id, name").eq("organization_id", project.organization_id).order("name") : null,
@@ -69,7 +70,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       <Link href="/admin/inspecciones/proyectos" className="text-xs text-foreground-muted hover:text-foreground">
         ← Proyectos
       </Link>
-      <h1 className="mt-3 text-2xl font-medium">{project.name}</h1>
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-2xl font-medium">{project.name}</h1>
+        {isAdmin && <DeleteDialog kind="project" id={project.id} label="Eliminar proyecto" />}
+      </div>
       <p className="mt-1 text-sm text-foreground-muted">
         {project.organizations?.name} · {PROJECT_STATUS_LABEL[project.status]}
         {project.code && <span className="font-mono"> · {project.code}</span>}
@@ -121,22 +125,31 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             {inspections.data.map((i) => {
               const n = i.captures[0]?.count ?? 0;
               return (
-                <li key={i.id}>
+                <li key={i.id} className="flex items-center gap-3 pr-4 hover:bg-surface-raised">
                   <Link
                     href={`/admin/inspecciones/proyectos/${project.id}/inspecciones/${i.id}`}
-                    className="flex items-center justify-between gap-4 px-5 py-3.5 hover:bg-surface-raised"
+                    className="flex flex-1 items-center justify-between gap-4 px-5 py-3.5"
                   >
                     <div className="min-w-0">
                       <div className="truncate font-medium">{i.assets?.name}</div>
                       <div className="text-xs text-foreground-subtle">{INSPECTION_KIND_LABEL[i.kind]}</div>
                     </div>
                     <div className="tabular whitespace-nowrap text-right text-xs text-foreground-muted">
-                      <div>{INSPECTION_STATUS_LABEL[i.status]}</div>
+                      <div>{i.deleting_at ? "Eliminación pendiente" : INSPECTION_STATUS_LABEL[i.status]}</div>
                       <div>
                         {n} {n === 1 ? "foto" : "fotos"}
                       </div>
                     </div>
                   </Link>
+                  {isAdmin && (
+                    <DeleteDialog
+                      kind="asset_inspections"
+                      id={i.asset_id}
+                      projectId={project.id}
+                      label="Eliminar inspecciones de esta máquina"
+                      pending={Boolean(i.deleting_at)}
+                    />
+                  )}
                 </li>
               );
             })}

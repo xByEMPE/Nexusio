@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { TextArea, TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
+import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
 import { InspectionTabContent } from "@/components/inspections/viewer/InspectionTabContent";
 import { InspectionTabs, resolveTab } from "@/components/inspections/viewer/InspectionTabs";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -34,7 +35,7 @@ export default async function InspectionPage({
 
   const { data: inspection } = await sb
     .from("inspections")
-    .select("id, project_id, kind, status, pilot_name, assistant_name, drone_model, notes, blade_length_m, approved_at, assets(name, code), projects(name)")
+    .select("id, project_id, kind, status, pilot_name, assistant_name, drone_model, notes, blade_length_m, approved_at, deleting_at, assets(name, code), projects(name)")
     .eq("id", inspectionId)
     .eq("project_id", id)
     .maybeSingle();
@@ -63,19 +64,30 @@ export default async function InspectionPage({
           </p>
         </div>
         {isAdmin && (
-          <ActionForm
-            action={setInspectionStatus}
-            submitLabel={approved ? "Reabrir" : "Aprobar"}
-            successMessage="Estado actualizado."
-            variant={approved ? "secondary" : "primary"}
-            inline
-          >
-            <input type="hidden" name="id" value={inspection.id} />
-            <input type="hidden" name="project_id" value={id} />
-            <input type="hidden" name="status" value={approved ? "reopen" : "approved"} />
-          </ActionForm>
+          <div className="flex flex-wrap items-center gap-2">
+            {!inspection.deleting_at && (
+              <ActionForm
+                action={setInspectionStatus}
+                submitLabel={approved ? "Reabrir" : "Aprobar"}
+                successMessage="Estado actualizado."
+                variant={approved ? "secondary" : "primary"}
+                inline
+              >
+                <input type="hidden" name="id" value={inspection.id} />
+                <input type="hidden" name="project_id" value={id} />
+                <input type="hidden" name="status" value={approved ? "reopen" : "approved"} />
+              </ActionForm>
+            )}
+            <DeleteDialog kind="inspection" id={inspection.id} label="Eliminar" pending={Boolean(inspection.deleting_at)} />
+          </div>
         )}
       </div>
+
+      {inspection.deleting_at && (
+        <p role="alert" className="mt-6 rounded-[2px] border border-signal-caution/60 p-4 text-sm text-signal-caution">
+          Eliminación pendiente: esta inspección ya no es visible para técnicos ni clientes y una eliminación anterior quedó a medias. Usa «Eliminación pendiente: reintentar».
+        </p>
+      )}
 
       {approved && !isAdmin && (
         <p className="panel mt-6 p-4 text-sm text-foreground-muted">Esta inspección está aprobada: solo un administrador puede modificarla.</p>

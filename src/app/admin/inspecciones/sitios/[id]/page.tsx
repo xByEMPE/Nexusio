@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
+import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
 import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { AssetFields, SiteFields } from "@/components/inspections/admin/SiteFields";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -47,6 +48,10 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
           .not("asset_lon", "is", null)
       : { data: [] };
   const inspectionPos = latestInspectionPositions(inspPos ?? []);
+  // Máquinas con inspecciones (para «Eliminar inspecciones de esta máquina»).
+  const { data: inspected } =
+    isAdmin && assetIds.length ? await sb.from("inspections").select("asset_id").in("asset_id", assetIds) : { data: [] };
+  const assetsWithInspections = new Set((inspected ?? []).map((r) => r.asset_id));
 
   const mapTurbines = site.kind === "wind_farm" ? await loadSiteMap(sb, id, "admin") : [];
 
@@ -113,6 +118,11 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                       <ActionForm action={applyInspectionPosition} submitLabel="Usar posición de la última inspección" successMessage="Posición guardada." variant="secondary" inline>
                         <input type="hidden" name="asset_id" value={a.id} />
                       </ActionForm>
+                    </div>
+                  )}
+                  {isAdmin && assetsWithInspections.has(a.id) && (
+                    <div className="mt-3">
+                      <DeleteDialog kind="asset_inspections" id={a.id} projectId={null} label="Eliminar inspecciones de esta máquina" />
                     </div>
                   )}
                   {isAdmin && (
