@@ -118,6 +118,10 @@ Ver [`docs/backend-blueprint.md`](docs/backend-blueprint.md). Resumen:
 - Cadena de custodia SHA-256 inmutable y auditoría de solo inserción.
 - Cinco buckets privados con políticas por organización y rol; acceso por URL firmada.
 
+## Dominio público e invitaciones (`SITE_URL`)
+
+Detrás del proxy de Hostinger el proceso Node escucha en `0.0.0.0:3000`; esa dirección interna no debe llegar al navegador. Define en Hostinger `SITE_URL=https://nexusio.com.mx` (sin barra final). Las redirecciones de `/auth/confirm` (enlace de invitación → `/auth/set-password`, o `/admin/login?error=invite` si el enlace falla) usan el origen público calculado por `src/lib/http/public-origin.ts`: primero `SITE_URL`; si no está definida, `x-forwarded-host`/`x-forwarded-proto` y luego `host`. El parámetro `next` solo admite rutas relativas del mismo sitio. En local deja `SITE_URL` sin definir (o apunta a `http://localhost:3000`).
+
 ## Mapa del parque (MapLibre): worker
 
 `scripts/copy-maplibre-worker.mjs` copia el worker de `maplibre-gl` a `public/maplibre/` (ignorado por git).
