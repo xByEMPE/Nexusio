@@ -31,6 +31,10 @@ REPO = Path(__file__).resolve().parents[3]
 SERVER_CODES = ["unsupported_version", "forbidden_project", "inspection_locked", "asset_other_org",
                 "empty_manifest", "bad_path", "missing_object", "unknown_finding_type", "unknown_capture",
                 "unknown_mosaic", "duplicate_sha256", "duplicate_id", "foreign_id", "finding_target_changed"]
+# Códigos que la rama del portal «borrado de inspecciones» añade a ingest_manifest (§8.3; migración
+# 20261117000100_inspections_delete.sql). Aún no están en el SQL ni en src/contracts de esta rama:
+# se listan aquí a mano. Cuando lleguen, la prueba exige que coincidan (sin debilitarla).
+PORTAL_PENDING_CODES = ["inspection_deleting"]
 LOCAL_CODES = ["unknown", "schema_invalid", "no_valid_photos", "nothing_to_upload"]
 EXIFTOOL = Path("C:/herramientas/exiftool.exe")
 
@@ -210,8 +214,10 @@ def _codes_from_contract() -> set[str]:
 
 def test_error_text_covers_every_contract_and_local_code():
     from_sql, from_ts = _codes_from_sql(), _codes_from_contract()
-    assert set(SERVER_CODES) <= from_sql and from_ts == set(SERVER_CODES)
-    for code in sorted(from_sql | from_ts | set(SERVER_CODES) | set(LOCAL_CODES)):
+    portal = set(PORTAL_PENDING_CODES)
+    assert set(SERVER_CODES) <= from_sql and from_ts - portal == set(SERVER_CODES)
+    assert from_ts & portal in (set(), portal) and from_sql & portal in (set(), portal)
+    for code in sorted(from_sql | from_ts | set(SERVER_CODES) | portal | set(LOCAL_CODES)):
         text = ERROR_TEXT.get(code)
         assert text, f"falta el texto en español del código {code}"
         explanation, _, action = text.partition("Qué hacer:")
@@ -537,6 +543,29 @@ def test_inspection_locked_offers_only_home(app, monkeypatch, how):
     assert screen.upload_button.winfo_manager() == ""  # sin «Reintentar»
     assert screen.home_button.winfo_manager() != "" and screen.home_button.instate(["!disabled"])
     assert "Reintentar" not in texts(app)
+
+
+def test_inspection_deleting_text_says_do_not_retry():
+    text = ERROR_TEXT["inspection_deleting"]
+    assert "está siendo eliminada" in text and "No reintentes" in text
+    assert "administrador" in text.split("Qué hacer:")[1] and "inspección nueva" in text
+
+
+@pytest.mark.parametrize("how", ["report", "storage"])
+def test_inspection_deleting_is_terminal(app, monkeypatch, how):
+    from nexus_desktop.nexus.upload import StorageForbidden
+    if how == "report":
+        fake = FakeUpload(ok_report(errors=[{"path": "/inspection/id", "code": "inspection_deleting", "blade": "A"}]))
+    else:
+        from nexus_desktop.nexus.upload import FORBIDDEN_TEXT
+        fake = FakeUpload(error=StorageForbidden(FORBIDDEN_TEXT))
+    screen = run_upload(app, monkeypatch, fake)
+    assert screen.upload_button.winfo_manager() == ""  # sin «Reintentar»/«Reanudar»
+    assert screen.home_button.winfo_manager() != "" and screen.home_button.instate(["!disabled"])
+    assert "Reintentar" not in texts(app) and "Reanudar" not in texts(app)
+    assert [p.status for p in pending.load()] == ["blocked"]
+    if how == "storage":
+        assert "No tienes permiso para subir a esta inspección" in screen.status_label.cget("text")
 
 
 def test_report_replaces_log_and_toggles(app, monkeypatch):

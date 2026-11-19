@@ -53,3 +53,7 @@ def test_default_location_is_data_dir(monkeypatch, tmp_path):
     assert (tmp_path / "NEXUS" / pending.FILE_NAME).is_file()
     assert pending.status_text("interrupted") == "Subida interrumpida"
     assert pending.status_text("raro") == "Subida sin terminar"
+
+
+def test_blocked_status_text():
+    assert pending.status_text("blocked") == "Bloqueada: la inspección se está eliminando en NEXUS"

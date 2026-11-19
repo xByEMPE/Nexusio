@@ -73,6 +73,7 @@ class StartScreen(Screen):
         # Confirmación cuando no se pudo guardar lo procesado y se va a cambiar de carpeta.
         self._on_discard = None
         self._no_data: set[str] = set()
+        self._blocked: set[str] = set()
         self.confirm_row = ttk.Frame(box, style="Panel.TFrame")
         self.discard_button = ttk.Button(self.confirm_row, text="Descartar y continuar",
                                          style="Danger.TButton", command=self._discard)
@@ -102,14 +103,19 @@ class StartScreen(Screen):
         tree.delete(*tree.get_children())
         self._pending_rows = {}
         self._no_data = set()
+        self._blocked = set()  # inspección en eliminación: ni subir ni reimportar, solo quitar
         items = pending.load()
         for entry in items:
             label = " · ".join(x for x in (entry.project, entry.asset) if x)
             has_data = ready.find_file(Path(entry.folder)) is not None
-            status = pending.status_text(entry.status) if has_data else NO_DATA  # sin JSON no se puede subir
+            blocked = entry.status == "blocked"
+            has_data = has_data and not blocked
+            status = pending.status_text(entry.status) if has_data or blocked else NO_DATA  # sin JSON no se puede subir
             item = tree.insert("", "end", values=(short_path(Path(entry.folder), PATH_LIMIT), label, status))
             self._pending_rows[item] = entry.folder
-            if not has_data:
+            if blocked:
+                self._blocked.add(item)
+            elif not has_data:
                 self._no_data.add(item)
         buttons = (self.remove_pending_button, self.reimport_button, self.upload_pending_button)
         for button in buttons:
@@ -136,10 +142,10 @@ class StartScreen(Screen):
         item = self._selected_item()
         busy = self.confirm_row.winfo_manager() != ""  # esperando «Descartar y continuar» / «Cancelar»
         selected = item is not None and not busy
-        has_data = selected and item not in self._no_data
+        has_data = selected and item not in self._no_data and item not in self._blocked
         self.remove_pending_button.state(["!disabled"] if selected else ["disabled"])
         self.upload_pending_button.state(["!disabled"] if has_data else ["disabled"])
-        self.reimport_button.state(["!disabled"] if selected and not has_data else ["disabled"])
+        self.reimport_button.state(["!disabled"] if selected and not has_data and item not in self._blocked else ["disabled"])
         self.import_button.state(["disabled"] if busy else ["!disabled"])
 
     def _set_status(self, text: str, error: bool = False) -> None:
@@ -162,7 +168,7 @@ class StartScreen(Screen):
         """«Subir» una entrada de la lista: se reconstruye el estado desde el JSON de su carpeta
         (validado) y se sigue por el destino; sin sesión, antes el login."""
         folder = self._selected_folder()
-        if folder is None or self._selected_item() in self._no_data:
+        if folder is None or self._selected_item() in self._no_data | self._blocked:
             return
         state = self.app.state
         if state.wtg is not None and state.sections and _same(state.wtg.path, folder):

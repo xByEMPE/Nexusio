@@ -31,6 +31,7 @@ from tkinter import ttk
 from nexus_desktop.config import resolve_exiftool
 from nexus_desktop.nexus.builder import DIRECTIONS  # "unknown" no se envía al manifiesto
 from nexus_desktop.nexus.projects import InspectionError, InspectionLocked
+from nexus_desktop.nexus.upload import StorageForbidden
 from nexus_desktop.nexus.uploader import PhotoInfo, StripInput, UploadPlan, UploadReport, upload_inspection
 from nexus_desktop.storage import pending, ready
 from nexus_desktop.storage.local_index import LocalIndex
@@ -52,6 +53,9 @@ ERROR_TEXT: dict[str, str] = {
                           "Qué hacer: pide a tu administrador que te asigne al proyecto y vuelve a intentarlo."),
     "inspection_locked": ("La inspección ya está aprobada y no admite más datos. "
                           "Qué hacer: si hay que corregirla, pide a un administrador que la reabra."),
+    "inspection_deleting": ("Esta inspección está siendo eliminada en NEXUS y no admite más archivos. "
+                            "Qué hacer: No reintentes: si necesitas volver a cargarla, pide a un administrador "
+                            "que termine o cancele la eliminación, o crea una inspección nueva."),
     "asset_other_org": ("La turbina no pertenece a la organización del proyecto. "
                         "Qué hacer: revisa que elegiste el proyecto y la turbina correctos; si es así, avisa "
                         "a tu administrador."),
@@ -116,7 +120,7 @@ def error_explanation(code: str) -> str:
 def error_message(exc: Exception) -> str:
     """Texto en español de un fallo de la subida: nunca la traza ni el texto crudo de la
     excepción (podría llevar URLs o tokens), salvo los mensajes legibles de projects.py."""
-    if isinstance(exc, (InspectionLocked, InspectionError)):
+    if isinstance(exc, (InspectionLocked, InspectionError, StorageForbidden)):
         return str(exc)
     if isinstance(exc, FileNotFoundError):
         name = Path(exc.filename).name if exc.filename else "un archivo necesario"
@@ -339,10 +343,12 @@ class UploadScreen(Screen):
                 if index.load_warning:
                     self._queue.put(("warning", index.load_warning, 0.0))
                 report = upload_inspection(plan, session, index, exiftool, self._report, cancel)
-            except BaseException:
-                self._mark_pending(folder, names, "interrupted")
+            except BaseException as exc:
+                self._mark_pending(folder, names, "blocked" if isinstance(exc, StorageForbidden) else "interrupted")
                 raise
-            if report.errors:
+            if any(e.get("code") == "inspection_deleting" for e in report.errors):
+                self._mark_pending(folder, names, "blocked")  # terminal: no se ofrece subir de nuevo
+            elif report.errors:
                 self._mark_pending(folder, names, "errors")
             elif report.cancelled:
                 self._mark_pending(folder, names, "cancelled")
@@ -410,7 +416,7 @@ class UploadScreen(Screen):
         self._set_status(message, TOKENS["critical"])
         self._set_buttons(running=False)
         self.home_button.pack(side="right", padx=(0, 8), before=self.back_button)
-        if isinstance(exc, InspectionLocked):  # reintentar fallaría igual: solo volver
+        if isinstance(exc, (InspectionLocked, StorageForbidden)):  # reintentar fallaría igual: solo volver
             self.upload_button.pack_forget()
         else:
             self._show_upload_button("Reintentar")
@@ -444,8 +450,9 @@ class UploadScreen(Screen):
             if report.cancelled:
                 text += " Además, se canceló antes de terminar."
             self._set_status(text, TOKENS["critical"])
-            if all(e.get("code") == "inspection_locked" for e in report.errors):
-                self.upload_button.pack_forget()  # aprobada: reintentar fallaría igual
+            if any(e.get("code") == "inspection_deleting" for e in report.errors) or all(
+                    e.get("code") == "inspection_locked" for e in report.errors):
+                self.upload_button.pack_forget()  # aprobada o en eliminación: reintentar fallaría igual
             else:
                 self._show_upload_button("Reintentar")
         elif report.cancelled:

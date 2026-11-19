@@ -437,6 +437,21 @@ def test_start_lists_ready_and_old_partial_entries(app, tmp_path):
     assert app.current.upload_pending_button.instate(["disabled"])
 
 
+def test_blocked_entry_has_no_upload_but_can_be_removed(app, tmp_path):
+    folder, _ = save_for_later(app, tmp_path)
+    pending.save_status(folder, "", "WTG 25", "blocked")
+    app.show_initial()
+    assert pending_rows(app.current) == [
+        (shown(folder), "WTG 25", "Bloqueada: la inspección se está eliminando en NEXUS")]
+    select_pending(app, app.current)
+    assert app.current.upload_pending_button.instate(["disabled"])
+    assert app.current.reimport_button.instate(["disabled"])
+    assert app.current.remove_pending_button.instate(["!disabled"])
+    app.current.remove_pending_button.invoke()
+    assert pending.load() == []
+    assert (folder / ".ingest_index.json").exists() or ready.find_file(folder) is not None  # datos del técnico intactos
+
+
 def test_reopen_and_upload_from_list_rebuilds_identical_plan(app, tmp_path, monkeypatch):
     folder, original = save_for_later(app, tmp_path / "Inspección Ñandú")
     app.show_initial()

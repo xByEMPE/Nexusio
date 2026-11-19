@@ -642,3 +642,69 @@ def test_estimated_gsd_goes_to_the_manifest_only_for_photos_without_laser(tmp_pa
     assert caps["a1.jpg"]["gsd"] == {"mm_px": 1.7, "source": "mosaic_calibration", "confidence": "low"}
     assert caps["a2.jpg"]["gsd"] == {"mm_px": pytest.approx(4500 / 3725.0), "source": "lrf", "confidence": "high"}
     assert caps["a3.jpg"]["gsd"] is None
+
+
+# --- Errores de Storage/TUS ------------------------------------------------------------------
+
+def _tus_fails_with(monkeypatch, error):
+    from nexus_desktop.nexus import upload
+
+    class FakeUploader:
+        def upload(self):
+            raise error
+
+    class FakeTusClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def uploader(self, *a, **k):
+            return FakeUploader()
+
+    monkeypatch.setattr(upload.client, "TusClient", FakeTusClient)
+    return upload
+
+
+def _call(upload, tmp_path):
+    f = tmp_path / "a.jpg"
+    f.write_bytes(b"x")
+    upload.tus_upload(f, "o/a.jpg", "image/jpeg", supabase_url="http://127.0.0.1:54321",
+                      access_token="tok", publishable_key="pk")
+
+
+@pytest.mark.parametrize("body", [
+    '{"statusCode":"403","error":"Unauthorized","message":"new row violates row-level security policy"}',
+    "Row-Level Security policy violation"])
+def test_tus_403_rls_becomes_storage_forbidden(tmp_path, monkeypatch, body):
+    from tusclient.exceptions import TusCommunicationError
+    upload = _tus_fails_with(monkeypatch, TusCommunicationError("fallo", status_code=403, response_content=body))
+    with pytest.raises(upload.StorageForbidden) as info:
+        _call(upload, tmp_path)
+    assert "tok" not in str(info.value) and "No tienes permiso" in str(info.value)
+
+
+@pytest.mark.parametrize("error", [
+    pytest.param("TusCommunicationError 500", id="500"),
+    pytest.param("TusCommunicationError 403 sin RLS", id="403-otro"),
+    pytest.param("ConnectionError", id="red")])
+def test_tus_other_failures_stay_generic_and_retryable(tmp_path, monkeypatch, error):
+    import requests
+    from tusclient.exceptions import TusCommunicationError
+    exc = {"TusCommunicationError 500": TusCommunicationError("x", status_code=500, response_content="boom"),
+           "TusCommunicationError 403 sin RLS": TusCommunicationError("x", status_code=403, response_content="expired"),
+           "ConnectionError": requests.ConnectionError("sin red")}[error]
+    upload = _tus_fails_with(monkeypatch, exc)
+    with pytest.raises(type(exc)):
+        _call(upload, tmp_path)
+
+
+def test_storage_forbidden_stops_the_run_without_retry(tmp_path):
+    from nexus_desktop.nexus.upload import StorageForbidden
+    root, plan, client, tus = setup(tmp_path)
+
+    def boom(t):
+        raise StorageForbidden("No tienes permiso para subir a esta inspección")
+
+    tus.hook = boom
+    with pytest.raises(StorageForbidden):
+        run(plan, client, tus)
+    assert len(tus.calls) == 1 and client.rpc_calls == []

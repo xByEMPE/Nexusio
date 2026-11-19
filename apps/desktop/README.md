@@ -218,6 +218,11 @@ apps/desktop/
   (mismo nombre, otro contenido) sí se reenvía: el índice guarda la huella de cada tira subida.
   Los ids del índice deben ser UUID; si no, el índice se respalda y se empieza uno nuevo. Una
   prueba verifica que la copia del esquema coincide con `src/contracts/`.
+- **Errores terminales de subida**: `inspection_deleting` (la inspección se está eliminando en
+  NEXUS; el manifiesto lo rechaza `ingest_manifest`) y un 403 de Storage por política de seguridad
+  (row-level security) al subir archivos se muestran en español, sin «Reintentar»: la carpeta queda
+  «Bloqueada» en el Inicio (solo «Quitar de la lista») y no se borra nada del técnico; un fallo de
+  red sí admite reintento.
 - La versión de la app (`config.VERSION`) va en `manifest.app.version` y en el ejecutable.
 
 ## Límites conocidos

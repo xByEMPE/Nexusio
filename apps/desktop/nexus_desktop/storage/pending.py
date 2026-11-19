@@ -4,7 +4,8 @@ Lista pequeña por usuario de Windows para el panel «Inspecciones locales pendi
 La escribe el final de la verificación («Guardar y subir después»: `ready`, «Lista para subir», con
 el nombre de la turbina en `asset` y `project` vacío), la pantalla de subida al empezar
 (`in_progress`) y al terminar (completa: se quita; si no,
-`cancelled`, `errors`, `interrupted` o `partial` si se omitieron fotos dañadas). Solo guarda la ruta de la carpeta WTG, los nombres del
+`cancelled`, `errors`, `interrupted`, `blocked` (inspección en eliminación o sin permiso: no se
+reintenta) o `partial` si se omitieron fotos dañadas). Solo guarda la ruta de la carpeta WTG, los nombres del
 proyecto y la turbina, el estado y la fecha: nunca tokens ni datos de la sesión. El avance real
 de la subida está en el índice de la carpeta (storage/local_index.py).
 """
@@ -27,6 +28,7 @@ STATUS_TEXT = {
     "cancelled": "Subida cancelada",
     "errors": "Subida con errores",
     "partial": "Algunas fotos no se subieron",
+    "blocked": "Bloqueada: la inspección se está eliminando en NEXUS",
 }
 _FIELDS = ("folder", "project", "asset", "status", "updated_at")
 _lock = threading.Lock()  # la escriben el hilo de Tk y el de la subida
