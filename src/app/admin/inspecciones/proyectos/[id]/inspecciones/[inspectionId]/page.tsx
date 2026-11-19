@@ -4,6 +4,7 @@ import { z } from "zod";
 import { TextArea, TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
+import { deleteEnabled } from "@/lib/inspections/flag";
 import { InspectionTabContent } from "@/components/inspections/viewer/InspectionTabContent";
 import { InspectionTabs, resolveTab } from "@/components/inspections/viewer/InspectionTabs";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -33,6 +34,7 @@ export default async function InspectionPage({
   if (!z.uuid().safeParse(id).success || !z.uuid().safeParse(inspectionId).success) notFound();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
+  const canDelete = deleteEnabled();
   const sb = await createSessionClient();
   if (!sb) notFound();
 
@@ -81,12 +83,18 @@ export default async function InspectionPage({
                 <input type="hidden" name="status" value={approved ? "reopen" : "approved"} />
               </ActionForm>
             )}
-            <DeleteDialog kind="inspection" id={inspection.id} label="Eliminar" pending={Boolean(inspection.deleting_at)} />
+            {canDelete && <DeleteDialog kind="inspection" id={inspection.id} label="Eliminar" pending={Boolean(inspection.deleting_at)} />}
           </div>
         )}
       </div>
 
-      {inspection.deleting_at && (
+      {inspection.deleting_at && isAdmin && !canDelete && (
+        <p role="alert" className="mt-6 rounded-[2px] border border-signal-caution/60 p-4 text-sm text-signal-caution">
+          Eliminación pendiente: el borrado está desactivado; actívalo para terminar.
+        </p>
+      )}
+
+      {inspection.deleting_at && canDelete && (
         <p role="alert" className="mt-6 rounded-[2px] border border-signal-caution/60 p-4 text-sm text-signal-caution">
           Eliminación pendiente: esta inspección ya no es visible para técnicos ni clientes y una eliminación anterior quedó a medias. Usa «Eliminación pendiente: reintentar».
         </p>

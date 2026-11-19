@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm, SelectField } from "@/components/inspections/admin/ActionForm";
 import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
+import { deleteEnabled } from "@/lib/inspections/flag";
 import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { ProjectFields } from "@/components/inspections/admin/ProjectFields";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -33,6 +34,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   if (!z.uuid().safeParse(id).success) notFound();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
+  const canDelete = deleteEnabled();
   const sb = await createSessionClient();
   if (!sb) notFound();
 
@@ -75,7 +77,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </Link>
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-medium">{project.name}</h1>
-        {isAdmin && <DeleteDialog kind="project" id={project.id} label="Eliminar proyecto" />}
+        {isAdmin && canDelete && <DeleteDialog kind="project" id={project.id} label="Eliminar proyecto" />}
       </div>
       <p className="mt-1 text-sm text-foreground-muted">
         {project.organizations?.name} · {PROJECT_STATUS_LABEL[project.status]}
@@ -144,7 +146,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       </div>
                     </div>
                   </Link>
-                  {isAdmin && (
+                  {isAdmin && canDelete && (
                     <DeleteDialog
                       kind="asset_inspections"
                       id={i.asset_id}

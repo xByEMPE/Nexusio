@@ -124,3 +124,11 @@ Ver [`docs/backend-blueprint.md`](docs/backend-blueprint.md). Resumen:
 Corre en `postinstall`, `predev` y `prebuild`, así que `npm install`, `npm run dev` y `npm run build` lo dejan listo;
 si se ejecuta `next build` directo, basta que antes se haya hecho `npm install`. La URL lleva `?v=<versión de maplibre-gl>`
 para invalidar cachés al actualizar. Opcional: `NEXT_PUBLIC_ESRI_API_KEY` (pública; restringir por referrer y a basemaps) habilita el botón Satélite.
+
+---
+
+## Interruptor de seguridad del borrado
+
+El borrado de inspecciones, máquinas y proyectos (solo admin) se controla con la variable de servidor `INSPECTIONS_DELETE_ENABLED`. Está **activo** salvo que valga `false`, `0`, `off` o `no` (sin distinguir mayúsculas ni espacios); cualquier otro valor o su ausencia lo deja activo.
+
+**Para desactivar el borrado en producción pon `INSPECTIONS_DELETE_ENABLED=false` en Hostinger y redespliega (o reinicia).** Con el borrado desactivado no se muestran los botones «Eliminar», las Server Actions de borrado responden «El borrado está desactivado en este entorno.» antes de leer o escribir nada, y las inspecciones ya marcadas «en eliminación» no se tocan (la página de la inspección avisa al admin de que hay una eliminación pendiente). No cambia la base de datos.

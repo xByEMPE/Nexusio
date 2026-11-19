@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
 import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
+import { deleteEnabled } from "@/lib/inspections/flag";
 import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
 import { AssetFields, SiteFields } from "@/components/inspections/admin/SiteFields";
 import { requireStaff } from "@/lib/auth/viewer";
@@ -24,6 +25,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
   if (!z.uuid().safeParse(id).success) notFound();
   const viewer = await requireStaff();
   const isAdmin = viewer.platformRole === "admin";
+  const canDelete = deleteEnabled();
   const sb = await createSessionClient();
   if (!sb) notFound();
 
@@ -123,7 +125,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                       </ActionForm>
                     </div>
                   )}
-                  {isAdmin && assetsWithInspections.has(a.id) && (
+                  {isAdmin && canDelete && assetsWithInspections.has(a.id) && (
                     <div className="mt-3">
                       <DeleteDialog kind="asset_inspections" id={a.id} projectId={null} label="Eliminar todas las inspecciones de esta máquina (todos los proyectos)" />
                     </div>

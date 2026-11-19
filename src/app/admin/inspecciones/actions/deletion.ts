@@ -8,6 +8,7 @@ import {
   type DeletionTarget,
   type StepResult,
 } from "@/lib/inspections/deletion-types";
+import { deleteEnabled } from "@/lib/inspections/flag";
 import { dbErrorMessage, requireAdminAction } from "@/lib/inspections/admin-action";
 import { MEDIA_BUCKET } from "@/services/inspections/deletion";
 import { runDeletionStep, type FlowDeps } from "@/services/inspections/deletion-flow";
@@ -16,6 +17,7 @@ import { createServiceClient, createSessionClient } from "@/services/supabase/se
 export type PreviewResult = { ok: true; preview: DeletionPreview } | { ok: false; message: string };
 
 const NO_SERVICE = "El servicio no está configurado.";
+const DELETE_OFF_MSG = "El borrado está desactivado en este entorno.";
 const fail = (message: string): StepResult => ({ ok: false, message });
 
 function parseTarget(kind: DeletionTarget["kind"], id: string, projectId?: string | null) {
@@ -27,6 +29,7 @@ function parseTarget(kind: DeletionTarget["kind"], id: string, projectId?: strin
 async function previewTarget(kind: DeletionTarget["kind"], id: string, projectId?: string | null): Promise<PreviewResult> {
   const gate = await requireAdminAction();
   if ("error" in gate) return { ok: false, message: "No tienes permiso para esta acción." };
+  if (!deleteEnabled()) return { ok: false, message: DELETE_OFF_MSG };
   const target = parseTarget(kind, id, projectId);
   if (!target) return { ok: false, message: "Elemento no válido." };
   const sb = await createSessionClient();
@@ -53,6 +56,7 @@ async function step(
 ): Promise<StepResult> {
   const gate = await requireAdminAction();
   if ("error" in gate) return fail("No tienes permiso para esta acción.");
+  if (!deleteEnabled()) return fail(DELETE_OFF_MSG);
   const target = parseTarget(kind, id, projectId);
   const confirm = ConfirmSchema.safeParse({ confirmName, reason: reason || undefined });
   if (!target || !confirm.success) return fail("Revisa el nombre escrito y el motivo (máximo 500 caracteres).");
