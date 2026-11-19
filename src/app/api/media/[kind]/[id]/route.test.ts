@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { clearStableCache } from "@/services/inspections/media";
-import { mediaEtag } from "@/lib/inspections/media-url";
+import { captureVersion, mediaEtag, mosaicVersion } from "@/lib/inspections/media-url";
 
 const ID = "3f0c9d3e-6c0e-4a43-9d57-3a8c5a1a2b11";
 const UPDATED = "2026-01-01T00:00:00+00:00";
+const SHA = "a".repeat(64);
+const STRIP = "o/p/i/mosaics/x/strip-ab12cd34.webp";
+const etagThumb = () => mediaEtag("thumb", ID, "o/p/i/t.webp", captureVersion(SHA, "o/p/i/t.webp", UPDATED));
 
 type Row = Record<string, unknown> | null;
 const state = {
@@ -67,8 +70,8 @@ beforeEach(() => {
   state.signCalls = 0;
   state.queried = [];
   state.rows = {
-    captures: { id: ID, thumb_path: "o/p/i/t.webp", preview_path: "o/p/i/p.webp", updated_at: UPDATED },
-    mosaics: { id: ID, path: "o/p/i/mosaics/x/strip-ab12cd34.webp", updated_at: UPDATED },
+    captures: { id: ID, thumb_path: "o/p/i/t.webp", preview_path: "o/p/i/p.webp", sha256: SHA, updated_at: UPDATED },
+    mosaics: { id: ID, path: STRIP, updated_at: UPDATED },
   };
   fetchMock.mockReset();
   fetchMock.mockImplementation(
@@ -91,7 +94,9 @@ describe("GET /api/media/[kind]/[id]", () => {
     expect(res.headers.get("Vary")).toBe("Cookie");
     expect(res.headers.get("Content-Type")).toBe("image/webp");
     expect(res.headers.get("Content-Length")).toBe("3");
-    expect(res.headers.get("ETag")).toBe(mediaEtag("thumb", ID, "o/p/i/t.webp", UPDATED));
+    expect(res.headers.get("ETag")).toBe(etagThumb());
+    expect(res.headers.get("Content-Security-Policy")).toBe("default-src 'none'; sandbox");
+    expect(res.headers.get("Content-Disposition")).toBe("inline");
     expect(await res.text()).toBe("IMG");
     // La URL firmada se usa solo en el servidor y no viaja en ninguna cabecera.
     expect([...res.headers.values()].join("\n")).not.toMatch(/SECRET|sb\.local|o\/p\/i/);
@@ -118,7 +123,7 @@ describe("GET /api/media/[kind]/[id]", () => {
   test("elige la ruta de la fila según el tipo (thumb, preview, idthumb, strip)", async () => {
     await call("thumb", ID);
     await call("preview", ID);
-    state.rows.captures = { id: ID, thumb_path: null, preview_path: "o/p/i/p.webp", updated_at: UPDATED };
+    state.rows.captures = { id: ID, thumb_path: null, preview_path: "o/p/i/p.webp", sha256: SHA, updated_at: UPDATED };
     await call("idthumb", ID);
     await call("strip", ID);
     const urls = fetchMock.mock.calls.map((c) => String(c[0]));
@@ -130,7 +135,7 @@ describe("GET /api/media/[kind]/[id]", () => {
   });
 
   test("304 con If-None-Match coincidente: no toca Storage y conserva las cabeceras de caché", async () => {
-    const etag = mediaEtag("thumb", ID, "o/p/i/t.webp", UPDATED);
+    const etag = etagThumb();
     const res = await call("thumb", ID, { "if-none-match": etag });
     expect(res.status).toBe(304);
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=15552000, immutable");
@@ -169,7 +174,7 @@ describe("GET /api/media/[kind]/[id]", () => {
   });
 
   test("404 si la fila no tiene esa imagen", async () => {
-    state.rows.captures = { id: ID, thumb_path: null, preview_path: null, updated_at: UPDATED };
+    state.rows.captures = { id: ID, thumb_path: null, preview_path: null, sha256: SHA, updated_at: UPDATED };
     expect((await call("thumb", ID)).status).toBe(404);
     expect((await call("idthumb", ID)).status).toBe(404);
   });
@@ -237,10 +242,23 @@ describe("GET /api/media/[kind]/[id]", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  test("un tipo de contenido que no es imagen se degrada a application/octet-stream", async () => {
-    fetchMock.mockImplementation(async () => new Response("<html>", { status: 200, headers: { "content-type": "text/html" } }));
-    const res = await call("thumb", ID);
-    expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
+  test("lista blanca exacta de Content-Type: webp, jpeg, png y tiff pasan (con parámetros), conservando Vary", async () => {
+    for (const t of ["image/webp", "image/jpeg", "image/png", "image/tiff", "IMAGE/PNG; charset=binary"]) {
+      fetchMock.mockImplementationOnce(async () => new Response("x", { status: 200, headers: { "content-type": t } }));
+      const res = await call("thumb", ID);
+      expect(res.status, t).toBe(200);
+      expect(res.headers.get("Vary")).toBe("Cookie");
+    }
+  });
+
+  test("Content-Type fuera de la lista (svg, html, xml, gif, vacío): 502 no-store, sin reenviar el cuerpo", async () => {
+    for (const t of ["image/svg+xml", "text/html", "application/xml", "image/gif", "application/octet-stream", ""]) {
+      fetchMock.mockImplementationOnce(async () => new Response("<svg onload=alert(1)>", { status: 200, headers: t ? { "content-type": t } : {} }));
+      const res = await call("thumb", ID);
+      expect(res.status, t).toBe(502);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(await res.text()).toBe("");
+    }
   });
 
   test("no reenvía Content-Length si el upstream viene comprimido", async () => {
@@ -250,5 +268,103 @@ describe("GET /api/media/[kind]/[id]", () => {
     );
     const res = await call("thumb", ID);
     expect(res.headers.get("Content-Length")).toBeNull();
+  });
+
+  test("el fetch al upstream no sigue redirecciones y lleva señal de cancelación", async () => {
+    await call("thumb", ID);
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(init.redirect).toBe("error");
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.cache).toBe("no-store");
+  });
+
+  test("upstream que no responde: a los 15 s se aborta y responde 504 no-store sin detalles", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fetchMock.mockImplementation(
+        (_u: string, init: RequestInit) =>
+          new Promise((_res, rej) => init.signal!.addEventListener("abort", () => rej(new DOMException("aborted https://sb.local/SECRET", "AbortError")))),
+      );
+      const p = call("thumb", ID);
+      let done = false;
+      void p.then(() => (done = true));
+      await vi.advanceTimersByTimeAsync(14_999);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      const res = await p;
+      expect(res.status).toBe(504);
+      expect(res.headers.get("Cache-Control")).toBe("no-store");
+      expect(await res.text()).not.toMatch(/SECRET|sb\.local/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("tras recibir las cabeceras el temporizador se cancela (no corta cuerpos largos)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const res = await call("thumb", ID);
+      expect(res.status).toBe(200);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await res.text()).toBe("IMG");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("usuario B sin permiso pide la misma imagen que A dejó en la caché de URLs: 404 por RLS antes de tocar la caché", async () => {
+    expect((await call("thumb", ID)).status).toBe(200); // A: firma y guarda la URL
+    expect(state.signCalls).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    state.rows.captures = null; // B: la lectura RLS no devuelve la fila
+    const res = await call("thumb", ID);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(state.signCalls).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no se usó la URL cacheada
+  });
+
+  test("upstream 404 en ambos intentos con la caché poblada: 404 no-store y no queda cacheada la URL mala", async () => {
+    await call("thumb", ID);
+    expect(state.signCalls).toBe(1);
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async () => new Response("no", { status: 404 }));
+    const res = await call("thumb", ID);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetchMock).toHaveBeenCalledTimes(2); // URL cacheada + una firma nueva
+    expect(state.signCalls).toBe(2);
+    // La siguiente petición vuelve a firmar (la URL mala no quedó guardada).
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(async () => new Response("IMG", { status: 200, headers: { "content-type": "image/webp" } }));
+    expect((await call("thumb", ID)).status).toBe(200);
+    expect(state.signCalls).toBe(3);
+  });
+
+  test("4xx con una URL recién firmada no se reintenta (un solo fetch)", async () => {
+    fetchMock.mockImplementation(async () => new Response("no", { status: 403 }));
+    const res = await call("thumb", ID);
+    expect(res.status).toBe(404);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(state.signCalls).toBe(1);
+  });
+
+  test("límite documentado: reemplazar el contenido sin cambiar sha256 ni ruta deja el mismo ETag (el contrato exige cambiar la ruta o la fila)", async () => {
+    const a = (await call("thumb", ID)).headers.get("ETag");
+    state.rows.captures = { ...state.rows.captures!, updated_at: "2027-05-05T00:00:00+00:00" }; // UPDATE sin cambio de contenido
+    expect((await call("thumb", ID)).headers.get("ETag")).toBe(a);
+    state.rows.captures = { ...state.rows.captures!, sha256: "b".repeat(64) }; // contenido nuevo declarado en la fila
+    expect((await call("thumb", ID)).headers.get("ETag")).not.toBe(a);
+  });
+
+  test("tira: el ETag sale de la ruta (con hash) y no cambia al calibrar; sin hash sí depende de updated_at", async () => {
+    const a = (await call("strip", ID)).headers.get("ETag");
+    expect(a).toBe(mediaEtag("strip", ID, STRIP, mosaicVersion(STRIP, UPDATED)));
+    state.rows.mosaics = { ...state.rows.mosaics!, updated_at: "2027-05-05T00:00:00+00:00" };
+    expect((await call("strip", ID)).headers.get("ETag")).toBe(a);
+    state.rows.mosaics = { id: ID, path: "o/p/i/mosaics/x/strip.webp", updated_at: UPDATED };
+    const old1 = (await call("strip", ID)).headers.get("ETag");
+    state.rows.mosaics = { id: ID, path: "o/p/i/mosaics/x/strip.webp", updated_at: "2027-05-05T00:00:00+00:00" };
+    expect((await call("strip", ID)).headers.get("ETag")).not.toBe(old1);
   });
 });

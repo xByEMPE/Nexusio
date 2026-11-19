@@ -117,3 +117,10 @@ export async function signStable(sb: SupabaseClient<Database>, path: string): Pr
 export function forgetStable(path: string): void {
   stableCache.delete(path);
 }
+
+/** ¿Hay una URL estable vigente guardada para esta ruta? (no cambia el orden de uso ni firma nada). */
+export function isStableCached(path: string): boolean {
+  const hit = stableCache.get(path);
+  if (!hit) return false;
+  return hit.expiresAt - Date.now() > Math.min(DAY_S, mediaUrlTtlSeconds() / 2) * 1000;
+}

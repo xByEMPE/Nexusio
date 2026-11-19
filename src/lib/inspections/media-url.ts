@@ -8,14 +8,36 @@ import { createHash } from "node:crypto";
  */
 export type MediaKind = "thumb" | "preview" | "idthumb" | "strip";
 
+const short = (x: string) => createHash("sha256").update(x).digest("hex").slice(0, 12);
+
 /**
- * URL pública (relativa) de una imagen del portal. `version` (la `updated_at` de la fila) solo sirve para
- * romper la caché del navegador cuando la imagen cambia: no interviene en la autorización.
+ * Versión (`?v=`) de una captura: identifica el CONTENIDO (`sha256` de la fila) y la ruta; no usa `updated_at`
+ * (un UPDATE de la fila no cambia la imagen). Solo si faltara el sha256 respalda con `updated_at`.
+ * Contrato: todo reemplazo de contenido debe cambiar la ruta o la fila (p. ej. su sha256).
+ */
+export function captureVersion(sha256: string | null | undefined, path: string, updatedAt: string | null | undefined): string {
+  return short(`c|${sha256 || `u:${updatedAt ?? ""}`}|${path}`);
+}
+
+/** Las tiras nuevas llevan el hash del contenido en el nombre: `strip-{sha8}.webp`. */
+const HASHED_STRIP = /(^|\/)strip-[0-9a-f]{8}(\.|$)/;
+
+/**
+ * Versión de una tira: hash de la RUTA. Si la ruta lleva `strip-{sha8}` un reproceso cambia la ruta (y la
+ * versión) y calibrar (UPDATE de `updated_at`) no rompe la caché. Una tira antigua en ruta fija
+ * (`strip.webp`) añade `updated_at` como respaldo.
+ */
+export function mosaicVersion(path: string, updatedAt: string | null | undefined): string {
+  return short(`m|${path}${HASHED_STRIP.test(path) ? "" : `|${updatedAt ?? ""}`}`);
+}
+
+/**
+ * URL pública (relativa) de una imagen del portal. `version` (de `captureVersion`/`mosaicVersion`) solo sirve
+ * para romper la caché del navegador cuando la imagen cambia: no interviene en la autorización.
  */
 export function mediaUrl(kind: MediaKind, id: string, version: string | null | undefined): string {
-  const ms = version ? Date.parse(version) : NaN;
   const base = `/api/media/${kind}/${id}`;
-  return Number.isFinite(ms) ? `${base}?v=${ms.toString(36)}` : base;
+  return version ? `${base}?v=${version}` : base;
 }
 
 /** ETag derivado de tipo, id, ruta y versión de la fila (sin revelar la ruta). */

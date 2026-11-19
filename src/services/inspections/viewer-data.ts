@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findingMeasurements, type FindingMeasurements, type Region } from "@/lib/blade";
 import type { Database } from "@/services/supabase/database.types";
-import { mediaUrl } from "@/lib/inspections/media-url";
+import { captureVersion, mediaUrl, mosaicVersion } from "@/lib/inspections/media-url";
 import { signPaths } from "./media";
 
 type Enums = Database["public"]["Enums"];
@@ -107,21 +107,21 @@ export type InspectionViewerData = {
 /**
  * Mapas ruta → URL `/api/media/...` de vistas previas, miniaturas y tiras. Ya no se firma nada en cada
  * render: el navegador pide la imagen a la ruta del portal, que valida la sesión con RLS y la entrega con
- * caché de 6 meses. La versión de la URL (`?v=`) es la `updated_at` de la fila (rompe la caché si cambia).
+ * caché de 6 meses. La versión (`?v=`) identifica el contenido: `sha256`+ruta en capturas; ruta (con `strip-{sha8}`) en tiras, y `updated_at` solo en tiras antiguas de ruta fija.
  * Las claves (rutas de Storage) se quedan en el servidor: al navegador solo viajan las URLs.
  */
 export function mediaUrlMaps(
-  captures: { id: string; preview_path: string | null; thumb_path: string | null; updated_at: string }[],
+  captures: { id: string; preview_path: string | null; thumb_path: string | null; sha256: string; updated_at: string }[],
   mosaics: { id: string; path: string; updated_at: string }[],
 ): { previewUrls: Map<string, string>; thumbUrls: Map<string, string>; stripUrls: Map<string, string> } {
   const previewUrls = new Map<string, string>();
   const thumbUrls = new Map<string, string>();
   const stripUrls = new Map<string, string>();
   for (const c of captures) {
-    if (c.preview_path) previewUrls.set(c.preview_path, mediaUrl("preview", c.id, c.updated_at));
-    if (c.thumb_path) thumbUrls.set(c.thumb_path, mediaUrl("thumb", c.id, c.updated_at));
+    if (c.preview_path) previewUrls.set(c.preview_path, mediaUrl("preview", c.id, captureVersion(c.sha256, c.preview_path, c.updated_at)));
+    if (c.thumb_path) thumbUrls.set(c.thumb_path, mediaUrl("thumb", c.id, captureVersion(c.sha256, c.thumb_path, c.updated_at)));
   }
-  for (const m of mosaics) stripUrls.set(m.path, mediaUrl("strip", m.id, m.updated_at));
+  for (const m of mosaics) stripUrls.set(m.path, mediaUrl("strip", m.id, mosaicVersion(m.path, m.updated_at)));
   return { previewUrls, thumbUrls, stripUrls };
 }
 

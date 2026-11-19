@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { etagMatches, mediaEtag, type MediaKind } from "@/lib/inspections/media-url";
-import { forgetStable, signStable } from "@/services/inspections/media";
+import { captureVersion, etagMatches, mediaEtag, mosaicVersion, type MediaKind } from "@/lib/inspections/media-url";
+import { forgetStable, isStableCached, signStable } from "@/services/inspections/media";
 import { createSessionClient } from "@/services/supabase/server";
 
 export const runtime = "nodejs";
@@ -8,6 +8,10 @@ export const dynamic = "force-dynamic";
 
 /** 6 meses en segundos. */
 const SIX_MONTHS = 15_552_000;
+/** Espera máxima de Storage hasta recibir las cabeceras. */
+const UPSTREAM_TIMEOUT_MS = 15_000;
+/** Lista blanca EXACTA de tipos que se entregan. */
+const ALLOWED_TYPES = new Set(["image/webp", "image/jpeg", "image/png", "image/tiff"]);
 const CACHEABLE = `private, max-age=${SIX_MONTHS}, immutable`;
 
 const ParamsSchema = z.object({
@@ -29,18 +33,21 @@ function cacheHeaders(etag: string): Headers {
   });
 }
 
+/** Tipo base en minúsculas y sin parámetros (`IMAGE/PNG; x=y` -> `image/png`). */
+const baseType = (h: string | null) => (h ?? "").split(";")[0]!.trim().toLowerCase();
+
 type Found = { path: string; version: string | null };
 
 /** Lee la fila con la SESIÓN del usuario (RLS): la ruta de Storage sale siempre de aquí, jamás del cliente. */
 async function findRow(sb: NonNullable<Awaited<ReturnType<typeof createSessionClient>>>, kind: MediaKind, id: string): Promise<Found | null> {
   if (kind === "strip") {
     const { data } = await sb.from("mosaics").select("id, path, updated_at").eq("id", id).maybeSingle();
-    return data?.path ? { path: data.path, version: data.updated_at } : null;
+    return data?.path ? { path: data.path, version: mosaicVersion(data.path, data.updated_at) } : null;
   }
-  const { data } = await sb.from("captures").select("id, thumb_path, preview_path, updated_at").eq("id", id).maybeSingle();
+  const { data } = await sb.from("captures").select("id, thumb_path, preview_path, sha256, updated_at").eq("id", id).maybeSingle();
   if (!data) return null;
   const path = kind === "thumb" ? data.thumb_path : kind === "preview" ? data.preview_path : (data.thumb_path ?? data.preview_path);
-  return path ? { path, version: data.updated_at } : null;
+  return path ? { path, version: captureVersion(data.sha256, path, data.updated_at) } : null;
 }
 
 /**
@@ -72,28 +79,49 @@ export async function GET(req: Request, ctx: { params: Promise<{ kind: string; i
 
   let upstream: Response | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
+    // Se reintenta solo si la URL salió de la caché (puede estar vencida o apuntar a un objeto reemplazado).
+    const fromCache = isStableCached(row.path);
     const url = await signStable(sb, row.path);
     if (!url) return fail(404);
+    // El plazo cubre solo hasta recibir las cabeceras; después el cuerpo se corta si el cliente cancela (req.signal).
+    // Límite conocido: un cuerpo que se detiene a mitad de camino sin que el cliente se desconecte no tiene temporizador de inactividad.
+    const timeout = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      timeout.abort();
+    }, UPSTREAM_TIMEOUT_MS);
     try {
-      upstream = await fetch(url, { cache: "no-store", signal: req.signal });
+      upstream = await fetch(url, { cache: "no-store", redirect: "error", signal: AbortSignal.any([req.signal, timeout.signal]) });
     } catch {
-      console.error(`[api/media] fallo de red al leer ${kind}`);
-      return fail(502);
+      console.error(`[api/media] ${timedOut ? "tiempo agotado" : "fallo de red"} al leer ${kind}`);
+      return fail(timedOut ? 504 : 502);
+    } finally {
+      clearTimeout(timer);
     }
     if (upstream.ok) break;
     const status = upstream.status;
     await upstream.body?.cancel().catch(() => {});
-    // 4xx con una URL guardada puede ser un token vencido o un objeto reemplazado: se firma de nuevo una vez.
     forgetStable(row.path);
-    if (status >= 400 && status < 500 && attempt === 0) continue;
+    if (status >= 400 && status < 500 && fromCache && attempt === 0) continue;
     console.error(`[api/media] Storage respondió ${status} para ${kind}`);
     return fail(status >= 500 ? 502 : 404);
   }
   if (!upstream?.ok) return fail(502);
 
+  // Defensa en profundidad: solo se entregan los tipos de imagen esperados. Cualquier otro (svg, html, xml...)
+  // es una anomalía de datos: se responde 502 no-store en lugar de servirlo, aunque sea con octet-stream.
+  const type = baseType(upstream.headers.get("content-type"));
+  if (!ALLOWED_TYPES.has(type)) {
+    await upstream.body?.cancel().catch(() => {});
+    console.error(`[api/media] tipo de contenido no permitido para ${kind}`);
+    return fail(502);
+  }
+
   const headers = cacheHeaders(etag);
-  const type = upstream.headers.get("content-type") ?? "";
-  headers.set("Content-Type", type.startsWith("image/") ? type : "application/octet-stream");
+  headers.set("Content-Type", type);
+  headers.set("Content-Disposition", "inline");
+  headers.set("Content-Security-Policy", "default-src 'none'; sandbox");
   const length = upstream.headers.get("content-length");
   if (length && !upstream.headers.get("content-encoding")) headers.set("Content-Length", length);
   return new Response(upstream.body, { status: 200, headers });

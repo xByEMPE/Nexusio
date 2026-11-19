@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MapStatus } from "@/lib/inspections/map";
 import type { Database } from "@/services/supabase/database.types";
-import { mediaUrl } from "@/lib/inspections/media-url";
+import { captureVersion, mediaUrl } from "@/lib/inspections/media-url";
 
 export type Sev = 1 | 2 | 3 | 4 | 5;
 
@@ -30,10 +30,11 @@ const isSev = (n: number): n is Sev => Number.isInteger(n) && n >= 1 && n <= 5;
 
 /**
  * URL de la miniatura de la foto `_ID` (miniatura o, si no hay, vista previa) vía `/api/media/idthumb`,
- * con la `updated_at` de la captura como versión. Ya no se firma nada por render.
+ * con versión de contenido (`sha256` + ruta). Ya no se firma nada por render.
  */
-export function idThumbUrlFor(cap: { id: string; thumb_path: string | null; preview_path: string | null; updated_at: string } | undefined): string | null {
-  return cap && (cap.thumb_path || cap.preview_path) ? mediaUrl("idthumb", cap.id, cap.updated_at) : null;
+export function idThumbUrlFor(cap: { id: string; thumb_path: string | null; preview_path: string | null; sha256: string; updated_at: string } | undefined): string | null {
+  const path = cap ? (cap.thumb_path ?? cap.preview_path) : null;
+  return cap && path ? mediaUrl("idthumb", cap.id, captureVersion(cap.sha256, path, cap.updated_at)) : null;
 }
 
 type AssetRow = { id: string; name: string; lat: number | null; lon: number | null };
@@ -67,7 +68,7 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
   const idCaptureIds = [...latest.values()].flatMap((i) => (i.id_capture_id ? [i.id_capture_id] : []));
   const [findings, caps] = await Promise.all([
     inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds).eq("status", "confirmed") : Promise.resolve({ data: [], error: null }),
-    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path, updated_at").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
+    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path, sha256, updated_at").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (findings.error) console.error("[map-data] daños:", findings.error.message);

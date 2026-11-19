@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/services/supabase/database.types";
-import { clearStableCache, mediaUrlTtlSeconds, setStableCacheLimit, signPaths, signPathsStable, signStable } from "./media";
+import { clearStableCache, mediaUrlTtlSeconds, setStableCacheLimit, signPaths, isStableCached, signPathsStable, signStable } from "./media";
 
 function fakeClient(impl: (paths: string[]) => unknown) {
   const createSignedUrls = vi.fn(async (paths: string[]) => impl(paths));
@@ -128,5 +128,14 @@ describe("signPathsStable", () => {
     expect(await signStable(sb, "x/y.webp")).toMatch(/^u\/x\/y\.webp/);
     const { sb: bad } = fakeClient(() => ({ data: [{ path: "q", signedUrl: null, error: "x" }], error: null }));
     expect(await signStable(bad, "q")).toBeNull();
+  });
+
+  test("isStableCached: verdadero solo con URL vigente y no renovable", async () => {
+    const { sb } = okClient();
+    expect(isStableCached("z")).toBe(false);
+    await signPathsStable(sb, ["z"]);
+    expect(isStableCached("z")).toBe(true);
+    vi.advanceTimersByTime(6 * DAY_MS + 1000);
+    expect(isStableCached("z")).toBe(false);
   });
 });

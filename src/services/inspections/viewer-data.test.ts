@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Region } from "@/lib/blade";
+import { captureVersion, mosaicVersion } from "@/lib/inspections/media-url";
 import { findingTypeMatches, mediaUrlMaps, measurementsForSave, oneOrNull, orderCaptures, type ViewerCapture } from "./viewer-data";
 
 const cap = (o: Partial<ViewerCapture>): ViewerCapture => ({
@@ -93,21 +94,38 @@ describe("oneOrNull", () => {
 });
 
 describe("mediaUrlMaps", () => {
-  const T = "2026-01-01T00:00:00+00:00";
-  const v = Date.parse(T).toString(36);
-  test("devuelve URLs /api/media por ruta (nunca URLs firmadas) con la versión de la fila", () => {
-    const { previewUrls, thumbUrls, stripUrls } = mediaUrlMaps(
-      [
-        { id: "c1", preview_path: "o/p.webp", thumb_path: "o/t.webp", updated_at: T },
-        { id: "c2", preview_path: null, thumb_path: null, updated_at: T },
-      ],
-      [{ id: "m1", path: "o/mosaics/m1/strip-ab12cd34.webp", updated_at: T }],
-    );
-    expect(previewUrls.get("o/p.webp")).toBe(`/api/media/preview/c1?v=${v}`);
-    expect(thumbUrls.get("o/t.webp")).toBe(`/api/media/thumb/c1?v=${v}`);
-    expect(stripUrls.get("o/mosaics/m1/strip-ab12cd34.webp")).toBe(`/api/media/strip/m1?v=${v}`);
+  const T1 = "2026-01-01T00:00:00+00:00";
+  const T2 = "2026-03-03T00:00:00+00:00";
+  const SHA = "a".repeat(64);
+  const caps = (sha: string, updated: string) => [
+    { id: "c1", preview_path: "o/p.webp", thumb_path: "o/t.webp", sha256: sha, updated_at: updated },
+    { id: "c2", preview_path: null, thumb_path: null, sha256: sha, updated_at: updated },
+  ];
+  const strip = (path: string, updated: string) => [{ id: "m1", path, updated_at: updated }];
+  const HASHED = "o/mosaics/m1/strip-ab12cd34.webp";
+
+  test("devuelve URLs /api/media por ruta (nunca URLs firmadas) con versión de contenido", () => {
+    const { previewUrls, thumbUrls, stripUrls } = mediaUrlMaps(caps(SHA, T1), strip(HASHED, T1));
+    expect(previewUrls.get("o/p.webp")).toBe(`/api/media/preview/c1?v=${captureVersion(SHA, "o/p.webp", T1)}`);
+    expect(thumbUrls.get("o/t.webp")).toBe(`/api/media/thumb/c1?v=${captureVersion(SHA, "o/t.webp", T1)}`);
+    expect(stripUrls.get(HASHED)).toBe(`/api/media/strip/m1?v=${mosaicVersion(HASHED, T1)}`);
     expect(previewUrls.size).toBe(1);
     expect(thumbUrls.size).toBe(1);
-    for (const u of [...previewUrls.values(), ...thumbUrls.values(), ...stripUrls.values()]) expect(u).not.toMatch(/token|supabase|storage/i);
+    for (const u of [...previewUrls.values(), ...thumbUrls.values(), ...stripUrls.values()]) expect(u).not.toMatch(/token|supabase|storage|o\/p|o\/t/i);
+  });
+  test("cambio de contenido (sha256) cambia v; un UPDATE de la fila (updated_at) no", () => {
+    const a = mediaUrlMaps(caps(SHA, T1), []).previewUrls.get("o/p.webp");
+    expect(mediaUrlMaps(caps("b".repeat(64), T1), []).previewUrls.get("o/p.webp")).not.toBe(a);
+    expect(mediaUrlMaps(caps(SHA, T2), []).previewUrls.get("o/p.webp")).toBe(a);
+  });
+  test("tira con hash: calibrar (updated_at) no cambia v, reprocesar (ruta nueva) sí", () => {
+    const a = mediaUrlMaps([], strip(HASHED, T1)).stripUrls.get(HASHED);
+    expect(mediaUrlMaps([], strip(HASHED, T2)).stripUrls.get(HASHED)).toBe(a);
+    const NEW = "o/mosaics/m1/strip-ffffffff.webp";
+    expect(mediaUrlMaps([], strip(NEW, T1)).stripUrls.get(NEW)).not.toBe(a);
+  });
+  test("tira antigua sin hash: updated_at sí cambia v", () => {
+    const OLD = "o/mosaics/m1/strip.webp";
+    expect(mediaUrlMaps([], strip(OLD, T2)).stripUrls.get(OLD)).not.toBe(mediaUrlMaps([], strip(OLD, T1)).stripUrls.get(OLD));
   });
 });
