@@ -4,16 +4,16 @@ import { cn } from "@/lib/cn";
 export type InspectionTab = "pala" | "fotos" | "danos";
 
 const TABS: { id: InspectionTab; label: string }[] = [
-  { id: "pala", label: "Pala completa" },
-  { id: "fotos", label: "Fotos" },
   { id: "danos", label: "Daños" },
+  { id: "fotos", label: "Fotos" },
+  { id: "pala", label: "Pala completa" },
 ];
 
-/** Pestaña pedida en `?tab=`; por defecto «pala» si hay tiras y, si no, «fotos». */
-export function resolveTab(value: string | string[] | undefined, hasMosaics: boolean): InspectionTab {
+/** Pestaña pedida en `?tab=`; por defecto «danos» (la primera). */
+export function resolveTab(value: string | string[] | undefined): InspectionTab {
   const v = Array.isArray(value) ? value[0] : value;
   if (v === "pala" || v === "fotos" || v === "danos") return v;
-  return hasMosaics ? "pala" : "fotos";
+  return "danos";
 }
 
 /** Pestañas como enlaces `?tab=` (renderizado en servidor). */

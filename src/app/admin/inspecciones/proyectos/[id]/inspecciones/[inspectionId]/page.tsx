@@ -48,7 +48,7 @@ export default async function InspectionPage({
 
   const data = await loadInspectionViewer(sb, id, inspectionId);
   if (!data) notFound();
-  const tab = resolveTab(tabParam, data.mosaics.some((m) => m.kind === "blade_strip"));
+  const tab = resolveTab(tabParam);
   const basePath = `/admin/inspecciones/proyectos/${id}/inspecciones/${inspectionId}`;
 
   const approved = inspection.status === "approved";

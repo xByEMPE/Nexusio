@@ -1,0 +1,30 @@
+# Despierta el Space gratuito de Hugging Face (el worker de IA): los Spaces gratuitos se duermen tras un tiempo sin
+# visitas, y el worker solo trabaja mientras está despierto. Sin secretos: la URL es la variable de repositorio
+# HF_SPACE_URL (Settings > Secrets and variables > Actions > Variables), p. ej. https://usuario-nombre.hf.space
+# Si la variable no está definida, el trabajo termina sin error.
+name: keepalive-hf
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Visitar el Space
+        env:
+          HF_SPACE_URL: ${{ vars.HF_SPACE_URL }}
+        run: |
+          if [ -z "$HF_SPACE_URL" ]; then
+            echo "HF_SPACE_URL no está definida; no hay nada que despertar."
+            exit 0
+          fi
+          # Un Space dormido tarda en arrancar: reintentos largos; un fallo no rompe el flujo.
+          curl --silent --show-error --location --max-time 120 --retry 3 --retry-delay 30 --retry-all-errors \
+            --output /dev/null --write-out "HTTP %{http_code}\n" "$HF_SPACE_URL" || echo "El Space no respondió (se reintenta en 6 h)."
+          exit 0

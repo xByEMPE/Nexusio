@@ -31,3 +31,10 @@ __pycache__/
 
 # Inspecciones reales (fotos de clientes): nunca en el repo
 WTG*/
+
+# Worker de IA (Hugging Face): los pesos del modelo nunca van a este repo (viajan por git lfs en el repo del Space)
+*.pth
+*.onnx
+*.pt
+*.safetensors
+HuggingFace/**/__pycache__/

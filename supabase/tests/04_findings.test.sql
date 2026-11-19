@@ -9,7 +9,7 @@ select w ->> 'project_a' as project_a, w ->> 'project_b' as project_b,
   w ->> 'service_a' as service_a, w ->> 'mgr_b' as mgr_b, w ->> 'tech_b' as tech_b
 from (select tests.make_world() as w) s \gset
 
-select ok((select count(*) = 7 from public.finding_types where domain = 'wind_blade'), 'semilla de 7 tipos de daño de pala');
+select ok((select count(*) = 8 from public.finding_types where domain = 'wind_blade'), 'semilla de 8 tipos de daño de pala (7 base + ai_unclassified)');
 select id as t_crack from public.finding_types where code = 'crack' \gset
 
 -- Datos (como postgres)

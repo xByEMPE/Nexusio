@@ -23,7 +23,27 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "assessment_requests": {
+            "ai_runs": {
+                  Row: {
+                    "attempts": number,"capture_id": string,"findings_count": number,"last_error": string | null,"model": string,"model_version": string,"processed_at": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"capture_id": string,"findings_count"?: number,"last_error"?: string | null,"model": string,"model_version": string,"processed_at"?: string,"status": string
+                  }
+                  Update: {
+                    "attempts"?: number,"capture_id"?: string,"findings_count"?: number,"last_error"?: string | null,"model"?: string,"model_version"?: string,"processed_at"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "ai_runs_capture_id_fkey"
+      columns: ["capture_id"]
+isOneToOne: true
+      referencedRelation: "captures"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"assessment_requests": {
                   Row: {
                     "aircraft_models": string | null,"company": string,"consent_at": string,"country": string,"created_at": string,"email": string,"fleet_size": string,"full_name": string,"hosting": string,"id": string,"industry": string,"objectives": (string)[],"project_summary": string,"reference": string,"role_title": string,"services": (string)[],"source_ip_hash": string | null,"timeline": string,"trace_id": string | null,"triage_status": string
                   }
@@ -543,7 +563,13 @@ isOneToOne: true
             [_ in never]: never
           }
           Functions: {
-            "begin_inspection_delete":
+            "ai_pending_captures":
+{ Args: { "p_limit"?: number }; Returns: { "asset_id": string,"attempts": number,"blade": Database["public"]['Enums']["blade_position"] | null,"capture_id": string,"face": Database["public"]['Enums']["blade_face"] | null,"file_name": string,"gsd_mm_px": number | null,"height_px": number,"inspection_id": string,"inspection_kind": Database["public"]['Enums']["inspection_kind"],"original_path": string,"project_id": string,"radius_center_m": number | null,"width_px": number }[]
+                           },
+"ai_record_run":
+{ Args: { "p_capture_id": string,"p_error"?: string,"p_manifest": Json,"p_model": string,"p_version": string }; Returns: Json
+                           },
+"begin_inspection_delete":
 { Args: { "p_inspection_id": string,"p_reason"?: string }; Returns: string
                            },
 "begin_scope_delete":
