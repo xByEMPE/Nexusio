@@ -112,3 +112,8 @@ export async function signPathsStable(sb: SupabaseClient<Database>, paths: strin
 export async function signStable(sb: SupabaseClient<Database>, path: string): Promise<string | null> {
   return (await signPathsStable(sb, [path])).get(path) ?? null;
 }
+
+/** Olvida la URL guardada de una ruta (p. ej. si Storage la rechazó): la próxima petición firma de nuevo. */
+export function forgetStable(path: string): void {
+  stableCache.delete(path);
+}
