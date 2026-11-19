@@ -94,6 +94,28 @@ export function parseTurbineList(raw: string): { turbines: TurbineListLine[]; er
 }
 
 /**
+ * Personal de campo adicional: filas con campos repetidos `staff_name` / `staff_role` / `staff_email` (alineados
+ * por posición). Las filas totalmente vacías se ignoran; las incompletas llegan a Zod para que dé el mensaje.
+ */
+function readExtraStaff(fd: FormData): { full_name?: string; role?: string; email?: string }[] {
+  const names = fd.getAll("staff_name");
+  const roles = fd.getAll("staff_role");
+  const emails = fd.getAll("staff_email");
+  const clean = (v: FormDataEntryValue | undefined) => {
+    const t = typeof v === "string" ? v.trim() : "";
+    return t === "" ? undefined : t;
+  };
+  const rows: { full_name?: string; role?: string; email?: string }[] = [];
+  for (let i = 0; i < Math.max(names.length, emails.length); i++) {
+    const full_name = clean(names[i]);
+    const email = clean(emails[i])?.toLowerCase();
+    if (full_name === undefined && email === undefined) continue;
+    rows.push({ full_name, role: clean(roles[i]) ?? "assistant", ...(email ? { email } : {}) });
+  }
+  return rows;
+}
+
+/**
  * Lee el formulario «Nuevo proyecto de campo» y arma la entrada del contrato `FieldProjectSchema`.
  * No valida: las turbinas se leen aquí (con sus errores por línea) y el resto lo valida Zod.
  */
@@ -130,11 +152,14 @@ export function readFieldProjectForm(fd: FormData): { input: unknown; lineErrors
       status: optStr(fd, "project_status") ?? "in_field",
       start_date: optStr(fd, "start_date"),
       end_date: optStr(fd, "end_date"),
+      drone_model: optStr(fd, "drone_model"),
     },
     technician: {
       email: optStr(fd, "technician_email")?.toLowerCase(),
       full_name: optStr(fd, "technician_name"),
+      role: optStr(fd, "technician_role") ?? "pilot",
     },
+    extra_staff: readExtraStaff(fd),
   };
   return { input, lineErrors: errors };
 }

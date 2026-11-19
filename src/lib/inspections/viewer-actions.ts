@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import type { Region } from "@/lib/blade";
 import {
   CommentCreateSchema,
@@ -15,6 +14,7 @@ import { getViewer, type Viewer } from "@/lib/auth/viewer";
 import { dbErrorMessage, fail, type ActionResult } from "@/lib/inspections/admin-action";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { pickHistoryFields } from "@/lib/inspections/history";
+import { revalidateProjectPaths } from "@/lib/inspections/revalidate";
 import { findingTypeMatches, measurementsForSave, signOne } from "@/services/inspections/viewer-data";
 import { createSessionClient } from "@/services/supabase/server";
 import type { Database, Json } from "@/services/supabase/database.types";
@@ -69,14 +69,9 @@ function jsonField(fd: FormData, k: string): unknown {
   }
 }
 
+/** Inspección y proyecto (conteos y estado), en admin y en el portal de clientes. */
 function revalidateInspection(projectId: string, inspectionId: string) {
-  for (const base of [
-    `/admin/inspecciones/proyectos/${projectId}/inspecciones/${inspectionId}`,
-    `/portal/proyectos/${projectId}/inspecciones/${inspectionId}`,
-  ]) {
-    revalidatePath(base);
-    revalidatePath(`${base}/visor`);
-  }
+  revalidateProjectPaths(projectId, inspectionId);
 }
 
 type RegionIn = Region;

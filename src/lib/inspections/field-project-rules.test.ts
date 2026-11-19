@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
+  crewDefaults,
   decideOrganization,
+  decideProjectDefaults,
   decideProject,
   isUniqueViolation,
   normalizeName,
@@ -94,5 +96,44 @@ describe("existingAccountNote", () => {
   });
   test.each(["invite", "resend", "stop"] as const)("%s: sin nota (ya se envió invitación o no aplica)", (k) => {
     expect(existingAccountNote(k)).toBeNull();
+  });
+});
+
+describe("crewDefaults", () => {
+  test("el técnico principal cuenta como piloto; el resto se une con «, » por función y en orden", () => {
+    expect(
+      crewDefaults({ name: "Ana Pérez", role: "pilot" }, [
+        { full_name: "Luis Gómez", role: "pilot" },
+        { full_name: "Marta Ruiz", role: "assistant" },
+        { full_name: "Iván Soto", role: "assistant" },
+      ]),
+    ).toEqual({ pilot: "Ana Pérez, Luis Gómez", assistant: "Marta Ruiz, Iván Soto" });
+  });
+  test("sin asistentes: solo piloto", () => {
+    expect(crewDefaults({ name: "Ana", role: "pilot" }, [])).toEqual({ pilot: "Ana" });
+  });
+  test("el técnico principal puede ser asistente", () => {
+    expect(crewDefaults({ name: "Ana", role: "assistant" }, [{ full_name: "Luis", role: "pilot" }])).toEqual({ pilot: "Luis", assistant: "Ana" });
+  });
+  test("no repite un nombre (sin distinguir acentos ni mayúsculas)", () => {
+    expect(crewDefaults({ name: "Ana Pérez", role: "pilot" }, [{ full_name: "ana  perez", role: "pilot" }])).toEqual({ pilot: "Ana Pérez" });
+  });
+});
+
+describe("decideProjectDefaults", () => {
+  const ex = (p: string | null, a: string | null, d: string | null) => ({ default_pilot_name: p, default_assistant_name: a, default_drone_model: d });
+  test("sin datos pedidos: sin aviso", () => {
+    expect(decideProjectDefaults("P", ex("X", null, null), {})).toBeUndefined();
+  });
+  test("iguales (reintento del mismo formulario): sin aviso", () => {
+    expect(decideProjectDefaults("P", ex("Ana", "Luis", "M300"), { pilot: "ana", assistant: "Luis", drone: "M300" })).toBeUndefined();
+  });
+  test("distintos: avisa qué campos y que no se modificaron", () => {
+    const w = decideProjectDefaults("Campaña", ex("Otro", null, "M300"), { pilot: "Ana", assistant: "Luis", drone: "M300" });
+    expect(w).toContain("«Campaña»");
+    expect(w).toContain("piloto");
+    expect(w).toContain("asistente");
+    expect(w).not.toContain("dron");
+    expect(w).toContain("No se modificaron");
   });
 });

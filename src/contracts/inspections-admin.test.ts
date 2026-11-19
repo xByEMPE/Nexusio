@@ -163,4 +163,60 @@ describe("FieldProjectSchema", () => {
   ])("rechaza %s", (_n, patch) => {
     expect(FieldProjectSchema.safeParse({ ...valid(), ...patch }).success).toBe(false);
   });
+
+  describe("personal adicional y dron", () => {
+    const staff = (n: number) => Array.from({ length: n }, (_, i) => ({ full_name: `Persona ${i}`, role: "assistant" as const }));
+    test("por defecto: sin personal adicional y el técnico principal es piloto", () => {
+      const r = FieldProjectSchema.safeParse(valid());
+      expect(r.success && r.data.extra_staff).toEqual([]);
+      expect(r.success && r.data.technician.role).toBe("pilot");
+    });
+    test("acepta personal con y sin correo, y el dron", () => {
+      const r = FieldProjectSchema.safeParse({
+        ...valid(),
+        project: { name: "Campaña 2026", status: "in_field", drone_model: "DJI M300" },
+        extra_staff: [
+          { full_name: "Luis Gómez", role: "pilot", email: "luis@ejemplo.com" },
+          { full_name: "Marta Ruiz", role: "assistant" },
+        ],
+      });
+      expect(r.success).toBe(true);
+    });
+    test("máximo 10 personas adicionales", () => {
+      expect(FieldProjectSchema.safeParse({ ...valid(), extra_staff: staff(10) }).success).toBe(true);
+      expect(FieldProjectSchema.safeParse({ ...valid(), extra_staff: staff(11) }).success).toBe(false);
+    });
+    test.each([
+      ["sin nombre", [{ role: "pilot" }]],
+      ["nombre de una letra", [{ full_name: "A", role: "pilot" }]],
+      ["rol inválido", [{ full_name: "Luis Gómez", role: "jefe" }]],
+      ["correo inválido", [{ full_name: "Luis Gómez", role: "pilot", email: "no-es-correo" }]],
+      ["mismo correo que el técnico principal", [{ full_name: "Luis Gómez", role: "pilot", email: "TEC@ejemplo.com" }]],
+      [
+        "correo repetido entre el personal",
+        [
+          { full_name: "Luis Gómez", role: "pilot", email: "a@ejemplo.com" },
+          { full_name: "Marta Ruiz", role: "assistant", email: "A@ejemplo.com" },
+        ],
+      ],
+    ])("rechaza %s", (_n, extra_staff) => {
+      expect(FieldProjectSchema.safeParse({ ...valid(), extra_staff }).success).toBe(false);
+    });
+    test("el nombre obligatorio da un mensaje claro", () => {
+      const r = FieldProjectSchema.safeParse({ ...valid(), extra_staff: [{ role: "pilot" }] });
+      expect(!r.success && r.error.issues[0]?.message).toContain("nombre");
+    });
+    test.each([["coma", "Pérez, Luis"], ["salto de línea", "Luis\nGómez"]])("rechaza %s en el nombre del personal y del técnico", (_n, name) => {
+      expect(FieldProjectSchema.safeParse({ ...valid(), extra_staff: [{ full_name: name, role: "pilot" }] }).success).toBe(false);
+      expect(FieldProjectSchema.safeParse({ ...valid(), technician: { email: "tec@ejemplo.com", full_name: name } }).success).toBe(false);
+    });
+    test("dron de más de 120 caracteres", () => {
+      expect(FieldProjectSchema.safeParse({ ...valid(), project: { name: "Campaña", status: "in_field", drone_model: "x".repeat(121) } }).success).toBe(false);
+    });
+    test("los nombres unidos no pueden pasar de 500 caracteres", () => {
+      const long = (c: string) => ({ full_name: c.repeat(120), role: "pilot" as const });
+      const r = FieldProjectSchema.safeParse({ ...valid(), extra_staff: [long("a"), long("b"), long("c"), long("d"), long("e")] });
+      expect(r.success).toBe(false);
+    });
+  });
 });

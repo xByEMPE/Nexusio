@@ -144,4 +144,39 @@ describe("readFieldProjectForm", () => {
     });
     expect(FieldProjectSchema.safeParse(input).success).toBe(false);
   });
+  test("personal adicional: filas alineadas, las vacías se ignoran y el correo se pasa a minúsculas", () => {
+    const fd = base();
+    fd.append("staff_name", "Luis Gómez");
+    fd.append("staff_role", "pilot");
+    fd.append("staff_email", "Luis@Ejemplo.com");
+    fd.append("staff_name", "");
+    fd.append("staff_role", "assistant");
+    fd.append("staff_email", "");
+    fd.append("staff_name", "Marta Ruiz");
+    fd.append("staff_role", "assistant");
+    fd.append("staff_email", "");
+    fd.set("technician_role", "pilot");
+    fd.set("drone_model", "DJI M300");
+    const { input } = readFieldProjectForm(fd);
+    expect(input).toMatchObject({
+      technician: { email: "tec@ejemplo.com", role: "pilot" },
+      project: { drone_model: "DJI M300" },
+      extra_staff: [
+        { full_name: "Luis Gómez", role: "pilot", email: "luis@ejemplo.com" },
+        { full_name: "Marta Ruiz", role: "assistant" },
+      ],
+    });
+    expect(FieldProjectSchema.safeParse(input).success).toBe(true);
+  });
+  test("fila con correo pero sin nombre: llega a Zod y se rechaza", () => {
+    const fd = base();
+    fd.append("staff_name", "");
+    fd.append("staff_role", "pilot");
+    fd.append("staff_email", "x@ejemplo.com");
+    const { input } = readFieldProjectForm(fd);
+    expect(FieldProjectSchema.safeParse(input).success).toBe(false);
+  });
+  test("sin personal adicional: lista vacía", () => {
+    expect(readFieldProjectForm(base()).input).toMatchObject({ extra_staff: [] });
+  });
 });

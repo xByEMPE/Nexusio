@@ -447,14 +447,14 @@ isOneToOne: false
                   ]
                 },"projects": {
                   Row: {
-                    "code": string | null,"contacts": NonNullable<Json>,"created_at": string,"created_by": string | null,"end_date": string | null,"id": string,"name": string,"notes": string | null,"organization_id": string,"start_date": string | null,"status": Database["public"]['Enums']["project_status"],"updated_at": string
+                    "code": string | null,"contacts": NonNullable<Json>,"created_at": string,"created_by": string | null,"default_assistant_name": string | null,"default_drone_model": string | null,"default_pilot_name": string | null,"end_date": string | null,"id": string,"name": string,"notes": string | null,"organization_id": string,"start_date": string | null,"status": Database["public"]['Enums']["project_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "code"?: string | null,"contacts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"end_date"?: string | null,"id"?: string,"name": string,"notes"?: string | null,"organization_id": string,"start_date"?: string | null,"status"?: Database["public"]['Enums']["project_status"],"updated_at"?: string
+                    "code"?: string | null,"contacts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"default_assistant_name"?: string | null,"default_drone_model"?: string | null,"default_pilot_name"?: string | null,"end_date"?: string | null,"id"?: string,"name": string,"notes"?: string | null,"organization_id": string,"start_date"?: string | null,"status"?: Database["public"]['Enums']["project_status"],"updated_at"?: string
                   }
                   Update: {
-                    "code"?: string | null,"contacts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"end_date"?: string | null,"id"?: string,"name"?: string,"notes"?: string | null,"organization_id"?: string,"start_date"?: string | null,"status"?: Database["public"]['Enums']["project_status"],"updated_at"?: string
+                    "code"?: string | null,"contacts"?: NonNullable<Json>,"created_at"?: string,"created_by"?: string | null,"default_assistant_name"?: string | null,"default_drone_model"?: string | null,"default_pilot_name"?: string | null,"end_date"?: string | null,"id"?: string,"name"?: string,"notes"?: string | null,"organization_id"?: string,"start_date"?: string | null,"status"?: Database["public"]['Enums']["project_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {

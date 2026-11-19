@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { TextArea, TextInput } from "@/components/assessment/fields";
 import { Button } from "@/components/ui/Button";
+import { MAX_FIELD_STAFF } from "@/contracts/inspections-admin";
 import { FIELD_STEP_STATUS_LABEL, type FieldProjectResult, type FieldStepStatus } from "@/lib/inspections/field-project";
 import { parseTurbineList } from "@/lib/inspections/form";
 import { PROJECT_STATUS_LABEL } from "@/lib/inspections/labels";
@@ -12,6 +13,8 @@ type Org = { id: string; name: string };
 type Site = { id: string; name: string; organization_id: string };
 
 const NEW = "__new__";
+
+type StaffRow = { id: number; name: string; role: "pilot" | "assistant"; email: string };
 
 const STATUS_STYLE: Record<FieldStepStatus, string> = {
   created: "text-telemetry-active",
@@ -60,6 +63,10 @@ export function FieldProjectForm({
   const [turbines, setTurbines] = useState("");
   const [pending, start] = useTransition();
   const [result, setResult] = useState<FieldProjectResult | null>(null);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [nextId, setNextId] = useState(1);
+  const updateStaff = (id: number, patch: Partial<StaffRow>) =>
+    setStaff((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const orgIsNew = orgChoice === NEW;
   const orgSites = useMemo(() => sites.filter((s) => s.organization_id === orgChoice), [sites, orgChoice]);
@@ -221,6 +228,9 @@ export function FieldProjectForm({
                 <TextInput name="end_date" type="date" />
               </Labeled>
             </div>
+            <Labeled label="Dron (modelo)" hint="Se copia a los datos de campo de cada inspección nueva.">
+              <TextInput name="drone_model" maxLength={120} placeholder="DJI Matrice 300" />
+            </Labeled>
           </div>
         </Section>
 
@@ -232,9 +242,73 @@ export function FieldProjectForm({
             <Labeled label="Correo del técnico">
               <TextInput name="technician_email" type="email" required autoComplete="off" />
             </Labeled>
-            <Labeled label="Nombre (opcional)" hint="Se usa en la invitación; por defecto, la parte del correo antes de la @.">
+            <Labeled label="Nombre (opcional)" hint="Se usa en la invitación y como piloto/asistente; por defecto, la parte del correo antes de la @.">
               <TextInput name="technician_name" maxLength={120} />
             </Labeled>
+            <Labeled label="Rol en la inspección">
+              <select name="technician_role" defaultValue="pilot" className={selectClass}>
+                <option value="pilot">Piloto</option>
+                <option value="assistant">Asistente</option>
+              </select>
+            </Labeled>
+          </div>
+        </Section>
+
+        <Section
+          title="5 · Personal de campo adicional"
+          hint="Opcional. Con correo se trata igual que al técnico (invitación o asignación al proyecto); sin correo solo se registra el nombre en los datos de campo de las inspecciones."
+        >
+          {staff.length === 0 && <p className="text-xs text-foreground-subtle">Aún no hay personal adicional.</p>}
+          {staff.map((r, i) => (
+            <div key={r.id} className="grid gap-3 sm:grid-cols-[1.4fr_1fr_1.4fr_auto] sm:items-end">
+              <Labeled label={`Nombre completo ${i + 1}`}>
+                <TextInput
+                  name="staff_name"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  value={r.name}
+                  onChange={(e) => updateStaff(r.id, { name: e.target.value })}
+                />
+              </Labeled>
+              <Labeled label="Rol">
+                <select
+                  name="staff_role"
+                  value={r.role}
+                  onChange={(e) => updateStaff(r.id, { role: e.target.value as StaffRow["role"] })}
+                  className={selectClass}
+                >
+                  <option value="pilot">Piloto</option>
+                  <option value="assistant">Asistente</option>
+                </select>
+              </Labeled>
+              <Labeled label="Correo (opcional)">
+                <TextInput
+                  name="staff_email"
+                  type="email"
+                  autoComplete="off"
+                  value={r.email}
+                  onChange={(e) => updateStaff(r.id, { email: e.target.value })}
+                />
+              </Labeled>
+              <Button type="button" variant="secondary" onClick={() => setStaff((rows) => rows.filter((x) => x.id !== r.id))}>
+                Quitar
+              </Button>
+            </div>
+          ))}
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={staff.length >= MAX_FIELD_STAFF}
+              onClick={() => {
+                setStaff((rows) => [...rows, { id: nextId, name: "", role: "assistant", email: "" }]);
+                setNextId((n) => n + 1);
+              }}
+            >
+              Añadir persona
+            </Button>
+            {staff.length >= MAX_FIELD_STAFF && <span className="ml-3 text-xs text-foreground-subtle">Máximo {MAX_FIELD_STAFF} personas.</span>}
           </div>
         </Section>
 
@@ -258,8 +332,8 @@ function ResultPanel({ result }: { result: FieldProjectResult }) {
       {!result.ok && <p className="text-sm text-signal-critical">{result.message}</p>}
       {result.steps.length > 0 && (
         <ul className="divide-y divide-border-subtle text-sm">
-          {result.steps.map((s) => (
-            <li key={s.key} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+          {result.steps.map((s, i) => (
+            <li key={`${s.key}-${i}`} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
               <span>
                 <span className="font-medium">{s.label}</span> <span className="text-foreground-muted">{s.detail}</span>
               </span>
@@ -280,6 +354,13 @@ function ResultPanel({ result }: { result: FieldProjectResult }) {
           {result.invited && `Se envió una invitación a ${result.technicianEmail}. `}
           {result.technicianNote}
         </p>
+      )}
+      {result.ok && result.staffNotes.length > 0 && (
+        <ul className="list-disc pl-5 text-sm text-foreground-muted">
+          {result.staffNotes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
       )}
       {result.projectId && (
         <Link

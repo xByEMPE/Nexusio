@@ -9,6 +9,9 @@ type Defaults = {
   start_date?: string | null;
   end_date?: string | null;
   contacts?: string;
+  default_pilot_name?: string | null;
+  default_assistant_name?: string | null;
+  default_drone_model?: string | null;
 };
 
 export function ProjectFields({
@@ -58,6 +61,23 @@ export function ProjectFields({
           <TextInput name="end_date" type="date" defaultValue={defaults.end_date ?? undefined} />
         </label>
       </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="flex flex-col gap-2">
+          <span className="label-caps">Piloto (por defecto)</span>
+          <TextInput name="default_pilot_name" maxLength={500} defaultValue={defaults.default_pilot_name ?? undefined} />
+        </label>
+        <label className="flex flex-col gap-2">
+          <span className="label-caps">Asistente (por defecto)</span>
+          <TextInput name="default_assistant_name" maxLength={500} defaultValue={defaults.default_assistant_name ?? undefined} />
+        </label>
+        <label className="flex flex-col gap-2">
+          <span className="label-caps">Dron (modelo)</span>
+          <TextInput name="default_drone_model" maxLength={120} defaultValue={defaults.default_drone_model ?? undefined} />
+        </label>
+      </div>
+      <p className="-mt-2 text-xs text-foreground-subtle">
+        Se copian a los datos de campo de cada inspección nueva del proyecto (varios nombres: sepáralos con «, »). No cambian las inspecciones ya creadas.
+      </p>
       <label className="flex flex-col gap-2">
         <span className="label-caps">Contactos</span>
         <TextArea name="contacts" rows={4} className="min-h-[96px] font-mono text-xs" defaultValue={defaults.contacts} placeholder="Cliente | Ana Pérez | ana@cliente.com" />

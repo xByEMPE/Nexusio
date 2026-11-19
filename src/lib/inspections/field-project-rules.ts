@@ -99,3 +99,51 @@ export function reusedTurbinesWarning(
 export const isUniqueViolation = (error: { code?: string } | null | undefined) => error?.code === "23505";
 
 export const CONCURRENT_MESSAGE = "Otro envío creó lo mismo al mismo tiempo; vuelve a enviar el formulario.";
+
+export type CrewRole = "pilot" | "assistant";
+
+/** Máximo de caracteres de los nombres unidos de una función (igual que el CHECK de la base). */
+export const MAX_CREW_NAMES_LENGTH = 500;
+
+/**
+ * Datos de campo por defecto del proyecto a partir del personal: el técnico principal (piloto por defecto)
+ * y el personal adicional; los nombres de una misma función se unen con «, » (sin repetir), en orden.
+ */
+export function crewDefaults(
+  technician: { name: string; role: CrewRole },
+  staff: { full_name: string; role: CrewRole }[],
+): { pilot?: string; assistant?: string } {
+  const lists: Record<CrewRole, string[]> = { pilot: [], assistant: [] };
+  const seen: Record<CrewRole, Set<string>> = { pilot: new Set(), assistant: new Set() };
+  for (const p of [{ name: technician.name, role: technician.role }, ...staff.map((s) => ({ name: s.full_name, role: s.role }))]) {
+    const name = p.name.trim();
+    const key = normalizeName(name);
+    if (!name || seen[p.role].has(key)) continue;
+    seen[p.role].add(key);
+    lists[p.role].push(name);
+  }
+  return {
+    ...(lists.pilot.length > 0 ? { pilot: lists.pilot.join(", ") } : {}),
+    ...(lists.assistant.length > 0 ? { assistant: lists.assistant.join(", ") } : {}),
+  };
+}
+
+/**
+ * Proyecto ya existente: sus datos de campo por defecto NO se pisan. Devuelve un aviso si lo pedido difiere de lo
+ * guardado (ningún aviso si no se pidió nada o es lo mismo, p. ej. al reenviar el formulario).
+ */
+export function decideProjectDefaults(
+  projectName: string,
+  existing: { default_pilot_name: string | null; default_assistant_name: string | null; default_drone_model: string | null },
+  requested: { pilot?: string; assistant?: string; drone?: string },
+): string | undefined {
+  const differs = (have: string | null, want: string | undefined) =>
+    want !== undefined && normalizeName(have ?? "") !== normalizeName(want);
+  const fields = [
+    differs(existing.default_pilot_name, requested.pilot) && "piloto",
+    differs(existing.default_assistant_name, requested.assistant) && "asistente",
+    differs(existing.default_drone_model, requested.drone) && "dron",
+  ].filter(Boolean) as string[];
+  if (fields.length === 0) return undefined;
+  return `El proyecto «${projectName}» ya tenía otros datos de campo (${fields.join(", ")}), quizá de un intento anterior que falló a medias. No se modificaron: las inspecciones nuevas usarán los datos guardados. Si no son los correctos, corrígelos en «Editar proyecto y contactos».`;
+}

@@ -1,6 +1,15 @@
 /** Resultado de «Nuevo proyecto de campo»: un paso por entidad, con lo creado, reutilizado o fallido. */
 
-export type FieldStepKey = "organization" | "site" | "turbines" | "project" | "link" | "technician" | "assignment";
+export type FieldStepKey =
+  | "organization"
+  | "site"
+  | "turbines"
+  | "project"
+  | "defaults"
+  | "link"
+  | "technician"
+  | "assignment"
+  | "staff";
 export type FieldStepStatus = "created" | "reused" | "failed" | "skipped";
 
 export type FieldStep = { key: FieldStepKey; label: string; status: FieldStepStatus; detail: string };
@@ -17,6 +26,8 @@ export type FieldProjectResult =
       technicianEmail: string;
       /** Qué debe hacer el técnico para ver su proyecto en la app. */
       technicianNote: string;
+      /** Una línea por persona adicional con correo (acceso o invitación); vacío si no hay. */
+      staffNotes: string[];
     }
   | {
       ok: false;

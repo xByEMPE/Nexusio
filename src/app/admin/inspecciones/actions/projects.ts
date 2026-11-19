@@ -3,19 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AssignmentSchema, InspectionInputSchema, ProjectInputSchema } from "@/contracts/inspections-admin";
-import { requireStaff } from "@/lib/auth/viewer";
 import { dbErrorMessage, fail, requireAdminAction, type ActionResult } from "@/lib/inspections/admin-action";
-import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { optStr, parseContacts } from "@/lib/inspections/form";
+import { revalidateProjectPaths } from "@/lib/inspections/revalidate";
 import { createSessionClient } from "@/services/supabase/server";
 
 const NO_PERMISSION = "No tienes permiso para esta acción.";
 
-function revalidateProject(projectId: string, inspectionId?: string) {
-  revalidatePath("/admin/inspecciones/proyectos");
-  revalidatePath(`/admin/inspecciones/proyectos/${projectId}`);
-  if (inspectionId) revalidatePath(`/admin/inspecciones/proyectos/${projectId}/inspecciones/${inspectionId}`);
-}
+/** Admin y portal de clientes: ambos muestran lo mismo que se edita aquí. */
+const revalidateProject = revalidateProjectPaths;
 
 export async function upsertProject(fd: FormData): Promise<ActionResult> {
   const gate = await requireAdminAction();
@@ -28,12 +24,15 @@ export async function upsertProject(fd: FormData): Promise<ActionResult> {
     start_date: optStr(fd, "start_date"),
     end_date: optStr(fd, "end_date"),
     contacts: parseContacts(String(fd.get("contacts") ?? "")),
+    default_pilot_name: optStr(fd, "default_pilot_name"),
+    default_assistant_name: optStr(fd, "default_assistant_name"),
+    default_drone_model: optStr(fd, "default_drone_model"),
   });
   if (!parsed.success) {
     const custom = parsed.error.issues.find((i) => i.code === "custom");
     return fail(
       custom?.message ??
-        "Revisa el nombre (2–160), las fechas y los contactos (máximo 20; cada línea «Rol | Nombre | correo»).",
+        "Revisa el nombre (2–160), las fechas, los contactos (máximo 20; cada línea «Rol | Nombre | correo») y los datos de campo (piloto y asistente hasta 500 caracteres, dron hasta 120).",
     );
   }
   const id = optStr(fd, "id");
@@ -42,7 +41,15 @@ export async function upsertProject(fd: FormData): Promise<ActionResult> {
   const sb = await createSessionClient();
   if (!sb) return fail("El servicio no está configurado.");
   const d = parsed.data;
-  const row = { ...d, code: d.code ?? null, start_date: d.start_date ?? null, end_date: d.end_date ?? null };
+  const row = {
+    ...d,
+    code: d.code ?? null,
+    start_date: d.start_date ?? null,
+    end_date: d.end_date ?? null,
+    default_pilot_name: d.default_pilot_name ?? null,
+    default_assistant_name: d.default_assistant_name ?? null,
+    default_drone_model: d.default_drone_model ?? null,
+  };
   if (id) {
     // La organización no cambia después de crear el proyecto.
     const { organization_id: _org, ...patch } = row;
@@ -55,6 +62,7 @@ export async function upsertProject(fd: FormData): Promise<ActionResult> {
     const { error } = await sb.from("projects").insert(row);
     if (error) return fail(dbErrorMessage(error, "No se pudo crear el proyecto."));
     revalidatePath("/admin/inspecciones/proyectos");
+    revalidatePath("/portal");
   }
   return { ok: true };
 }
@@ -137,10 +145,10 @@ export async function unassignUser(fd: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Personal con permiso de escritura del proyecto (RLS decide); no requiere ser admin. */
+/** Solo admin (el técnico de la app de escritorio crea inspecciones por RLS directo, no por aquí). */
 export async function createInspection(fd: FormData): Promise<ActionResult> {
-  assertInspectionsEnabled();
-  await requireStaff();
+  const gate = await requireAdminAction();
+  if ("error" in gate) return gate.error;
   const parsed = InspectionInputSchema.safeParse({
     project_id: optStr(fd, "project_id"),
     asset_id: optStr(fd, "asset_id"),
@@ -177,16 +185,17 @@ export async function createInspection(fd: FormData): Promise<ActionResult> {
 const DetailsSchema = z.object({
   id: z.uuid(),
   project_id: z.uuid(),
-  pilot_name: z.string().trim().max(120).optional(),
-  assistant_name: z.string().trim().max(120).optional(),
+  // Hasta 500: el piloto/asistente copiado del proyecto puede unir varios nombres con «, ».
+  pilot_name: z.string().trim().max(500).optional(),
+  assistant_name: z.string().trim().max(500).optional(),
   drone_model: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
-/** Datos de campo de la inspección. RLS bloquea al técnico cuando está aprobada. */
+/** Datos de campo de la inspección: solo admin (los técnicos los ven en solo lectura). */
 export async function updateInspectionDetails(fd: FormData): Promise<ActionResult> {
-  assertInspectionsEnabled();
-  await requireStaff();
+  const gate = await requireAdminAction();
+  if ("error" in gate) return gate.error;
   const parsed = DetailsSchema.safeParse({
     id: optStr(fd, "id"),
     project_id: optStr(fd, "project_id"),
@@ -195,7 +204,7 @@ export async function updateInspectionDetails(fd: FormData): Promise<ActionResul
     drone_model: optStr(fd, "drone_model"),
     notes: optStr(fd, "notes"),
   });
-  if (!parsed.success) return fail("Revisa los datos (máximo 120 caracteres por campo y 2000 en notas).");
+  if (!parsed.success) return fail("Revisa los datos (máximo 500 caracteres en piloto y asistente, 120 en dron y 2000 en notas).");
   const sb = await createSessionClient();
   if (!sb) return fail("El servicio no está configurado.");
   const { id, project_id, ...rest } = parsed.data;
@@ -207,7 +216,7 @@ export async function updateInspectionDetails(fd: FormData): Promise<ActionResul
   };
   const { data, error } = await sb.from("inspections").update(patch).eq("id", id).eq("project_id", project_id).select("id");
   if (error) return fail(dbErrorMessage(error, "No se pudieron guardar los datos."));
-  if (!data?.length) return fail("La inspección está aprobada o no tienes permiso para editarla.");
+  if (!data?.length) return fail("No se encontró la inspección.");
   revalidateProject(project_id, id);
   return { ok: true };
 }

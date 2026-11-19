@@ -52,7 +52,8 @@ export default async function InspectionPage({
   const basePath = `/admin/inspecciones/proyectos/${id}/inspecciones/${inspectionId}`;
 
   const approved = inspection.status === "approved";
-  const canEdit = isAdmin || !approved;
+  // Los datos de campo los edita solo el admin (técnicos y clientes los ven en solo lectura); los daños, aparte.
+  const canEdit = isAdmin;
 
   return (
     <div>
@@ -100,8 +101,12 @@ export default async function InspectionPage({
         </p>
       )}
 
-      {approved && !isAdmin && (
-        <p className="panel mt-6 p-4 text-sm text-foreground-muted">Esta inspección está aprobada: solo un administrador puede modificarla.</p>
+      {!isAdmin && (
+        <p className="panel mt-6 p-4 text-sm text-foreground-muted">
+          {approved
+            ? "Esta inspección está aprobada: solo un administrador puede modificarla."
+            : "Los datos de campo solo los modifica un administrador; los daños sí puedes crearlos y editarlos mientras no esté aprobada."}
+        </p>
       )}
 
       <section className="panel mt-6 p-5">
@@ -113,11 +118,11 @@ export default async function InspectionPage({
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-2">
                 <span className="label-caps">Piloto</span>
-                <TextInput name="pilot_name" maxLength={120} defaultValue={inspection.pilot_name ?? undefined} />
+                <TextInput name="pilot_name" maxLength={500} defaultValue={inspection.pilot_name ?? undefined} />
               </label>
               <label className="flex flex-col gap-2">
                 <span className="label-caps">Asistente</span>
-                <TextInput name="assistant_name" maxLength={120} defaultValue={inspection.assistant_name ?? undefined} />
+                <TextInput name="assistant_name" maxLength={500} defaultValue={inspection.assistant_name ?? undefined} />
               </label>
               <label className="flex flex-col gap-2">
                 <span className="label-caps">Dron</span>

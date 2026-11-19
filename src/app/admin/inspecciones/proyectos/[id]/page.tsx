@@ -41,7 +41,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
   const { data: project } = await sb
     .from("projects")
-    .select("id, name, code, status, start_date, end_date, contacts, organization_id, organizations(name)")
+    .select("id, name, code, status, start_date, end_date, contacts, organization_id, default_pilot_name, default_assistant_name, default_drone_model, organizations(name)")
     .eq("id", id)
     .maybeSingle();
   if (!project) notFound();
@@ -100,6 +100,9 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 start_date: project.start_date,
                 end_date: project.end_date,
                 contacts: formatContacts(project.contacts),
+                default_pilot_name: project.default_pilot_name,
+                default_assistant_name: project.default_assistant_name,
+                default_drone_model: project.default_drone_model,
               }}
             />
           </ActionForm>
@@ -161,7 +164,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             })}
           </ul>
         )}
-        {assets && assets.length > 0 && (
+        {isAdmin && assets && assets.length > 0 && (
           <div className="panel mt-3 p-5">
             <h3 className="label-caps">Nueva inspección</h3>
             <ActionForm action={createInspection} submitLabel="Crear inspección" successMessage="Inspección creada." className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end">

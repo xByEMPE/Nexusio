@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { crewDefaults, MAX_CREW_NAMES_LENGTH } from "@/lib/inspections/field-project-rules";
 
 export const OrganizationInputSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -79,6 +80,10 @@ export const ProjectInputSchema = z
     start_date: isoDate.optional(),
     end_date: isoDate.optional(),
     contacts: z.array(ContactSchema).max(20),
+    // Datos de campo por defecto: se copian a cada inspección nueva (trigger en la base).
+    default_pilot_name: z.string().trim().min(1).max(500).optional(),
+    default_assistant_name: z.string().trim().min(1).max(500).optional(),
+    default_drone_model: z.string().trim().min(1).max(120).optional(),
   })
   .superRefine((v, ctx) => {
     if (v.start_date && v.end_date && v.end_date < v.start_date) {
@@ -98,6 +103,21 @@ export const InspectionInputSchema = z.object({
 export type InspectionInput = z.infer<typeof InspectionInputSchema>;
 
 export const MAX_FIELD_TURBINES = 300;
+export const MAX_FIELD_STAFF = 10;
+export const FIELD_CREW_ROLES = ["pilot", "assistant"] as const;
+
+/** Persona de campo adicional: el nombre es obligatorio; con correo recibe acceso como el técnico principal. */
+export const FieldStaffSchema = z.object({
+  full_name: z
+    .string("El nombre completo del personal adicional es obligatorio")
+    .trim()
+    .min(2, "El nombre del personal adicional debe tener entre 2 y 120 caracteres")
+    .max(120, "El nombre del personal adicional debe tener entre 2 y 120 caracteres")
+    .refine((s) => !/[,\r\n]/.test(s), "El nombre del personal adicional no puede llevar comas ni saltos de línea"),
+  role: z.enum(FIELD_CREW_ROLES, "Elige el rol del personal adicional: Piloto o Asistente"),
+  email: z.email("El correo del personal adicional no es válido").optional(),
+});
+export type FieldStaff = z.infer<typeof FieldStaffSchema>;
 
 /** Medidas comunes del alta de campo, con mensajes en español. */
 const FieldSpecsSchema = z.object({
@@ -152,11 +172,15 @@ export const FieldProjectSchema = z
       status: z.enum(PROJECT_STATUSES, "Elige un estado válido").default("in_field"),
       start_date: isoDate.optional(),
       end_date: isoDate.optional(),
+      drone_model: z.string().trim().min(1).max(120, "El modelo de dron no puede pasar de 120 caracteres").optional(),
     }),
     technician: z.object({
       email: z.email("El correo del técnico no es válido"),
-      full_name: z.string().trim().min(2, "El nombre del técnico debe tener entre 2 y 120 caracteres").max(120, "El nombre del técnico debe tener entre 2 y 120 caracteres").optional(),
+      full_name: z.string().trim().min(2, "El nombre del técnico debe tener entre 2 y 120 caracteres").max(120, "El nombre del técnico debe tener entre 2 y 120 caracteres").refine((s) => !/[,\r\n]/.test(s), "El nombre del técnico no puede llevar comas ni saltos de línea").optional(),
+      /** El técnico principal es piloto salvo que se indique lo contrario. */
+      role: z.enum(FIELD_CREW_ROLES, "Elige el rol del técnico: Piloto o Asistente").default("pilot"),
     }),
+    extra_staff: z.array(FieldStaffSchema).max(MAX_FIELD_STAFF, `Máximo ${MAX_FIELD_STAFF} personas de personal adicional`).default([]),
   })
   .superRefine((v, ctx) => {
     if (v.org.mode === "new" && v.site.mode === "existing") {
@@ -165,6 +189,21 @@ export const FieldProjectSchema = z
     const { start_date, end_date } = v.project;
     if (start_date && end_date && end_date < start_date) {
       ctx.addIssue({ code: "custom", path: ["project", "end_date"], message: "La fecha final no puede ser anterior a la inicial" });
+    }
+    const emails = new Set([v.technician.email.toLowerCase()]);
+    v.extra_staff.forEach((s, i) => {
+      if (!s.email) return;
+      const key = s.email.toLowerCase();
+      if (emails.has(key)) {
+        ctx.addIssue({ code: "custom", path: ["extra_staff", i, "email"], message: `El correo ${s.email} aparece más de una vez en el formulario` });
+      }
+      emails.add(key);
+    });
+    const crew = crewDefaults({ name: v.technician.full_name ?? v.technician.email.split("@")[0]!, role: v.technician.role }, v.extra_staff);
+    for (const [role, label] of [["pilot", "pilotos"], ["assistant", "asistentes"]] as const) {
+      if ((crew[role]?.length ?? 0) > MAX_CREW_NAMES_LENGTH) {
+        ctx.addIssue({ code: "custom", path: ["extra_staff"], message: `Los nombres de los ${label} juntos no pueden pasar de ${MAX_CREW_NAMES_LENGTH} caracteres` });
+      }
     }
   });
 export type FieldProjectInput = z.infer<typeof FieldProjectSchema>;

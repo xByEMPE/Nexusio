@@ -94,6 +94,9 @@ async function step(
   revalidatePath("/admin/inspecciones");
   if (kind !== "project") revalidatePath(`/admin/inspecciones/proyectos/${projectId ?? ""}`);
   if (kind === "project") revalidatePath(`/admin/inspecciones/proyectos/${id}`);
+  // El portal de clientes muestra los mismos proyectos e inspecciones.
+  revalidatePath("/portal");
+  revalidatePath(`/portal/proyectos/${kind === "project" ? id : (projectId ?? "")}`);
   return result;
 }
 
