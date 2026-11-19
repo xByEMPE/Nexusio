@@ -53,7 +53,6 @@ export async function upsertAsset(fd: FormData): Promise<ActionResult> {
     model: optStr(fd, "model"),
     blade_length_m: optNum(fd, "blade_length_m"),
     rotor_diameter_m: optNum(fd, "rotor_diameter_m"),
-    hub_height_m: optNum(fd, "hub_height_m"),
   };
   const hasTurbine = Object.values(turbine).some((v) => v !== undefined);
   const parsed = AssetInputSchema.safeParse({
@@ -66,7 +65,7 @@ export async function upsertAsset(fd: FormData): Promise<ActionResult> {
     turbine: hasTurbine ? turbine : undefined,
   });
   if (!parsed.success) {
-    return fail("Revisa el nombre (1–60), las coordenadas y las medidas (pala 1–150 m, rotor 1–300 m, buje 1–250 m).");
+    return fail("Revisa el nombre (1–60), las coordenadas y las medidas (pala 1–150 m, rotor 1–300 m).");
   }
   const id = optStr(fd, "id");
   if (id && !z.uuid().safeParse(id).success) return fail("Activo no válido.");
@@ -102,11 +101,43 @@ export async function upsertAsset(fd: FormData): Promise<ActionResult> {
       model: specs.model ?? null,
       blade_length_m: specs.blade_length_m ?? null,
       rotor_diameter_m: specs.rotor_diameter_m ?? null,
-      hub_height_m: specs.hub_height_m ?? null,
     });
     if (error) return fail(dbErrorMessage(error, "El activo se guardó, pero no las especificaciones de la turbina."));
   }
   revalidateCatalog(asset.site_id);
+  return { ok: true };
+}
+
+export const ASSET_HAS_INSPECTIONS = "Elimina primero sus inspecciones: usa «Eliminar todas las inspecciones de esta máquina».";
+
+/**
+ * Elimina un activo (solo admin). `wind_turbine_specs` cae en cascada; `inspections.asset_id` es
+ * ON DELETE RESTRICT, así que un activo con inspecciones nunca se borra aquí (se comprueba antes y la FK
+ * lo garantiza ante carreras). No depende de INSPECTIONS_DELETE_ENABLED: sin inspecciones no hay archivos.
+ */
+export async function deleteAsset(id: string, confirmName: string): Promise<ActionResult> {
+  const gate = await requireAdminAction();
+  if ("error" in gate) return gate.error;
+  if (typeof id !== "string" || !z.uuid().safeParse(id).success) return fail("Activo no válido.");
+  if (typeof confirmName !== "string") return fail("El nombre escrito no coincide con el del activo.");
+
+  const sb = await createSessionClient();
+  if (!sb) return fail("El servicio no está configurado.");
+  const { data: asset } = await sb.from("assets").select("id, name, site_id").eq("id", id).maybeSingle();
+  if (!asset) return fail("No se encontró el activo; quizá ya se eliminó.");
+  if (confirmName.trim() !== asset.name) return fail("El nombre escrito no coincide con el del activo.");
+
+  const { count, error: cErr } = await sb.from("inspections").select("id", { count: "exact", head: true }).eq("asset_id", id);
+  if (cErr) return fail(dbErrorMessage(cErr, "No se pudo comprobar si el activo tiene inspecciones."));
+  if ((count ?? 0) > 0) return fail(ASSET_HAS_INSPECTIONS);
+
+  const { data, error } = await sb.from("assets").delete().eq("id", id).select("id");
+  if (error) return fail(error.code === "23503" ? ASSET_HAS_INSPECTIONS : dbErrorMessage(error, "No se pudo eliminar el activo.", "delete"));
+  if (!data?.length) return fail("No se encontró el activo; quizá ya se eliminó.");
+  revalidateCatalog(asset.site_id);
+  revalidatePath("/admin/inspecciones/proyectos");
+  revalidatePath("/admin/inspecciones");
+  revalidatePath("/portal");
   return { ok: true };
 }
 

@@ -183,7 +183,7 @@ export function FieldProjectForm({
               </ul>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Labeled label="Fabricante">
               <TextInput name="manufacturer" maxLength={80} />
             </Labeled>
@@ -195,9 +195,6 @@ export function FieldProjectForm({
             </Labeled>
             <Labeled label="Rotor (m)">
               <TextInput name="rotor_diameter_m" inputMode="decimal" />
-            </Labeled>
-            <Labeled label="Buje (m)">
-              <TextInput name="hub_height_m" inputMode="decimal" />
             </Labeled>
           </div>
           <p className="-mt-2 text-xs text-foreground-subtle">Medidas comunes opcionales: se aplican a las turbinas nuevas y a las ya existentes que no tengan especificaciones. Las turbinas que ya existen en el parque se reutilizan por nombre y no se modifican su código ni sus coordenadas.</p>

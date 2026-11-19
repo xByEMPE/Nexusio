@@ -126,7 +126,6 @@ export function readFieldProjectForm(fd: FormData): { input: unknown; lineErrors
     model: optStr(fd, "model"),
     blade_length_m: optNum(fd, "blade_length_m"),
     rotor_diameter_m: optNum(fd, "rotor_diameter_m"),
-    hub_height_m: optNum(fd, "hub_height_m"),
   };
   const hasSpecs = Object.values(specs).some((v) => v !== undefined);
   const input = {

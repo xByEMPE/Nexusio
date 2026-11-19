@@ -48,7 +48,6 @@ export const TurbineSpecsSchema = z.object({
   model: z.string().trim().min(1).max(80).optional(),
   blade_length_m: z.number().min(1).max(150).optional(),
   rotor_diameter_m: z.number().min(1).max(300).optional(),
-  hub_height_m: z.number().min(1).max(250).optional(),
 });
 
 export const AssetInputSchema = z.object({
@@ -125,7 +124,6 @@ const FieldSpecsSchema = z.object({
   model: z.string().trim().min(1).max(80, "El modelo no puede pasar de 80 caracteres").optional(),
   blade_length_m: z.number("La longitud de pala debe ser un número").min(1, "La pala mide entre 1 y 150 m").max(150, "La pala mide entre 1 y 150 m").optional(),
   rotor_diameter_m: z.number("El diámetro de rotor debe ser un número").min(1, "El rotor mide entre 1 y 300 m").max(300, "El rotor mide entre 1 y 300 m").optional(),
-  hub_height_m: z.number("La altura de buje debe ser un número").min(1, "El buje mide entre 1 y 250 m").max(250, "El buje mide entre 1 y 250 m").optional(),
 });
 
 export const TurbineLineSchema = z.object({

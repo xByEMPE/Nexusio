@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { Region } from "@/lib/blade";
 import { SEVERITY_COLOR } from "@/lib/inspections/severity";
+import { cropImageStyle, cropOutline, thumbCrop } from "./finding-thumb";
 
 const STATUS_LABEL = { detected: "Detectado", confirmed: "Confirmado", dismissed: "Descartado" } as const;
 const FACES = ["LE", "PS", "TE", "SS"] as const;
@@ -17,9 +19,61 @@ export type TableFinding = {
   radius_m: number | null;
   length_mm: number | null;
   width_mm: number | null;
+  /** Región normalizada (0–1) sobre la foto o el mosaico; null si no es válida. */
+  region?: Region | null;
 };
 
-export type Placed = { id: string; blade: "A" | "B" | "C" | null; face: "TE" | "PS" | "LE" | "SS" | null; file_name?: string };
+export type Placed = {
+  id: string;
+  blade: "A" | "B" | "C" | null;
+  face: "TE" | "PS" | "LE" | "SS" | null;
+  file_name?: string;
+  /** URL de vista previa (`/api/media/...`, con caché) y tamaño del original, para la miniatura del daño. */
+  previewUrl?: string;
+  width_px?: number;
+  height_px?: number;
+};
+
+const THUMB_W = 120;
+
+/** Miniatura del daño: la foto (o mosaico) recortada alrededor de la región, con su contorno encima. */
+function DamageThumb({ finding, src, label }: { finding: TableFinding; src: Placed | undefined; label: string }) {
+  const { region } = finding;
+  if (!src?.previewUrl || !src.width_px || !src.height_px || !region) return <span className="text-foreground-subtle">—</span>;
+  const crop = thumbCrop(region, src.width_px, src.height_px);
+  const color = SEVERITY_COLOR[finding.severity] ?? "#A3A3A3";
+  const pts = cropOutline(region, crop)
+    .map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`)
+    .join(" ");
+  return (
+    <span
+      className="relative block overflow-hidden rounded-[2px] border border-border-subtle bg-background-base"
+      style={{ width: THUMB_W, aspectRatio: "4 / 3" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- /api/media ya trae caché; recorte por CSS */}
+      <img
+        src={src.previewUrl}
+        alt={label}
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        className="pointer-events-none absolute max-w-none select-none"
+        style={cropImageStyle(crop)}
+      />
+      <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full">
+        <polygon
+          points={pts}
+          fill={`${color}33`}
+          stroke={color}
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+          strokeDasharray={finding.status === "detected" ? "4 3" : undefined}
+          opacity={finding.status === "dismissed" ? 0.5 : 1}
+        />
+      </svg>
+    </span>
+  );
+}
 
 const selectCls = "rounded-[2px] border border-border-subtle bg-background-base px-2 py-1 text-sm";
 const fmt = (n: number | null, unit: string) => (n == null ? "—" : `${Number(n.toFixed(1)).toLocaleString("es-MX")} ${unit}`);
@@ -48,7 +102,7 @@ export function FindingsTable({
   const place = (f: TableFinding) => {
     const c = f.capture_id ? capBy.get(f.capture_id) : undefined;
     const m = f.mosaic_id ? mosBy.get(f.mosaic_id) : undefined;
-    return { blade: c?.blade ?? m?.blade ?? null, face: c?.face ?? m?.face ?? null, file: c?.file_name ?? null };
+    return { blade: c?.blade ?? m?.blade ?? null, face: c?.face ?? m?.face ?? null, file: c?.file_name ?? null, src: c ?? m };
   };
 
   const rows = findings.filter((f) => {
@@ -114,6 +168,7 @@ export function FindingsTable({
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="label-caps border-b border-border-subtle">
+                <th className="px-3 py-2">Vista</th>
                 <th className="px-3 py-2">Severidad</th>
                 <th className="px-3 py-2">Tipo</th>
                 <th className="px-3 py-2">Pala</th>
@@ -131,6 +186,19 @@ export function FindingsTable({
                 const href = f.capture_id ? `${viewerBase}?foto=${f.capture_id}&dano=${f.id}` : null;
                 return (
                   <tr key={f.id} className="border-b border-border-subtle last:border-0 hover:bg-background-elevated">
+                    <td className="px-3 py-2">
+                      {(() => {
+                        const label = `Daño de categoría ${f.severity}${typeLabels[f.type_id] ? `, ${typeLabels[f.type_id]}` : ""}${p.blade ? `, pala ${p.blade}` : ""}${p.face ? ` cara ${p.face}` : ""}`;
+                        const thumb = <DamageThumb finding={f} src={p.src} label={label} />;
+                        return href ? (
+                          <Link href={href} className="block">
+                            {thumb}
+                          </Link>
+                        ) : (
+                          thumb
+                        );
+                      })()}
+                    </td>
                     <td className="px-3 py-2">
                       <span className="inline-flex items-center gap-2">
                         <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SEVERITY_COLOR[f.severity] }} />

@@ -184,7 +184,6 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
         model: v.specs!.model ?? null,
         blade_length_m: v.specs!.blade_length_m ?? null,
         rotor_diameter_m: v.specs!.rotor_diameter_m ?? null,
-        hub_height_m: v.specs!.hub_height_m ?? null,
       }));
     if (rows.length > 0) {
       const { error } = await sb.from("wind_turbine_specs").insert(rows);

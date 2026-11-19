@@ -78,7 +78,7 @@ describe("SiteInputSchema", () => {
 describe("AssetInputSchema", () => {
   const base = { site_id: ORG, kind: "wind_turbine", name: "WTG-01" };
   test("acepta un activo con turbina", () => {
-    const r = AssetInputSchema.safeParse({ ...base, turbine: { manufacturer: "Vestas", blade_length_m: 52, rotor_diameter_m: 110, hub_height_m: 90 } });
+    const r = AssetInputSchema.safeParse({ ...base, turbine: { manufacturer: "Vestas", blade_length_m: 52, rotor_diameter_m: 110 } });
     expect(r.success).toBe(true);
   });
   test("rechaza blade_length_m = 0", () => {
@@ -87,7 +87,6 @@ describe("AssetInputSchema", () => {
   test("rechaza medidas fuera de rango", () => {
     expect(AssetInputSchema.safeParse({ ...base, turbine: { blade_length_m: 151 } }).success).toBe(false);
     expect(AssetInputSchema.safeParse({ ...base, turbine: { rotor_diameter_m: 301 } }).success).toBe(false);
-    expect(AssetInputSchema.safeParse({ ...base, turbine: { hub_height_m: 251 } }).success).toBe(false);
   });
   test("rechaza nombre vacío o de más de 60", () => {
     expect(AssetInputSchema.safeParse({ ...base, name: "" }).success).toBe(false);

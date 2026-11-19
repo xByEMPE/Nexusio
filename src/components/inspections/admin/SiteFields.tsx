@@ -62,7 +62,6 @@ type AssetDefaults = {
   model?: string | null;
   blade_length_m?: number | null;
   rotor_diameter_m?: number | null;
-  hub_height_m?: number | null;
 };
 
 const num = (label: string, name: string, min: number, max: number, v?: number | null) => (
@@ -109,7 +108,6 @@ export function AssetFields({ siteId, defaults = {} }: { siteId: string; default
         <span className="hidden sm:block" />
         {num("Pala (m)", "blade_length_m", 1, 150, defaults.blade_length_m)}
         {num("Rotor (m)", "rotor_diameter_m", 1, 300, defaults.rotor_diameter_m)}
-        {num("Buje (m)", "hub_height_m", 1, 250, defaults.hub_height_m)}
       </fieldset>
     </>
   );

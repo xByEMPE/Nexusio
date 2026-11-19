@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
+import { DeleteAssetDialog } from "@/components/inspections/admin/DeleteAssetDialog";
 import { DeleteDialog } from "@/components/inspections/admin/DeleteDialog";
 import { deleteEnabled } from "@/lib/inspections/flag";
 import { ParkMapLoader } from "@/components/inspections/map/ParkMapLoader";
@@ -37,7 +38,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
   if (!site) notFound();
   const { data: assets, error } = await sb
     .from("assets")
-    .select("id, name, kind, code, lat, lon, wind_turbine_specs(manufacturer, model, blade_length_m, rotor_diameter_m, hub_height_m)")
+    .select("id, name, kind, code, lat, lon, wind_turbine_specs(manufacturer, model, blade_length_m, rotor_diameter_m)")
     .eq("site_id", id)
     .order("name");
 
@@ -106,7 +107,6 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                 t?.model,
                 t?.blade_length_m != null && `pala ${t.blade_length_m} m`,
                 t?.rotor_diameter_m != null && `rotor ${t.rotor_diameter_m} m`,
-                t?.hub_height_m != null && `buje ${t.hub_height_m} m`,
               ].filter(Boolean);
               return (
                 <li key={a.id} className="px-5 py-3.5">
@@ -131,6 +131,15 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                     </div>
                   )}
                   {isAdmin && (
+                    <div className="mt-3">
+                      {assetsWithInspections.has(a.id) ? (
+                        <p className="text-xs text-foreground-subtle">Para eliminar este activo, elimina primero sus inspecciones.</p>
+                      ) : (
+                        <DeleteAssetDialog assetId={a.id} name={a.name} />
+                      )}
+                    </div>
+                  )}
+                  {isAdmin && (
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-foreground-muted hover:text-foreground">Editar</summary>
                       <ActionForm action={upsertAsset} submitLabel="Guardar" successMessage="Activo actualizado." className="mt-3 flex flex-col gap-4">
@@ -147,7 +156,6 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                             model: t?.model,
                             blade_length_m: t?.blade_length_m,
                             rotor_diameter_m: t?.rotor_diameter_m,
-                            hub_height_m: t?.hub_height_m,
                           }}
                         />
                       </ActionForm>
