@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AssetInputSchema, SiteInputSchema } from "@/contracts/inspections-admin";
 import { dbErrorMessage, fail, requireAdminAction, type ActionResult } from "@/lib/inspections/admin-action";
+import { ASSET_HAS_INSPECTIONS } from "@/lib/inspections/asset-messages";
 import { optNum, optStr } from "@/lib/inspections/form";
 import { latestInspectionPositions } from "@/lib/inspections/map";
 import { createSessionClient } from "@/services/supabase/server";
@@ -108,7 +109,6 @@ export async function upsertAsset(fd: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-export const ASSET_HAS_INSPECTIONS = "Elimina primero sus inspecciones: usa «Eliminar todas las inspecciones de esta máquina».";
 
 /**
  * Elimina un activo (solo admin). `wind_turbine_specs` cae en cascada; `inspections.asset_id` es

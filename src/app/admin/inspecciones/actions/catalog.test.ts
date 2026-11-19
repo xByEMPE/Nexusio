@@ -9,7 +9,8 @@ vi.mock("@/lib/inspections/admin-action", () => ({
 }));
 vi.mock("@/services/supabase/server", () => ({ createSessionClient: m.createSessionClient }));
 
-import { ASSET_HAS_INSPECTIONS, deleteAsset, upsertAsset } from "./catalog";
+import { ASSET_HAS_INSPECTIONS } from "@/lib/inspections/asset-messages";
+import { deleteAsset, upsertAsset } from "./catalog";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const SITE = "22222222-2222-4222-8222-222222222222";
