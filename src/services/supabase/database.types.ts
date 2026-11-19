@@ -173,6 +173,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"deletion_log": {
+                  Row: {
+                    "actor_id": string | null,"at": string,"bytes": number,"counts": NonNullable<Json>,"entity_id": string,"entity_type": string,"id": number,"kind": string,"name": string | null,"operation_id": string,"organization_id": string | null,"project_id": string | null,"reason": string | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "actor_id"?: string | null,"at"?: string,"bytes"?: number,"counts"?: NonNullable<Json>,"entity_id": string,"entity_type": string,"id"?: never,"kind": string,"name"?: string | null,"operation_id": string,"organization_id"?: string | null,"project_id"?: string | null,"reason"?: string | null,"status": string
+                  }
+                  Update: {
+                    "actor_id"?: string | null,"at"?: string,"bytes"?: number,"counts"?: NonNullable<Json>,"entity_id"?: string,"entity_type"?: string,"id"?: never,"kind"?: string,"name"?: string | null,"operation_id"?: string,"organization_id"?: string | null,"project_id"?: string | null,"reason"?: string | null,"status"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"finding_types": {
                   Row: {
                     "code": string,"domain": Database["public"]['Enums']["inspection_kind"],"id": string,"is_active": boolean,"label_en": string,"label_es": string
@@ -251,14 +265,14 @@ isOneToOne: false
                   ]
                 },"inspections": {
                   Row: {
-                    "approved_at": string | null,"approved_by": string | null,"asset_id": string,"asset_lat": number | null,"asset_lon": number | null,"asset_position_source": string | null,"assistant_name": string | null,"blade_length_m": number | null,"created_at": string,"drone_model": string | null,"id": string,"id_capture_id": string | null,"inspected_at": string | null,"kind": Database["public"]['Enums']["inspection_kind"],"notes": string | null,"pilot_name": string | null,"project_id": string,"status": Database["public"]['Enums']["inspection_status"],"updated_at": string
+                    "approved_at": string | null,"approved_by": string | null,"asset_id": string,"asset_lat": number | null,"asset_lon": number | null,"asset_position_source": string | null,"assistant_name": string | null,"blade_length_m": number | null,"created_at": string,"deleting_at": string | null,"drone_model": string | null,"id": string,"id_capture_id": string | null,"inspected_at": string | null,"kind": Database["public"]['Enums']["inspection_kind"],"notes": string | null,"pilot_name": string | null,"project_id": string,"status": Database["public"]['Enums']["inspection_status"],"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"asset_id": string,"asset_lat"?: number | null,"asset_lon"?: number | null,"asset_position_source"?: string | null,"assistant_name"?: string | null,"blade_length_m"?: number | null,"created_at"?: string,"drone_model"?: string | null,"id"?: string,"id_capture_id"?: string | null,"inspected_at"?: string | null,"kind": Database["public"]['Enums']["inspection_kind"],"notes"?: string | null,"pilot_name"?: string | null,"project_id": string,"status"?: Database["public"]['Enums']["inspection_status"],"updated_at"?: string
+                    "approved_at"?: string | null,"approved_by"?: string | null,"asset_id": string,"asset_lat"?: number | null,"asset_lon"?: number | null,"asset_position_source"?: string | null,"assistant_name"?: string | null,"blade_length_m"?: number | null,"created_at"?: string,"deleting_at"?: string | null,"drone_model"?: string | null,"id"?: string,"id_capture_id"?: string | null,"inspected_at"?: string | null,"kind": Database["public"]['Enums']["inspection_kind"],"notes"?: string | null,"pilot_name"?: string | null,"project_id": string,"status"?: Database["public"]['Enums']["inspection_status"],"updated_at"?: string
                   }
                   Update: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"asset_id"?: string,"asset_lat"?: number | null,"asset_lon"?: number | null,"asset_position_source"?: string | null,"assistant_name"?: string | null,"blade_length_m"?: number | null,"created_at"?: string,"drone_model"?: string | null,"id"?: string,"id_capture_id"?: string | null,"inspected_at"?: string | null,"kind"?: Database["public"]['Enums']["inspection_kind"],"notes"?: string | null,"pilot_name"?: string | null,"project_id"?: string,"status"?: Database["public"]['Enums']["inspection_status"],"updated_at"?: string
+                    "approved_at"?: string | null,"approved_by"?: string | null,"asset_id"?: string,"asset_lat"?: number | null,"asset_lon"?: number | null,"asset_position_source"?: string | null,"assistant_name"?: string | null,"blade_length_m"?: number | null,"created_at"?: string,"deleting_at"?: string | null,"drone_model"?: string | null,"id"?: string,"id_capture_id"?: string | null,"inspected_at"?: string | null,"kind"?: Database["public"]['Enums']["inspection_kind"],"notes"?: string | null,"pilot_name"?: string | null,"project_id"?: string,"status"?: Database["public"]['Enums']["inspection_status"],"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -529,7 +543,25 @@ isOneToOne: true
             [_ in never]: never
           }
           Functions: {
-            "ingest_manifest":
+            "begin_inspection_delete":
+{ Args: { "p_inspection_id": string,"p_reason"?: string }; Returns: string
+                           },
+"begin_scope_delete":
+{ Args: { "p_id": string,"p_kind": string,"p_project_id"?: string,"p_reason"?: string }; Returns: (string)[]
+                           },
+"delete_project_row":
+{ Args: { "p_project_id": string,"p_reason"?: string }; Returns: Json
+                           },
+"deletion_objects":
+{ Args: { "p_inspection_id": string,"p_limit"?: number }; Returns: string[]
+                           },
+"deletion_preview":
+{ Args: { "p_id": string,"p_kind": string,"p_project_id"?: string }; Returns: Json
+                           },
+"finish_inspection_delete":
+{ Args: { "p_inspection_id": string }; Returns: Json
+                           },
+"ingest_manifest":
 { Args: { "p_manifest": Json }; Returns: Json
                            },
 "mark_finding_reviewed":
