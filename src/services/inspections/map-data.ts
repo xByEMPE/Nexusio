@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MapStatus } from "@/lib/inspections/map";
 import type { Database } from "@/services/supabase/database.types";
-import { signPaths } from "./media";
+import { mediaUrl } from "@/lib/inspections/media-url";
 
 export type Sev = 1 | 2 | 3 | 4 | 5;
 
@@ -27,6 +27,14 @@ function hrefFor(scope: Scope, projectId: string, inspectionId: string): string 
 
 const emptyCounts = (): Record<Sev, number> => ({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
 const isSev = (n: number): n is Sev => Number.isInteger(n) && n >= 1 && n <= 5;
+
+/**
+ * URL de la miniatura de la foto `_ID` (miniatura o, si no hay, vista previa) vía `/api/media/idthumb`,
+ * con la `updated_at` de la captura como versión. Ya no se firma nada por render.
+ */
+export function idThumbUrlFor(cap: { id: string; thumb_path: string | null; preview_path: string | null; updated_at: string } | undefined): string | null {
+  return cap && (cap.thumb_path || cap.preview_path) ? mediaUrl("idthumb", cap.id, cap.updated_at) : null;
+}
 
 type AssetRow = { id: string; name: string; lat: number | null; lon: number | null };
 
@@ -59,7 +67,7 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
   const idCaptureIds = [...latest.values()].flatMap((i) => (i.id_capture_id ? [i.id_capture_id] : []));
   const [findings, caps] = await Promise.all([
     inspIds.length ? sb.from("findings").select("inspection_id, severity").in("inspection_id", inspIds).eq("status", "confirmed") : Promise.resolve({ data: [], error: null }),
-    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
+    idCaptureIds.length ? sb.from("captures").select("id, thumb_path, preview_path, updated_at").in("id", idCaptureIds) : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (findings.error) console.error("[map-data] daños:", findings.error.message);
@@ -72,8 +80,7 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
     c[f.severity]++;
     byInsp.set(f.inspection_id, c);
   }
-  const capPath = new Map((caps.data ?? []).map((c) => [c.id, c.thumb_path ?? c.preview_path ?? ""]));
-  const signed = await signPaths(sb, [...capPath.values()]);
+  const capById = new Map((caps.data ?? []).map((c) => [c.id, c]));
 
   return assets.map((a): MapTurbine => {
     const cur = latest.get(a.id) ?? null;
@@ -81,7 +88,6 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
     const assetHasPos = a.lat != null && a.lon != null;
     const counts = (cur && byInsp.get(cur.id)) ?? emptyCounts();
     const sevs = ([1, 2, 3, 4, 5] as Sev[]).filter((s) => counts[s] > 0);
-    const thumbPath = cur?.id_capture_id ? capPath.get(cur.id_capture_id) : undefined;
     return {
       assetId: a.id,
       name: a.name,
@@ -91,7 +97,7 @@ async function build(sb: SupabaseClient<Database>, assets: AssetRow[], projectId
       maxSeverity: sevs.length ? sevs[sevs.length - 1]! : null,
       counts,
       inspectionHref: cur ? hrefFor(scope, cur.project_id, cur.id) : null,
-      idThumbUrl: thumbPath ? (signed.get(thumbPath) ?? null) : null,
+      idThumbUrl: idThumbUrlFor(cur?.id_capture_id ? capById.get(cur.id_capture_id) : undefined),
     };
   });
 }

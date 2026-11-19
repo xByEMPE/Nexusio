@@ -133,7 +133,7 @@ Flujo de inicio de sesión del portal:
 | `reports` | PDF, JSON, CSV de reportes | 100 MB | todos los miembros | admin, inspector |
 
 - Todos los buckets son privados. Las políticas de `storage.objects` exigen que el primer segmento de la ruta sea un `org_id` del usuario: `{org_id}/{flight_id|site_id}/{archivo}`. `media_assets` tiene un `CHECK` que obliga a esa misma convención.
-- El acceso a binarios se hace solo con URLs firmadas de vida corta (`createSignedUrl(path, 300)`), que a su vez requieren permiso `SELECT` sobre el objeto. Ver `signedMediaUrl()` en `src/services/supabase/browser.ts`.
+- El acceso a binarios se hace solo con URLs firmadas de vida corta (`createSignedUrl(path, 300)`), que a su vez requieren permiso `SELECT` sobre el objeto. En el visor, las miniaturas, vistas previas y tiras pasan por la ruta `/api/media/...` del portal (ver «Caché de imágenes» en el README); originales y matrices térmicas se firman bajo demanda con vida corta (`signOne`).
 - Archivos de más de 6 MB: carga reanudable (TUS) desde el cliente o la app MSDK. Ortomosaicos y nubes los escriben los workers de procesamiento con `service_role`.
 - Sobrescritura y borrado: solo administradores, para preservar la cadena de custodia.
 - Retención: un job de `pg_cron` o una Edge Function programada elimina el RAW más antiguo que `organizations.retention_raw_days` y deja el evento en `audit_log`.

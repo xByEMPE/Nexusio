@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findingMeasurements, type FindingMeasurements, type Region } from "@/lib/blade";
 import type { Database } from "@/services/supabase/database.types";
+import { mediaUrl } from "@/lib/inspections/media-url";
 import { signPaths } from "./media";
 
 type Enums = Database["public"]["Enums"];
@@ -104,9 +105,30 @@ export type InspectionViewerData = {
 };
 
 /**
+ * Mapas ruta → URL `/api/media/...` de vistas previas, miniaturas y tiras. Ya no se firma nada en cada
+ * render: el navegador pide la imagen a la ruta del portal, que valida la sesión con RLS y la entrega con
+ * caché de 6 meses. La versión de la URL (`?v=`) es la `updated_at` de la fila (rompe la caché si cambia).
+ * Las claves (rutas de Storage) se quedan en el servidor: al navegador solo viajan las URLs.
+ */
+export function mediaUrlMaps(
+  captures: { id: string; preview_path: string | null; thumb_path: string | null; updated_at: string }[],
+  mosaics: { id: string; path: string; updated_at: string }[],
+): { previewUrls: Map<string, string>; thumbUrls: Map<string, string>; stripUrls: Map<string, string> } {
+  const previewUrls = new Map<string, string>();
+  const thumbUrls = new Map<string, string>();
+  const stripUrls = new Map<string, string>();
+  for (const c of captures) {
+    if (c.preview_path) previewUrls.set(c.preview_path, mediaUrl("preview", c.id, c.updated_at));
+    if (c.thumb_path) thumbUrls.set(c.thumb_path, mediaUrl("thumb", c.id, c.updated_at));
+  }
+  for (const m of mosaics) stripUrls.set(m.path, mediaUrl("strip", m.id, m.updated_at));
+  return { previewUrls, thumbUrls, stripUrls };
+}
+
+/**
  * Carga todo lo que el visor necesita con la sesión del usuario (RLS decide qué ve).
- * Devuelve null si la inspección no es visible. Las vistas previas, miniaturas y tiras se
- * firman por lotes; originales y matrices se firman bajo demanda (`signOne`).
+ * Devuelve null si la inspección no es visible. Las vistas previas, miniaturas y tiras son URLs
+ * `/api/media/...` (caché de 6 meses); originales y matrices se firman bajo demanda con vida corta (`signOne`).
  */
 export async function loadInspectionViewer(
   sb: SupabaseClient<Database>,
@@ -165,11 +187,7 @@ export async function loadInspectionViewer(
   );
 
   const mosaicRows = mosaics.data ?? [];
-  const [previewUrls, thumbUrls, stripUrls] = await Promise.all([
-    signPaths(sb, captures.flatMap((c) => (c.preview_path ? [c.preview_path] : []))),
-    signPaths(sb, captures.flatMap((c) => (c.thumb_path ? [c.thumb_path] : []))),
-    signPaths(sb, mosaicRows.map((m) => m.path)),
-  ]);
+  const { previewUrls, thumbUrls, stripUrls } = mediaUrlMaps(rows, mosaicRows);
 
   return {
     inspection,
@@ -184,7 +202,7 @@ export async function loadInspectionViewer(
   };
 }
 
-/** Firma una sola ruta (original o matriz térmica) bajo demanda. */
+/** Firma una sola ruta (original o matriz térmica) bajo demanda, con vida corta (600 s): pesados y poco pedidos, no se cachean 6 meses. */
 export async function signOne(sb: SupabaseClient<Database>, path: string): Promise<string | null> {
   return (await signPaths(sb, [path], 600)).get(path) ?? null;
 }

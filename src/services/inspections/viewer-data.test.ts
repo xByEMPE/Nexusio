@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { Region } from "@/lib/blade";
-import { findingTypeMatches, measurementsForSave, oneOrNull, orderCaptures, type ViewerCapture } from "./viewer-data";
+import { findingTypeMatches, mediaUrlMaps, measurementsForSave, oneOrNull, orderCaptures, type ViewerCapture } from "./viewer-data";
 
 const cap = (o: Partial<ViewerCapture>): ViewerCapture => ({
   id: "x",
@@ -89,5 +89,25 @@ describe("oneOrNull", () => {
     expect(oneOrNull([])).toBeNull();
     expect(oneOrNull(null)).toBeNull();
     expect(oneOrNull(undefined)).toBeNull();
+  });
+});
+
+describe("mediaUrlMaps", () => {
+  const T = "2026-01-01T00:00:00+00:00";
+  const v = Date.parse(T).toString(36);
+  test("devuelve URLs /api/media por ruta (nunca URLs firmadas) con la versión de la fila", () => {
+    const { previewUrls, thumbUrls, stripUrls } = mediaUrlMaps(
+      [
+        { id: "c1", preview_path: "o/p.webp", thumb_path: "o/t.webp", updated_at: T },
+        { id: "c2", preview_path: null, thumb_path: null, updated_at: T },
+      ],
+      [{ id: "m1", path: "o/mosaics/m1/strip-ab12cd34.webp", updated_at: T }],
+    );
+    expect(previewUrls.get("o/p.webp")).toBe(`/api/media/preview/c1?v=${v}`);
+    expect(thumbUrls.get("o/t.webp")).toBe(`/api/media/thumb/c1?v=${v}`);
+    expect(stripUrls.get("o/mosaics/m1/strip-ab12cd34.webp")).toBe(`/api/media/strip/m1?v=${v}`);
+    expect(previewUrls.size).toBe(1);
+    expect(thumbUrls.size).toBe(1);
+    for (const u of [...previewUrls.values(), ...thumbUrls.values(), ...stripUrls.values()]) expect(u).not.toMatch(/token|supabase|storage/i);
   });
 });
