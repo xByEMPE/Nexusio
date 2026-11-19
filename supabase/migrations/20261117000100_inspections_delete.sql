@@ -201,8 +201,9 @@ language sql stable security definer set search_path = '' as $$
     select count(x.id) as n, coalesce(sum((x.metadata ->> 'size')::bigint), 0) as b
     from public.inspections i
     join public.projects pj on pj.id = i.project_id
+    cross join lateral (select lower(pj.organization_id || '/' || i.project_id || '/' || i.id || '/') as p) pf
     left join storage.objects x on x.bucket_id = 'inspection-media'
-      and x.name like pj.organization_id || '/' || i.project_id || '/' || i.id || '/%'
+      and lower(x.name) collate "C" >= pf.p and lower(x.name) collate "C" < left(pf.p, -1) || '0'
     where i.id = p_id) o;
 $$;
 
@@ -285,7 +286,9 @@ begin
   return v_result;
 end $$;
 
--- Lista (por lotes) los objetos de Storage de una inspección, por prefijo
+-- Lista (por lotes) los objetos de Storage de una inspección, por prefijo. La comparación es por rango sobre
+-- lower(name) collate "C" (usa el índice idx_objects_bucket_id_name_lower de Storage) y no distingue mayúsculas
+-- del UUID, igual que storage_path_ids.
 create or replace function public.deletion_objects(p_inspection_id uuid, p_limit integer default 1000)
 returns setof text
 language plpgsql stable security definer set search_path = '' as $$
@@ -295,7 +298,7 @@ begin
   if not private.is_admin() then
     raise exception 'not_allowed' using errcode = '42501';
   end if;
-  select pj.organization_id || '/' || i.project_id || '/' || i.id || '/' into v_prefix
+  select lower(pj.organization_id || '/' || i.project_id || '/' || i.id || '/') into v_prefix
   from public.inspections i join public.projects pj on pj.id = i.project_id
   where i.id = p_inspection_id;
   if v_prefix is null then
@@ -303,7 +306,8 @@ begin
   end if;
   return query
     select o.name from storage.objects o
-    where o.bucket_id = 'inspection-media' and o.name like v_prefix || '%'
+    where o.bucket_id = 'inspection-media'
+      and lower(o.name) collate "C" >= v_prefix and lower(o.name) collate "C" < left(v_prefix, -1) || '0'
     order by o.name
     limit least(greatest(coalesce(p_limit, 1000), 1), 5000);
 end $$;
@@ -412,7 +416,8 @@ begin
 
   select count(*) into v_left from storage.objects x
   where x.bucket_id = 'inspection-media'
-    and x.name like r.organization_id || '/' || r.project_id || '/' || p_inspection_id || '/%';
+    and lower(x.name) collate "C" >= lower(r.organization_id || '/' || r.project_id || '/' || p_inspection_id || '/')
+    and lower(x.name) collate "C" < left(lower(r.organization_id || '/' || r.project_id || '/' || p_inspection_id || '/'), -1) || '0';
   if v_left > 0 then
     raise exception 'objects_remaining' using errcode = 'P0001', detail = v_left::text;
   end if;
