@@ -67,7 +67,7 @@ export function HowWeWork() {
     <section id="proceso" className="scroll-mt-20 border-t border-border-subtle py-24 md:py-32">
       <div className="container">
         <SectionHeader
-          index="05"
+          index="06"
           eyebrow={t.eyebrow}
           title={t.title}
           lede={t.lede}

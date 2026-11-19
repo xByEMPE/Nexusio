@@ -10,7 +10,7 @@ export function AppShowcase({ t }: { t: Dictionary }) {
     <section id="apps" className="relative scroll-mt-20 overflow-hidden border-t border-border-subtle py-24 md:py-32">
       <div className="container">
         <SectionHeader
-          index="02"
+          index="03"
           eyebrow={t.apps.eyebrow}
           title={t.apps.title}
           lede={t.apps.lede}

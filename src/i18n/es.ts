@@ -95,6 +95,30 @@ export const es = {
     lede: "Desde la app que usa el piloto en terreno hasta el portal donde se revisan los resultados y el sitio web de su empresa.",
     items: SERVICES,
   },
+  whyInspect: {
+    eyebrow: "Inspección a tiempo",
+    title: "¿Por qué inspeccionar a tiempo?",
+    lede: "Los activos de energía rara vez fallan de un día para otro: se degradan por etapas. Una inspección a tiempo permite ver el problema cuando todavía es pequeño y actuar antes de que escale.",
+    tablistAria: "Tipo de activo",
+    loading: "Cargando la figura interactiva",
+    tabs: [
+      {
+        label: "Palas eólicas",
+        title: "Lo que no se atiende por fuera termina por dentro.",
+        body: "Un daño externo que no se atiende deja entrar humedad y esfuerzo; con el tiempo se convierte en un daño estructural o interno, mucho más difícil de reparar.",
+      },
+      {
+        label: "Paneles solares",
+        title: "Sin mantenimiento, las celdas se deterioran.",
+        body: "Con suciedad, sombras o fallas sin atender, las celdas se dañan y aparecen zonas calientes. La termografía con dron las detecta cuando todavía se pueden corregir.",
+      },
+      {
+        label: "Líneas de transmisión",
+        title: "Los defectos se repiten y escalan.",
+        body: "Los defectos recurrentes, y los que apenas empiezan a aparecer, crecen con el viento, la carga y el tiempo. Revisarlos de forma periódica ayuda a que no lleguen a una falla.",
+      },
+    ],
+  },
   apps: {
     eyebrow: "Apps para controles DJI",
     title: "Su proceso de inspección, convertido en una app para su equipo.",

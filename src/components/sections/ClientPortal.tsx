@@ -13,7 +13,7 @@ export function ClientPortal({ t: dict }: { t: Dictionary }) {
       <div aria-hidden className="pointer-events-none absolute right-0 top-40 h-[520px] w-[520px] rounded-full bg-accent-halo opacity-50" />
       <div className="container relative">
         <SectionHeader
-          index="03"
+          index="04"
           eyebrow={t.eyebrow}
           title={t.title}
           lede={t.lede}

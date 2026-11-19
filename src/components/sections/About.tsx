@@ -12,7 +12,7 @@ export function About({ t }: { t: Dictionary }) {
     <section id="nosotros" className="relative scroll-mt-20 overflow-hidden border-t border-border-subtle py-24 md:py-32">
       <div aria-hidden className="pointer-events-none absolute -left-40 top-32 h-[560px] w-[560px] rounded-full bg-accent-halo opacity-50" />
       <div className="container relative">
-        <SectionHeader index="04" eyebrow={ABOUT.eyebrow} title={ABOUT.title} />
+        <SectionHeader index="05" eyebrow={ABOUT.eyebrow} title={ABOUT.title} />
 
         <div className="mt-14 grid gap-12 lg:grid-cols-12">
           {/* Origen */}

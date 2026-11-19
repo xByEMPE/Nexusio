@@ -1,5 +1,6 @@
 import { Hero } from "@/components/sections/Hero";
 import { Services } from "@/components/sections/Services";
+import { WhyInspect } from "@/components/sections/WhyInspect";
 import { AppShowcase } from "@/components/sections/AppShowcase";
 import { ClientPortal } from "@/components/sections/ClientPortal";
 import { About } from "@/components/sections/About";
@@ -61,6 +62,7 @@ export function HomeView({ locale }: { locale: Locale }) {
       <JsonLd data={ld} />
       <Hero t={t} />
       <Services t={t} />
+      <WhyInspect t={t} />
       <AppShowcase t={t} />
       <ClientPortal t={t} />
       <About t={t} />

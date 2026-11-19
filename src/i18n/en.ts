@@ -327,6 +327,7 @@ export const en: Dictionary = {
   nav: {
     items: [
       { href: "/en#servicios", label: "Services" },
+      { href: "/en#por-que-inspeccionar", label: "Why inspect" },
       { href: "/en#apps", label: "DJI apps" },
       { href: "/en#portal", label: "Client portal" },
       { href: "/en#nosotros", label: "About" },
@@ -393,6 +394,30 @@ export const en: Dictionary = {
     title: "What we build for your drone operation.",
     lede: "From the app the pilot uses in the field to the portal where results are reviewed and your company's website.",
     items: services,
+  },
+  whyInspect: {
+    eyebrow: "Early inspection",
+    title: "Why inspect early?",
+    lede: "Energy assets rarely fail overnight: they degrade in stages. An early inspection lets you see the problem while it is still small and act before it escalates.",
+    tablistAria: "Asset type",
+    loading: "Loading the interactive figure",
+    tabs: [
+      {
+        label: "Wind blades",
+        title: "What goes unattended outside ends up inside.",
+        body: "External damage left untreated lets moisture and stress in; over time it becomes structural or internal damage, much harder to repair.",
+      },
+      {
+        label: "Solar panels",
+        title: "Without maintenance, cells deteriorate.",
+        body: "With dirt, shade or faults left unattended, cells get damaged and hot spots appear. Drone thermography finds them while they can still be corrected.",
+      },
+      {
+        label: "Transmission lines",
+        title: "Defects repeat and escalate.",
+        body: "Recurring defects, and those just starting to appear, grow with wind, load and time. Reviewing them periodically helps keep them from turning into a failure.",
+      },
+    ],
   },
   apps: {
     eyebrow: "Apps for DJI controllers",

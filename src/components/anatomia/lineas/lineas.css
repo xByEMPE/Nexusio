@@ -1,0 +1,409 @@
+/* Figura «Línea de transmisión». Tokens del kit ajustados a los del sitio:
+   fondo y superficie de globals.css, acento #3d87fb como único `lit`. */
+
+.iso.lf-theme {
+  --anatomy-page: hsl(var(--background-base, 0 0% 0%));
+  --anatomy-card: hsl(var(--surface-layer, 220 14% 4%));
+  --anatomy-text: hsl(var(--foreground-muted, 0 0% 66%));
+  --anatomy-strong: hsl(var(--foreground, 0 0% 100%));
+  --anatomy-muted: hsl(var(--foreground-subtle, 0 0% 53%));
+  --anatomy-paper: var(--anatomy-card);
+  --anatomy-face: #15171a;
+  --anatomy-top: #17191d;
+  --anatomy-shade-0: #0b0c0e;
+  --anatomy-shade-1: #0e1012;
+  --anatomy-shade-2: #111316;
+  --anatomy-shade-3: #14161a;
+  --anatomy-lit-top: #182234;
+  --anatomy-lit-shade: #121a28;
+  --anatomy-hi: #d5d8dd;
+  --anatomy-mid: #6c7078;
+  --anatomy-lo: #3b3e45;
+  --anatomy-faint: #24272c;
+  --anatomy-lit: hsl(var(--accent-primary, 218 99% 59%));
+  --anatomy-halo: #000;
+  --anatomy-halo-opacity: 0.85;
+  --anatomy-dot: #e3e5e8;
+  --anatomy-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --lf-wire-f: #b4b8bf;
+  --lf-leaf: #1a1d21;
+  --lf-leaf-light: #262a30;
+  --lf-wire-g: #8d9198;
+  --lf-wire-b: #565a62;
+  --lf-caution: hsl(var(--signal-caution, 39 77% 60%));
+  --lf-critical: hsl(var(--signal-critical, 4 100% 65%));
+  --lf-border: hsl(var(--border-subtle, 0 0% 15%));
+  --lf-border-strong: hsl(var(--border-strong, 0 0% 23%));
+}
+
+html[data-theme="light"] .iso.lf-theme {
+  --anatomy-paper: var(--anatomy-card);
+  --anatomy-face: #ffffff;
+  --anatomy-top: #ffffff;
+  --anatomy-shade-0: #dcdde0;
+  --anatomy-shade-1: #e5e6e9;
+  --anatomy-shade-2: #edeef0;
+  --anatomy-shade-3: #f4f5f6;
+  --anatomy-lit-top: #eef4ff;
+  --anatomy-lit-shade: #dfe9fb;
+  --anatomy-hi: #24262b;
+  --anatomy-mid: #878b93;
+  --anatomy-lo: #b2b5bb;
+  --anatomy-faint: #d6d8dc;
+  --anatomy-halo: #8a8e98;
+  --anatomy-halo-opacity: 0.3;
+  --anatomy-dot: #33363c;
+  --lf-wire-f: #3a3d44;
+  --lf-leaf: #e4e6e3;
+  --lf-leaf-light: #f6f7f5;
+  --lf-wire-g: #62666e;
+  --lf-wire-b: #9a9ea6;
+}
+
+.lf-theme .lf {
+  margin: 0;
+}
+
+.lf-theme .iso-plate {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px var(--lf-border);
+  padding: 48px 24px 52px;
+}
+
+.lf-theme .iso-plate-corner {
+  font-family: var(--anatomy-mono);
+}
+
+.lf-stage {
+  position: relative;
+  border-radius: 10px;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lf-stage:focus-visible {
+  outline: 1px solid var(--anatomy-lit);
+  outline-offset: 6px;
+}
+
+.lf-stage .iso-svg {
+  overflow: visible;
+}
+
+/* conductores: una vaina del color del papel separa los cruces en profundidad */
+.lf-wire path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lf-wire .lf-case {
+  stroke-linecap: butt;
+  stroke: var(--anatomy-paper);
+  stroke-width: 2.6;
+}
+.lf-core {
+  stroke-width: 1.05;
+}
+.lf-wire[data-side="f"] .lf-core {
+  stroke: var(--lf-wire-f);
+}
+.lf-wire[data-side="g"] .lf-core {
+  stroke: var(--lf-wire-g);
+  stroke-width: 0.9;
+}
+.lf-wire[data-side="b"] .lf-core {
+  stroke: var(--lf-wire-b);
+  stroke-width: 0.95;
+}
+.lf-stop-f {
+  stop-color: var(--lf-wire-f);
+}
+.lf-stop-g {
+  stop-color: var(--lf-wire-g);
+}
+.lf-stop-b {
+  stop-color: var(--lf-wire-b);
+}
+.lf-stop-paper {
+  stop-color: var(--anatomy-paper);
+}
+
+.lf-soft {
+  filter: blur(5px);
+  opacity: 0.55;
+}
+
+.lf-ball > .iso-fill,
+.lf-ball > .iso-shade {
+  fill: var(--lf-leaf);
+}
+.lf-ball > .iso-top {
+  fill: var(--lf-leaf-light);
+}
+
+.lf-needle {
+  stroke-width: 1.2;
+}
+
+.lf-zone {
+  stroke: var(--lf-critical) !important;
+  stroke-width: 1.1;
+  opacity: 0.85;
+}
+
+.lf-rust circle {
+  fill: var(--lf-caution);
+  opacity: 0.75;
+}
+
+.lf-dirt circle {
+  fill: var(--anatomy-mid);
+  opacity: 0.9;
+}
+
+.lf-crack {
+  stroke-width: 0.9;
+}
+
+.lf-arc .lf-glow {
+  stroke-width: 4.2;
+  opacity: 0.32;
+  filter: blur(1.6px);
+}
+.lf-arc .lf-bolt {
+  stroke-width: 1.15;
+}
+.lf-arc circle {
+  fill: var(--anatomy-lit);
+  opacity: 1;
+}
+.lf-corona circle {
+  fill: var(--anatomy-lit);
+  opacity: 1;
+}
+
+.lf-halo,
+.lf-heat,
+.lf-smoke {
+  stroke: none;
+  filter: blur(5px);
+}
+.lf-halo {
+  fill: var(--anatomy-lit);
+}
+.lf-heat {
+  fill: var(--lf-caution);
+}
+.lf-smoke {
+  fill: var(--anatomy-mid);
+}
+
+.lf-reticle path {
+  fill: none;
+  stroke: var(--anatomy-lit);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lf-hotspots circle {
+  fill: transparent;
+  stroke: none;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+/* controles bajo el dibujo */
+.lf-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px 18px;
+  margin-top: 18px;
+}
+
+.lf-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.lf-group-label {
+  color: var(--anatomy-muted);
+  font-family: var(--anatomy-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.lf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--lf-border);
+  background: transparent;
+  color: var(--anatomy-text);
+  font-family: var(--anatomy-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 200ms var(--anatomy-ease),
+    color 200ms var(--anatomy-ease),
+    background-color 200ms var(--anatomy-ease);
+}
+.lf-chip:hover {
+  border-color: var(--lf-border-strong);
+  color: var(--anatomy-strong);
+}
+.lf-chip[aria-checked="true"] {
+  border-color: var(--anatomy-lit);
+  color: var(--anatomy-strong);
+  background: color-mix(in srgb, var(--anatomy-lit) 12%, transparent);
+}
+.lf-chip:focus-visible {
+  outline: 1px solid var(--anatomy-lit);
+  outline-offset: 3px;
+}
+.lf-chip-index {
+  color: var(--anatomy-muted);
+  font-size: 10px;
+}
+.lf-chip[aria-checked="true"] .lf-chip-index {
+  color: var(--anatomy-lit);
+}
+.lf-chip-small {
+  min-height: 26px;
+  padding: 0 9px;
+  font-size: 10.5px;
+}
+
+.lf-panel {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--lf-border);
+  min-height: 9.5em;
+}
+.lf-panel p {
+  margin: 0;
+}
+.lf-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--anatomy-muted);
+  font-family: var(--anatomy-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.lf-panel-name {
+  color: var(--anatomy-text);
+}
+.lf-steps {
+  display: inline-flex;
+  gap: 3px;
+}
+.lf-step {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--lf-border-strong);
+}
+.lf-step[data-on] {
+  background: var(--anatomy-lit);
+}
+.lf-panel[data-stage="3"] .lf-step[data-on] {
+  background: var(--lf-critical);
+}
+.lf-panel-title {
+  color: var(--anatomy-strong);
+  font-size: 15px;
+  font-weight: 500;
+  margin-top: 4px !important;
+}
+.lf-panel-text,
+.lf-panel-drone,
+.lf-panel-risk {
+  color: var(--anatomy-text);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.lf-panel-lead {
+  color: var(--anatomy-lit);
+  font-family: var(--anatomy-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.lf-panel-risk .lf-panel-lead {
+  color: var(--lf-critical);
+}
+.lf-tag {
+  display: inline-block;
+  margin: 2px 6px 2px 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--lf-critical) 45%, transparent);
+  color: var(--anatomy-strong);
+  font-size: 12px;
+}
+
+.lf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lf-hint-narrow {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .lf-theme .iso-plate {
+    padding: 44px 12px 76px;
+  }
+  .lf-chip {
+    min-height: 34px;
+  }
+  .lf-stage {
+    overflow: hidden;
+  }
+  .lf-stage .iso-svg {
+    width: 112%;
+    margin: -2% -6% -2%;
+  }
+  .lf-hint-wide {
+    display: none;
+  }
+  .lf-hint-narrow {
+    display: inline;
+  }
+  .lf-controls {
+    gap: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lf-chip {
+    transition: none;
+  }
+}

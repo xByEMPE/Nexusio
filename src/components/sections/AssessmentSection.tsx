@@ -12,7 +12,7 @@ export function AssessmentSection({ t: dict }: { t: Dictionary }) {
       <div aria-hidden className="pointer-events-none absolute -left-40 bottom-0 h-[520px] w-[520px] rounded-full bg-accent-halo opacity-60" />
       <div className="container relative">
         <SectionHeader
-          index="06"
+          index="07"
           eyebrow={t.eyebrow}
           title={t.title}
           lede={t.lede}

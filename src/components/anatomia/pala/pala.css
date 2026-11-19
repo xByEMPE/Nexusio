@@ -1,0 +1,433 @@
+/* Figura «pala eólica». Tokens del kit llevados a los del sitio (oscuro por
+   defecto, claro bajo html[data-theme="light"]). Ningún token en :root. */
+
+.pala {
+  --anatomy-page: hsl(var(--background-base));
+  --anatomy-card: hsl(var(--surface-layer));
+  --anatomy-paper: hsl(var(--surface-layer));
+  --anatomy-text: hsl(var(--foreground-muted));
+  --anatomy-strong: hsl(var(--foreground));
+  --anatomy-muted: hsl(var(--foreground-subtle));
+  --anatomy-face: #20232a;
+  --anatomy-top: #282b33;
+  --anatomy-shade-0: #0e0f13;
+  --anatomy-shade-1: #14161b;
+  --anatomy-shade-2: #1a1d23;
+  --anatomy-shade-3: #22252c;
+  --anatomy-lit-top: #2c303a;
+  --anatomy-lit-shade: #1b1e26;
+  --anatomy-hi: #d5d8de;
+  --anatomy-mid: #6c7079;
+  --anatomy-lo: #3e424b;
+  --anatomy-faint: #282b32;
+  --anatomy-lit: hsl(var(--accent-primary));
+  --anatomy-halo: #000;
+  --anatomy-halo-opacity: 0.9;
+  --anatomy-dot: #e6e8ec;
+  --anatomy-mono: var(--font-jetbrains), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --pala-skin: #22252c;
+  --pala-core: #14161a;
+  --pala-cap: #2c303a;
+  --pala-filler: #1b1e24;
+  --pala-cavity: #050608;
+  --pala-deep: #020203;
+  --pala-void: #020203;
+  --pala-exposed: #2b2620;
+  --pala-warn: hsl(var(--signal-caution));
+  --pala-crit: hsl(var(--signal-critical));
+  margin: 0;
+}
+
+html[data-theme="light"] .pala {
+  --anatomy-face: #ffffff;
+  --anatomy-top: #ffffff;
+  --anatomy-shade-0: #d9dbe0;
+  --anatomy-shade-1: #e3e5e9;
+  --anatomy-shade-2: #eceef1;
+  --anatomy-shade-3: #f4f5f7;
+  --anatomy-lit-top: #ffffff;
+  --anatomy-lit-shade: #eef0f3;
+  --anatomy-hi: #23262c;
+  --anatomy-mid: #878b94;
+  --anatomy-lo: #b2b6bd;
+  --anatomy-faint: #d3d6db;
+  --anatomy-halo: #868a94;
+  --anatomy-halo-opacity: 0.32;
+  --anatomy-dot: #383b42;
+  --pala-skin: #eef0f2;
+  --pala-core: #dcdfe3;
+  --pala-cap: #f9fafb;
+  --pala-filler: #e4e6ea;
+  --pala-cavity: #9fa3ab;
+  --pala-deep: #868a93;
+  --pala-void: #5d6169;
+  --pala-exposed: #e9ddc9;
+}
+
+.pala .iso-plate {
+  padding: 46px 18px 40px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px hsl(var(--border-subtle));
+}
+
+.pala-frame {
+  position: relative;
+}
+
+.pala-stage {
+  position: relative;
+  border-radius: 2px;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.pala-stage:focus-visible {
+  outline: 1px solid hsl(var(--accent-primary) / 0.55);
+  outline-offset: 4px;
+}
+
+.pala-stage [data-grip] {
+  cursor: ew-resize;
+}
+
+.pala-stage[data-dragging] [data-grip] {
+  cursor: grabbing;
+}
+
+.pala-stage [data-part] {
+  cursor: pointer;
+}
+
+/* ---------- cara del corte ---------- */
+
+.pala-fill {
+  stroke: none;
+}
+.pala-fill[data-fill="skin"] {
+  fill: var(--pala-skin);
+}
+.pala-fill[data-fill="core"] {
+  fill: var(--pala-core);
+}
+.pala-fill[data-fill="cap"] {
+  fill: var(--pala-cap);
+}
+.pala-fill[data-fill="filler"] {
+  fill: var(--pala-filler);
+}
+.pala-fill[data-fill="cavity"] {
+  fill: var(--pala-cavity);
+}
+
+.pala-cable-core {
+  fill: var(--anatomy-hi);
+}
+
+/* ---------- control ---------- */
+
+.pala-inlay[data-zone="window"] {
+  fill: hsl(var(--accent-primary));
+  opacity: 0.8;
+}
+.pala-inlay[data-zone="structural"] {
+  fill: var(--pala-crit);
+  opacity: 0.55;
+}
+.pala-zone {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-linecap: butt;
+}
+.pala-zone[data-zone="window"] {
+  stroke: hsl(var(--accent-primary));
+}
+.pala-zone[data-zone="structural"] {
+  stroke: var(--pala-crit);
+  opacity: 0.7;
+}
+.pala-needle {
+  fill: var(--anatomy-lit);
+  stroke: var(--anatomy-lit);
+  stroke-width: 0.4;
+  stroke-linejoin: round;
+}
+.pala-pointer {
+  stroke-width: 1.2;
+}
+.pala-knob-dot {
+  fill: var(--anatomy-lit);
+}
+
+/* ---------- daños ---------- */
+
+.pala-pit {
+  fill: var(--pala-void);
+  stroke: var(--pala-warn);
+  stroke-width: 0.45;
+}
+.pala-peel {
+  fill: var(--pala-exposed);
+  stroke: var(--pala-warn);
+  stroke-width: 0.55;
+  stroke-linejoin: round;
+}
+.pala-warn,
+.pala-crit {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pala-warn {
+  stroke: var(--pala-warn);
+  stroke-width: 0.7;
+}
+.pala-crit {
+  stroke: var(--pala-crit);
+  stroke-width: 0.85;
+}
+.pala-blister {
+  fill: none;
+  stroke: var(--pala-crit);
+  stroke-width: 0.6;
+  stroke-dasharray: 2.4 1.6;
+}
+.pala-open {
+  fill: var(--pala-void);
+  stroke: var(--pala-crit);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+.pala-seep circle {
+  fill: var(--pala-warn);
+  opacity: 0.85;
+}
+.pala-burn {
+  transition: opacity 420ms var(--anatomy-ease, ease);
+}
+.pala-burn[data-off] {
+  opacity: 0;
+}
+.pala-scorch {
+  fill: var(--pala-crit);
+  fill-opacity: 0.16;
+  stroke: var(--pala-crit);
+  stroke-width: 0.5;
+}
+
+/* ---------- resaltado por componente ---------- */
+
+.pala-hl {
+  fill: none;
+  stroke: var(--anatomy-lit);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms var(--anatomy-ease, ease);
+}
+.pala[data-pick="raiz"] .pala-hl[data-for="raiz"],
+.pala[data-pick="ataque"] .pala-hl[data-for="ataque"],
+.pala[data-pick="fuga"] .pala-hl[data-for="fuga"],
+.pala[data-pick="carcasa"] .pala-hl[data-for="carcasa"],
+.pala[data-pick="laminado"] .pala-hl[data-for="laminado"],
+.pala[data-pick="largueros"] .pala-hl[data-for="largueros"],
+.pala[data-pick="relleno"] .pala-hl[data-for="relleno"],
+.pala[data-pick="rayo"] .pala-hl[data-for="rayo"],
+.pala[data-pick="punta"] .pala-hl[data-for="punta"] {
+  opacity: 1;
+}
+
+/* ---------- punto del rayo ---------- */
+
+.pala-bolt {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--accent-primary) / 0.8);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+.pala-bolt[aria-pressed="true"] {
+  border-color: var(--pala-crit);
+}
+.pala-bolt:focus-visible {
+  outline: 1px solid hsl(var(--accent-primary));
+  outline-offset: 3px;
+}
+
+/* ---------- panel bajo la tarjeta ---------- */
+
+.pala-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: hsl(var(--foreground-muted));
+}
+.pala-stage-text h3 {
+  margin: 0 0 4px;
+  color: hsl(var(--foreground));
+  font-size: 15px;
+  font-weight: 500;
+}
+.pala-stage-text h3 span {
+  color: hsl(var(--foreground-subtle));
+  font-family: var(--anatomy-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+.pala-stage-text p {
+  margin: 0;
+}
+.pala-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-family: var(--anatomy-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: hsl(var(--foreground));
+}
+.pala-badge::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  background: hsl(var(--foreground-subtle));
+}
+.pala-badge[data-repair="surface"]::before {
+  background: hsl(var(--accent-primary));
+}
+.pala-badge[data-repair="laminate"]::before {
+  background: var(--pala-warn);
+}
+.pala-badge[data-repair="structural"]::before {
+  background: var(--pala-crit);
+}
+.pala-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.pala-chip {
+  font-family: var(--anatomy-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 5px 9px;
+  border: 1px solid hsl(var(--border-subtle));
+  border-radius: 2px;
+  background: transparent;
+  color: hsl(var(--foreground-muted));
+  cursor: pointer;
+}
+.pala-chip:hover {
+  border-color: hsl(var(--border-strong));
+  color: hsl(var(--foreground));
+}
+.pala-chip[aria-pressed="true"] {
+  border-color: hsl(var(--accent-primary));
+  color: hsl(var(--foreground));
+}
+.pala-chip:focus-visible {
+  outline: 1px solid hsl(var(--accent-primary));
+  outline-offset: 2px;
+}
+.pala-label {
+  font-family: var(--anatomy-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--foreground-subtle));
+  margin: 0;
+}
+.pala-part-text {
+  margin: 0;
+  min-height: 3.1em;
+}
+.pala-part-text strong {
+  color: hsl(var(--foreground));
+  font-weight: 500;
+}
+.pala-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12.5px;
+  color: hsl(var(--foreground-subtle));
+}
+.pala-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.pala-key::before {
+  content: "";
+  width: 14px;
+  height: 2px;
+  background: currentColor;
+}
+.pala-key[data-key="control"]::before,
+.pala-key[data-key="window"]::before {
+  background: hsl(var(--accent-primary));
+}
+.pala-key[data-key="external"]::before {
+  background: var(--pala-warn);
+}
+.pala-key[data-key="internal"]::before,
+.pala-key[data-key="structural"]::before {
+  background: var(--pala-crit);
+}
+.pala-caption {
+  margin: 0;
+  font-size: 12.5px;
+  color: hsl(var(--foreground-subtle));
+}
+.pala-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 560px) {
+  .pala .iso-plate {
+    padding: 40px 6px 58px;
+  }
+  .pala .iso-plate {
+    overflow: hidden;
+  }
+  .pala-frame {
+    width: 116%;
+    margin: -5% -8% -3%;
+  }
+  .pala-bolt {
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pala * {
+    transition: none !important;
+  }
+}

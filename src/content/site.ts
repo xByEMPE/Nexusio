@@ -2,6 +2,7 @@ import type { ProcessStep, ServiceSpec, ValuePoint } from "@/contracts/platform"
 
 export const NAV = [
   { href: "/#servicios", label: "Servicios" },
+  { href: "/#por-que-inspeccionar", label: "Inspección" },
   { href: "/#apps", label: "Apps DJI" },
   { href: "/#portal", label: "Portal de clientes" },
   { href: "/#nosotros", label: "Nosotros" },
