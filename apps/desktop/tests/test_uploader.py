@@ -534,7 +534,9 @@ def test_changed_strip_is_resent_and_unchanged_is_not(tmp_path):
 
     Image.new("RGB", (20, 300), (200, 10, 10)).save(strip_a, "JPEG")  # tira A reprocesada
     report = run(plan, client, tus, index=LocalIndex(root))
-    assert [c["object"] for c in tus.calls[first:]] == [path_a]
+    new_a = manifests(client)[-2]["mosaics"][0]["path"]
+    assert new_a != path_a  # tira versionada: contenido distinto, ruta distinta
+    assert [c["object"] for c in tus.calls[first:]] == [new_a]
     assert manifests(client)[-2]["mosaics"][0]["height_px"] == 300 and report.errors == []
 
     again = len(tus.calls)
@@ -708,3 +710,80 @@ def test_storage_forbidden_stops_the_run_without_retry(tmp_path):
     with pytest.raises(StorageForbidden):
         run(plan, client, tus)
     assert len(tus.calls) == 1 and client.rpc_calls == []
+
+
+# --- tiras versionadas y caché de 6 meses ------------------------------------------------------
+
+def test_strip_path_is_versioned_by_source_hash_under_mosaic_prefix(tmp_path):
+    import re
+
+    from nexus_desktop.domain.media import sha256_file  # misma huella que usa el uploader
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    m = manifests(client)[0]["mosaics"][0]
+    sha = sha256_file(plan.strips[0].path)
+    assert m["path"] == f"{ORG}/{PROJECT}/{INSP}/mosaics/{m['id']}/strip-{sha[:8]}.webp"
+    assert re.fullmatch(r".+/mosaics/[0-9a-f-]{36}/strip-[0-9a-f]{8}\.webp", m["path"])
+    assert m["path"] in tus.objects  # FakeIngest ya validó el esquema del manifiesto
+
+
+def test_same_strip_content_same_path_across_runs(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    run(plan, client, tus, index=LocalIndex(root))
+    ms = [m["mosaics"][0]["path"] for m in manifests(client) if m["mosaics"]]
+    assert len(ms) == 2 and ms[0] == ms[1]
+
+
+def test_reprocessed_strip_uploads_new_object_and_keeps_old_one(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    old = manifests(client)[0]["mosaics"][0]
+    Image.new("RGB", (20, 300), (200, 10, 10)).save(plan.strips[0].path, "JPEG")
+    first = len(tus.calls)
+    run(plan, client, tus, index=LocalIndex(root))
+    new = [m for m in manifests(client)[1:] if m["mosaics"]][0]["mosaics"][0]
+    assert new["id"] == old["id"] and new["path"] != old["path"]
+    assert [c["object"] for c in tus.calls[first:]] == [new["path"]]
+    assert {old["path"], new["path"]} <= tus.objects  # el viejo queda huérfano: la app no borra nada
+
+
+def test_missing_object_works_with_versioned_strip_path(tmp_path):
+    root, plan, client, tus = setup(tmp_path)
+    run(plan, client, tus)
+    path = manifests(client)[0]["mosaics"][0]["path"]
+    assert "strip-" in path
+    tus.objects.discard(path)
+    run(plan, client, tus, index=LocalIndex(root))
+    assert not LocalIndex(root).is_uploaded(path)
+
+
+def test_cache_control_is_six_months_for_photos_and_strips(tmp_path, monkeypatch):
+    from nexus_desktop.nexus import upload
+
+    assert upload.CACHE_CONTROL == "15552000" and int(upload.CACHE_CONTROL) == 180 * 24 * 3600
+    seen = []
+
+    class RecUploader:
+        def __init__(self, metadata):
+            self.metadata = metadata
+
+        def upload(self):
+            seen.append(self.metadata)
+
+    class RecClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def uploader(self, path, chunk_size=None, metadata=None):
+            return RecUploader(metadata)
+
+    monkeypatch.setattr(upload.client, "TusClient", RecClient)
+    root, plan, client, _ = setup(tmp_path)
+    client.rpc_handler = lambda name, params: {"inserted": {}, "updated": {}, "skipped": {"findings": []}}
+    run(plan, client, upload.tus_upload)
+    names = [m["objectName"] for m in seen]
+    assert any("/original" in n or n.endswith(".jpg") for n in names) and any("strip-" in n for n in names)
+    assert any(n.endswith("preview.webp") or "preview" in n for n in names)
+    assert any("thumb" in n for n in names)
+    assert seen and all(m["cacheControl"] == "15552000" for m in seen)

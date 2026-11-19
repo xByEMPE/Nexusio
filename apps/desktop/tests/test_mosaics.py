@@ -10,6 +10,19 @@ def test_build_mosaic_shape():
                  "format": "image", "path": "o/p/i/mosaics/id1/strip.webp", "width_px": 7000, "height_px": 900}
 
 
+SHA_A = "ab12cd34" + "0" * 56
+SHA_B = "ef56ab78" + "1" * 56
+
+
+def test_build_mosaic_versioned_path_is_stable_and_content_addressed():
+    s = mosaics.StripFile(Path("x.jpeg"), "B", "SS")
+    a1 = mosaics.build_mosaic(s, "id1", "o/p/i/", 7000, 900, content_sha256=SHA_A)
+    a2 = mosaics.build_mosaic(s, "id1", "o/p/i/", 7000, 900, content_sha256=SHA_A)
+    b = mosaics.build_mosaic(s, "id1", "o/p/i/", 7000, 900, content_sha256=SHA_B)
+    assert a1["path"] == a2["path"] == "o/p/i/mosaics/id1/strip-ab12cd34.webp"
+    assert b["path"] == "o/p/i/mosaics/id1/strip-ef56ab78.webp" != a1["path"]
+
+
 # --- revisión final: límite de Pillow solo relajado para las tiras -----------------------------
 
 import pytest  # noqa: E402

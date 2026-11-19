@@ -8,6 +8,11 @@ from tusclient.exceptions import TusCommunicationError
 
 BUCKET = "inspection-media"
 CHUNK_SIZE = 6 * 1024 * 1024
+# Caché de 6 meses (180 días, en SEGUNDOS: Storage lo guarda como `max-age=<n>`) para que el CDN y el
+# navegador no vuelvan a descargar imágenes ya vistas (menos egress). Es seguro porque las rutas de
+# fotos llevan UUID inmutables y las de las tiras llevan la huella del contenido en el nombre
+# (`strip-{sha8}.webp`): una tira reprocesada sube a una ruta nueva, nunca reescribe la vieja.
+CACHE_CONTROL = "15552000"
 
 
 FORBIDDEN_TEXT = ("No tienes permiso para subir a esta inspección: puede estar siendo eliminada o ya "
@@ -33,7 +38,7 @@ def tus_upload(path: Path, object_name: str, content_type: str, *, supabase_url:
     uploader = tus.uploader(
         str(path), chunk_size=CHUNK_SIZE,
         metadata={"bucketName": BUCKET, "objectName": object_name,
-                  "contentType": content_type, "cacheControl": "3600"},
+                  "contentType": content_type, "cacheControl": CACHE_CONTROL},
     )
     try:
         uploader.upload()

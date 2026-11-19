@@ -206,7 +206,17 @@ apps/desktop/
   `status = captured`); una inspección aprobada no se modifica.
 - **Archivos**: TUS reanudable (fragmentos de 6 MB) al bucket `inspection-media`, en
   `{org}/{proyecto}/{inspección}/captures/{id}/…` (original, preview y miniatura) y
-  `…/mosaics/{id}/strip.webp` (tiras, lado mayor ≤ 8000 px).
+  `…/mosaics/{id}/strip-{sha8}.webp` (tiras, lado mayor ≤ 8000 px; `sha8` = 8 primeros
+  caracteres de la huella SHA-256 de la tira de origen, la misma que guarda el índice local).
+  Las tiras ya subidas con la ruta antigua `strip.webp` no se tocan.
+  - **Caché de 6 meses**: los objetos se suben con `cacheControl: 15552000` (180 días, en
+    segundos; Storage lo guarda como `max-age`) para reducir el egress. Es seguro porque las
+    rutas de fotos llevan UUID inmutables y las tiras llevan la huella en el nombre: mismo
+    contenido, misma ruta (no se reenvía); contenido distinto, ruta nueva.
+  - **Objetos huérfanos**: al reprocesar una tira, la nueva sube a una ruta nueva, el manifiesto
+    actualiza `mosaics.path` (`ingest_manifest` hace upsert por id) y el objeto anterior queda
+    huérfano en Storage. La app nunca borra nada del servidor; el borrado de la inspección
+    limpia por prefijo.
 - **Manifiesto**: un manifiesto v1 por pala (`captures[]`, `mosaics[]` con `calibration`),
   validado contra `schema/ingest-manifest.v1.schema.json` antes de enviarlo con la RPC
   `ingest_manifest`, que deja la inspección en revisión (`in_review`). La foto `_ID` va en el

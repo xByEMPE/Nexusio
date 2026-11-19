@@ -46,9 +46,14 @@ class StripFile:
     face: str
 
 
-def build_mosaic(strip: StripFile, mosaic_id: str, prefix: str, width_px: int, height_px: int) -> dict:
+def build_mosaic(strip: StripFile, mosaic_id: str, prefix: str, width_px: int, height_px: int,
+                 content_sha256: str | None = None) -> dict:
+    """Mosaico del manifiesto. Con `content_sha256` la ruta lleva los 8 primeros caracteres de la huella
+    (`strip-{sha8}.webp`): la caché de 6 meses nunca sirve una tira vieja, porque contenido distinto es
+    ruta distinta y el mismo contenido siempre da la misma ruta. Sin huella, el nombre antiguo `strip.webp`."""
+    name = f"strip-{content_sha256[:8]}.webp" if content_sha256 else "strip.webp"
     return {"id": mosaic_id, "kind": "blade_strip", "spectrum": "rgb", "blade": strip.blade, "face": strip.face,
-            "format": "image", "path": f"{prefix}mosaics/{mosaic_id}/strip.webp",
+            "format": "image", "path": f"{prefix}mosaics/{mosaic_id}/{name}",
             "width_px": width_px, "height_px": height_px}
 
 

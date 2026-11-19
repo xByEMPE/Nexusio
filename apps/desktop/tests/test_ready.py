@@ -80,6 +80,17 @@ def test_calibration_is_stored_in_original_strip_pixels(tmp_path):
         assert [p["gsd_mm_px"] for p in stored["photos"]] == [p.gsd_mm_px for p in section.photos]
 
 
+def test_ready_json_has_no_storage_path_of_strips_so_old_files_stay_compatible(tmp_path):
+    """El JSON «lista para subir» solo guarda la tira LOCAL: la ruta de Storage (`mosaics/{id}/strip-{sha8}.webp`)
+    se calcula al subir, así que los archivos ya guardados siguen valiendo con tiras versionadas."""
+    state = make_state(tmp_path)
+    raw = ready.save_ready(state).read_text(encoding="utf-8")
+    assert "mosaics" not in raw and "strip-" not in raw and ".webp" not in raw
+    data = json.loads(raw)
+    assert all(set(sec) >= {"strip"} and not any("mosaic" in k for k in sec) for sec in data["sections"])
+    assert plan_of(load_state(state.wtg.path)) == plan_of(state)
+
+
 def test_paths_are_relative_and_folder_can_move(tmp_path):
     state = make_state(tmp_path / "origen")
     path = ready.save_ready(state)

@@ -328,8 +328,10 @@ class _Run:
             with mosaics.large_images(), Image.open(strip.path) as im:  # tira: panorámica grande
                 im.load()  # la tira de origen se lee entera; un fallo aquí es de este archivo
                 original_h = im.size[1]
-            # Reprocesar reescribe la tira con el MISMO nombre (mismo id y misma ruta en Storage): la
-            # huella decide si el objeto subido sigue siendo esta tira o hay que reenviarla.
+            # Reprocesar reescribe la tira con el MISMO nombre local (mismo id). La huella del ARCHIVO DE
+            # ORIGEN (la que ya guarda el índice) decide si hay que reenviarla y da la versión de la ruta
+            # en Storage (`strip-{sha8}.webp`): se usa la de origen y no la del WebP generado para que
+            # un cambio de Pillow/libwebp no cambie la ruta (ni reenvíe) tiras sin cambios.
             sha = sha256_file(strip.path)
         except _SOURCE_ERRORS:
             self.skip_file(strip.path.name, f"Tira omitida (dañada o ilegible): {strip.path.name}")
@@ -339,7 +341,7 @@ class _Run:
         try:
             w, h = mosaics.make_strip(strip.path, out)  # fallos al escribir el temporal se propagan
             mosaic = mosaics.build_mosaic(mosaics.StripFile(strip.path, strip.blade, strip.face), mid, self.prefix,
-                                          w, h)
+                                          w, h, content_sha256=sha)
             self.strip_names[mosaic["path"]] = strip.path.name
             if strip.calibration is not None and strip.calibration.get("mm_per_px") is not None:
                 # sin escala no se envía: el servidor sobrescribiría la calibración con nulos
@@ -347,7 +349,7 @@ class _Run:
             uploaded = self.index.is_uploaded(mosaic["path"], sha)
             if not uploaded:
                 self.index.save()
-                self.send(out, mosaic["path"], "image/webp", sha)  # x-upsert: reemplaza la anterior
+                self.send(out, mosaic["path"], "image/webp", sha)  # ruta nueva por contenido; la anterior queda huérfana (no se borra)
                 self.index.save()
         finally:
             out.unlink(missing_ok=True)
