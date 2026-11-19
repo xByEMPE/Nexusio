@@ -189,11 +189,13 @@ export function StripViewer({
         onPointerCancel={endDrag}
       >
         {box.w > 0 && (
-          // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
+          // Tira activa: sin loading="lazy" (es la imagen visible); decoding async para no bloquear con tiras de hasta 8000 px.
+          // eslint-disable-next-line @next/next/no-img-element -- ruta /api/media del portal (sesión + caché)
           <img
             key={item.url}
             src={item.url}
             alt={`Pala ${blade}, ${item.label}`}
+            decoding="async"
             draggable={false}
             onLoad={(e) => {
               const { naturalWidth: w, naturalHeight: h } = e.currentTarget;

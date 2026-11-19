@@ -48,8 +48,8 @@ export function CaptureGrid({ captures, viewerBase }: { captures: GridCapture[];
                             const body = (
                               <>
                                 {c.thumbUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
-                                  <img src={c.thumbUrl} alt={c.fileName} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                                  // eslint-disable-next-line @next/next/no-img-element -- ruta /api/media del portal (sesión + caché)
+                                  <img src={c.thumbUrl} alt={c.fileName} loading="lazy" decoding="async" className="aspect-[4/3] w-full object-cover" />
                                 ) : (
                                   <div className={cn("flex aspect-[4/3] items-center justify-center px-2 text-center text-2xs text-foreground-subtle")}>
                                     Sin miniatura

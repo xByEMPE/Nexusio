@@ -44,8 +44,8 @@ export function OtherFaces({
               data-face={face}
             >
               {photo.thumbUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
-                <img src={photo.thumbUrl} alt={`Cara ${face}`} className="aspect-[4/3] w-full object-cover" loading="lazy" />
+                // eslint-disable-next-line @next/next/no-img-element -- ruta /api/media del portal (sesión + caché)
+                <img src={photo.thumbUrl} alt={`Cara ${face}`} className="aspect-[4/3] w-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <div className="aspect-[4/3] w-full bg-background-elevated" />
               )}

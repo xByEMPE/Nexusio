@@ -7,6 +7,10 @@ from tusclient import client
 
 BUCKET = "inspection-media"
 CHUNK_SIZE = 6 * 1024 * 1024
+# Cabecera Cache-Control (max-age) de los objetos: 6 meses (180 días) en segundos. Con ella el CDN de Supabase y
+# el navegador conservan las imágenes, lo que reduce el egress sin caché (cached egress). Solo sirve para
+# objetos nuevos o resubidos: no cambia los ya existentes.
+CACHE_CONTROL = "15552000"
 
 
 def tus_upload(path: Path, object_name: str, content_type: str, *, supabase_url: str,
@@ -18,6 +22,6 @@ def tus_upload(path: Path, object_name: str, content_type: str, *, supabase_url:
     uploader = tus.uploader(
         str(path), chunk_size=CHUNK_SIZE,
         metadata={"bucketName": BUCKET, "objectName": object_name,
-                  "contentType": content_type, "cacheControl": "3600"},
+                  "contentType": content_type, "cacheControl": CACHE_CONTROL},
     )
     uploader.upload()

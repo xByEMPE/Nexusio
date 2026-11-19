@@ -1,6 +1,6 @@
 import type { InspectionViewerData, ViewerCapture } from "@/services/inspections/viewer-data";
 
-/** Lo que viaja al navegador por cada foto: sin rutas de almacenamiento, solo la URL firmada de la vista previa. */
+/** Lo que viaja al navegador por cada foto: sin rutas de almacenamiento, solo la URL `/api/media/...` de la vista previa. */
 export type ViewerPhoto = {
   id: string;
   file_name: string;

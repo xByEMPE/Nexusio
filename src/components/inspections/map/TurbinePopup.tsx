@@ -9,7 +9,7 @@ export function TurbinePopup({ turbine, onClose }: { turbine: MapTurbine; onClos
   return (
     <div role="dialog" aria-label={t.name} className="panel absolute left-3 top-3 z-10 w-64 overflow-hidden bg-surface-layer shadow-lg">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {t.idThumbUrl && <img src={t.idThumbUrl} alt={`Foto de identificación de ${t.name}`} className="h-36 w-full object-cover" />}
+      {t.idThumbUrl && <img src={t.idThumbUrl} alt={`Foto de identificación de ${t.name}`} decoding="async" className="h-36 w-full object-cover" />}
       <div className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="font-medium">{t.name}</div>

@@ -168,8 +168,9 @@ export function BladeOverview({ strips }: { strips: OverviewStrip[] }) {
               >
                 {strip ? (
                   <div className="absolute inset-0 origin-top-left" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado */}
-                    <img src={strip.url} alt={`Pala ${blade}, ${FACE_LABEL[face]}`} draggable={false} className="h-full w-full object-contain" />
+                    {/* Resumen con varias tiras, parte fuera de pantalla: carga diferida; el tamaño lo da el contenedor (object-contain), no la imagen. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- ruta /api/media del portal (sesión + caché) */}
+                    <img src={strip.url} alt={`Pala ${blade}, ${FACE_LABEL[face]}`} loading="lazy" decoding="async" draggable={false} className="h-full w-full object-contain" />
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-2 text-center text-xs text-foreground-subtle">Sin reconstrucción</div>

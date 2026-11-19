@@ -51,10 +51,12 @@ export function ImageStage({
   return (
     <div className="pointer-events-none absolute max-w-none select-none" style={style}>
       {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- URL firmada temporal del bucket privado
+        // Vista previa activa: sin loading="lazy" (es la imagen visible y el visor depende de su carga); decoding async no bloquea el hilo.
+        // eslint-disable-next-line @next/next/no-img-element -- ruta /api/media del portal (sesión + caché)
         <img
           src={previewUrl}
           alt={alt}
+          decoding="async"
           draggable={false}
           className="absolute inset-0 h-full w-full max-w-none"
           ref={(el) => {
