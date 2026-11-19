@@ -7,7 +7,22 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
 export const fail = (message: string): ActionResult => ({ ok: false, message });
 
 /** Traduce errores de Postgres/RLS a mensajes en español, sin detalles técnicos. */
-export function dbErrorMessage(error: { code?: string } | null | undefined, fallback: string): string {
+export function dbErrorMessage(
+  error: { code?: string; message?: string } | null | undefined,
+  fallback: string,
+  context?: "delete",
+): string {
+  if (context === "delete") {
+    if (error?.code === "23503") return "No se puede eliminar: tiene datos relacionados que aún existen. Inténtalo de nuevo.";
+    if (error?.code === "P0002") return "No se encontró lo que quieres eliminar; quizá ya se eliminó.";
+    if (error?.code === "P0001" && error.message === "objects_remaining") {
+      return "Aún quedan archivos por eliminar. Vuelve a intentarlo.";
+    }
+    if (error?.code === "P0001" && error.message === "inspections_remaining") {
+      return "El proyecto todavía tiene inspecciones. Vuelve a intentarlo.";
+    }
+    if (error?.code === "P0001") return fallback;
+  }
   switch (error?.code) {
     case "42501":
       return "No tienes permiso para esta acción.";
