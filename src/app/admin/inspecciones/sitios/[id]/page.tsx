@@ -15,6 +15,9 @@ import { applyInspectionPosition, upsertAsset, upsertSite } from "../../actions/
 
 export const metadata = { title: "Sitio" };
 
+// Las acciones de borrado de esta página heredan este límite (la plataforma lo recorta a su máximo).
+export const maxDuration = 300;
+
 export default async function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   assertInspectionsEnabled();
   const { id } = await params;
@@ -122,7 +125,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
                   )}
                   {isAdmin && assetsWithInspections.has(a.id) && (
                     <div className="mt-3">
-                      <DeleteDialog kind="asset_inspections" id={a.id} projectId={null} label="Eliminar inspecciones de esta máquina" />
+                      <DeleteDialog kind="asset_inspections" id={a.id} projectId={null} label="Eliminar todas las inspecciones de esta máquina (todos los proyectos)" />
                     </div>
                   )}
                   {isAdmin && (

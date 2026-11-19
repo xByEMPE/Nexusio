@@ -20,11 +20,13 @@ import {
 const FIELD =
   "w-full rounded-[2px] border border-border-strong bg-background-base px-3.5 py-3 text-sm text-foreground focus:border-signal-critical focus:outline-none focus:ring-1 focus:ring-signal-critical/50";
 
-const TITLE: Record<DeletionKind, string> = {
-  inspection: "Eliminar inspección",
-  asset_inspections: "Eliminar inspecciones de esta máquina",
-  project: "Eliminar proyecto",
-};
+function titleFor(kind: DeletionKind, projectId: string | null): string {
+  if (kind === "inspection") return "Eliminar inspección";
+  if (kind === "project") return "Eliminar proyecto";
+  return projectId
+    ? "Eliminar todas las inspecciones de esta máquina en este proyecto"
+    : "Eliminar todas las inspecciones de esta máquina (todos los proyectos)";
+}
 
 const KEEPS: Record<DeletionKind, string> = {
   inspection: "Se conservan la máquina, el sitio, el proyecto, la organización y el historial de cambios.",
@@ -57,7 +59,7 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState("");
   const [reason, setReason] = useState("");
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number; objectsLeft?: number } | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, startLoading] = useTransition();
@@ -127,6 +129,8 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
     setBusy(true);
     void (async () => {
       let done = 0;
+      let lastLeft = Number.POSITIVE_INFINITY;
+      let stalled = 0;
       setProgress({ done, total });
       // Un paso por inspección: así ninguna llamada se acerca al tiempo límite y se puede reanudar.
       for (let guard = 0; guard < 10000; guard++) {
@@ -134,7 +138,11 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
         try {
           r = await callStep();
         } catch {
-          r = { ok: false, message: "Ocurrió un error inesperado. Puedes reintentar." };
+          r = {
+            ok: false,
+            message:
+              "La operación tardó demasiado o se interrumpió. La eliminación sigue pendiente: pulsa «Reintentar» para continuar.",
+          };
         }
         if (!r.ok) {
           setError(r.message);
@@ -143,7 +151,19 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
           return;
         }
         done = Math.max(done, total - r.remaining);
-        setProgress({ done: r.done ? total : done, total });
+        setProgress({ done: r.done ? total : done, total, objectsLeft: r.filesPending ? r.objectsLeft : undefined });
+        if (r.filesPending) {
+          // Quedan archivos: se repite el paso; si dos pasos seguidos no avanzan, se detiene.
+          const left = r.objectsLeft ?? 0;
+          stalled = left >= lastLeft ? stalled + 1 : 0;
+          lastLeft = left;
+          if (stalled >= 2) {
+            setError("La eliminación no avanza. Queda pendiente: inténtalo de nuevo en unos minutos.");
+            setFailed(true);
+            setBusy(false);
+            return;
+          }
+        }
         if (r.done) {
           setOpen(false);
           setBusy(false);
@@ -163,7 +183,7 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
   return (
     <>
       <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs text-signal-critical" onClick={openDialog}>
-        {pending ? "Eliminación pendiente: reintentar" : (label ?? TITLE[kind])}
+        {pending ? "Eliminación pendiente: reintentar" : (label ?? titleFor(kind, projectId))}
       </Button>
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
@@ -177,7 +197,7 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
             className="panel max-h-[90vh] w-full max-w-xl overflow-y-auto bg-surface-layer p-6 focus:outline-none"
           >
             <h2 id={titleId} className="text-lg font-medium">
-              {TITLE[kind]}
+              {titleFor(kind, projectId)}
             </h2>
 
             {loading && <p className="mt-4 text-sm text-foreground-muted">Calculando lo que se eliminará…</p>}
@@ -256,9 +276,11 @@ export function DeleteDialog({ kind, id, projectId = null, label, pending = fals
 
                 {busy && progress && (
                   <p role="status" className="mt-4 text-sm text-foreground-muted">
-                    {multi
-                      ? `Eliminando ${Math.min(progress.done + 1, progress.total)} de ${progress.total} inspecciones…`
-                      : "Eliminando archivos…"}
+                    {progress.objectsLeft !== undefined
+                      ? `Eliminando archivos: ${progress.objectsLeft} archivos restantes…`
+                      : multi
+                        ? `Eliminando ${Math.min(progress.done + 1, progress.total)} de ${progress.total} inspecciones…`
+                        : "Eliminando archivos…"}
                   </p>
                 )}
                 {error && (

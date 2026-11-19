@@ -110,6 +110,36 @@ describe("runDeletionStep", () => {
     expect(d.deleteProjectRow).not.toHaveBeenCalled();
   });
 
+  test("tiempo agotado con archivos pendientes: done:false, sin cerrar filas ni borrar el proyecto", async () => {
+    const names = Array.from({ length: 300 }, (_, i) => `o/p/i/${i}.jpg`);
+    const store = new Set(names);
+    let t = 0;
+    const { d } = deps({
+      preview: vi.fn(async () => ({ data: preview({ kind: "project", confirm_name: "P", objects: 300 }), error: null })),
+      listObjects: vi.fn(async (_id: string, limit: number) => ({ data: [...store].slice(0, limit), error: null })),
+      removeObjects: vi.fn(async (paths: string[]) => {
+        t += 30000;
+        paths.forEach((p) => store.delete(p));
+        return { error: null, data: paths.map((name) => ({ name })) };
+      }),
+      now: () => t,
+      budgetMs: 40000,
+      concurrency: 1,
+    });
+    const r = await runDeletionStep(d, { kind: "project", id: P, projectId: null }, "P");
+    expect(r).toEqual({ ok: true, done: false, remaining: 1, filesPending: true, objectsLeft: 100 });
+    expect(d.finishOne).not.toHaveBeenCalled();
+    expect(d.deleteProjectRow).not.toHaveBeenCalled();
+  });
+
+  test("un error transitorio al calcular el resumen no se presenta como «ya se eliminó»", async () => {
+    const { d } = deps({ preview: vi.fn(async () => ({ data: null, error: { code: "57014", message: "timeout" } })) });
+    const r = await runDeletionStep(d, { kind: "inspection", id: A, projectId: null }, "WTG-01");
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r)).not.toMatch(/eliminó|encontró/);
+    expect(r).toEqual({ ok: false, message: expect.stringContaining("Inténtalo de nuevo") });
+  });
+
   test("errores de la base se traducen sin detalles internos", async () => {
     const { d } = deps({ preview: vi.fn(async () => ({ data: null, error: { code: "42501", message: "secret detail" } })) });
     const r = await runDeletionStep(d, { kind: "inspection", id: A, projectId: null }, "WTG-01");
@@ -119,7 +149,7 @@ describe("runDeletionStep", () => {
   test("un nombre que no existe responde sin filtrar detalles", async () => {
     const { d } = deps({ preview: vi.fn(async () => ({ data: null, error: { code: "P0002", message: "not_found" } })) });
     const r = await runDeletionStep(d, { kind: "inspection", id: A, projectId: null }, "x");
-    expect(r.ok).toBe(false);
+    expect(r).toEqual({ ok: false, message: expect.stringContaining("ya se eliminó") });
     expect(JSON.stringify(r)).not.toContain("not_found");
   });
 });

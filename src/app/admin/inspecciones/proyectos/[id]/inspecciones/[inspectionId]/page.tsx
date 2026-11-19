@@ -15,6 +15,9 @@ import { setInspectionStatus, updateInspectionDetails } from "../../../../action
 
 export const metadata = { title: "Inspección" };
 
+// Las acciones de borrado de esta página heredan este límite (la plataforma lo recorta a su máximo).
+export const maxDuration = 300;
+
 export const dynamic = "force-dynamic";
 
 export default async function InspectionPage({

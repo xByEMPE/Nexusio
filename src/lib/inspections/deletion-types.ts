@@ -27,7 +27,7 @@ export type DeletionPreview = {
 };
 
 export type StepResult =
-  | { ok: true; done: boolean; remaining: number; redirectTo?: string }
+  | { ok: true; done: boolean; remaining: number; redirectTo?: string; filesPending?: boolean; objectsLeft?: number }
   | { ok: false; message: string };
 
 export const TargetSchema = z.object({

@@ -10,14 +10,19 @@ export type FlowDeps = {
   beginScope: (t: DeletionTarget, reason: string | null) => Rpc<string[]>;
   beginOne: (id: string, reason: string | null) => Promise<{ error?: DbError }>;
   listObjects: (id: string, limit: number) => Rpc<string[]>;
-  removeObjects: (paths: string[]) => Promise<{ error?: { message?: string; statusCode?: string | number } | null }>;
+  removeObjects: (paths: string[]) => Promise<{ error?: { message?: string; statusCode?: string | number } | null; data?: unknown }>;
   finishOne: (id: string) => Rpc<{ status: string }>;
   deleteProjectRow: (id: string, reason: string | null) => Rpc<{ status: string }>;
   mapError: (error: DbError, fallback: string) => string;
   sleep?: (ms: number) => Promise<void>;
+  /** Presupuesto de tiempo de cada llamada (por omisión ~40 s), reloj y concurrencia inyectables. */
+  budgetMs?: number;
+  now?: () => number;
+  concurrency?: number;
 };
 
 const NOT_FOUND = "No se encontró lo que quieres eliminar; quizá ya se eliminó.";
+const PREVIEW_FAILED = "No se pudo calcular el resumen. Inténtalo de nuevo.";
 const MISMATCH = "El nombre escrito no coincide. Escríbelo exactamente como aparece.";
 
 /**
@@ -35,9 +40,11 @@ export async function runDeletionStep(
   const why = reason?.trim() ? reason.trim() : null;
 
   const pv = await deps.preview(target);
-  if (pv.error || !pv.data) {
-    return { ok: false, message: deps.mapError(pv.error, NOT_FOUND) };
+  if (pv.error) {
+    // Solo «no encontrado» significa que ya se eliminó; cualquier otro error es transitorio.
+    return { ok: false, message: pv.error.code === "P0002" ? NOT_FOUND : deps.mapError(pv.error, PREVIEW_FAILED) };
   }
+  if (!pv.data) return { ok: false, message: NOT_FOUND };
   const preview = pv.data;
   if (confirmName !== preview.confirm_name) return { ok: false, message: MISMATCH };
 
@@ -82,11 +89,24 @@ export async function runDeletionStep(
         return data;
       },
       sleep: deps.sleep,
+      budgetMs: deps.budgetMs,
+      now: deps.now,
+      concurrency: deps.concurrency,
     });
     if (!run.ok) {
       return {
         ok: false,
         message: `${run.message} La inspección quedó marcada como «eliminación pendiente»: puedes reintentar.`,
+      };
+    }
+    if (!run.done) {
+      // Se agotó el tiempo de esta llamada: quedan archivos; el cliente repite el paso.
+      return {
+        ok: true,
+        done: false,
+        remaining: ids.length,
+        filesPending: true,
+        objectsLeft: Math.max(0, preview.objects - run.removed),
       };
     }
     remaining = ids.length - 1;

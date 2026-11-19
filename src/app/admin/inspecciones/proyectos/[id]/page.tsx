@@ -22,6 +22,9 @@ import {
 
 export const metadata = { title: "Proyecto" };
 
+// Las acciones de borrado de esta página heredan este límite (la plataforma lo recorta a su máximo).
+export const maxDuration = 300;
+
 const PLATFORM_LABEL = { admin: "Administrador", technician: "Técnico", service: "Servicio" } as const;
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -146,7 +149,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                       kind="asset_inspections"
                       id={i.asset_id}
                       projectId={project.id}
-                      label="Eliminar inspecciones de esta máquina"
+                      label="Eliminar todas las inspecciones de esta máquina en este proyecto"
                       pending={Boolean(i.deleting_at)}
                     />
                   )}
