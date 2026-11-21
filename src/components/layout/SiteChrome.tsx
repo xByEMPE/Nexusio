@@ -1,6 +1,7 @@
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { InPageNavigation } from "@/components/layout/InPageNavigation";
+import { WebMcpTools } from "@/components/agent/WebMcpTools";
 import { MascotLazy } from "@/components/mascot/MascotLazy";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { getDictionary, type Locale } from "@/i18n";
@@ -21,6 +22,7 @@ export function SiteChrome({ locale, children }: { locale: Locale; children: Rea
       <SiteFooter t={t} />
       <MascotLazy />
       <InPageNavigation />
+      <WebMcpTools />
     </LocaleProvider>
   );
 }

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { Dictionary } from "@/i18n";
+import { companyPath } from "@/i18n/routes";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { NexusMark } from "@/components/brand/NexusMark";
@@ -22,6 +24,14 @@ export function About({ t }: { t: Dictionary }) {
                 <p className="mb-5 text-lg leading-relaxed text-foreground-muted">{p}</p>
               </RevealItem>
             ))}
+            <RevealItem>
+              <Link
+                href={companyPath(t.meta.locale === "en" ? "en" : "es", "about")}
+                className="font-mono text-2xs uppercase tracking-label text-accent-primary hover:underline"
+              >
+                {t.company.aboutMore} →
+              </Link>
+            </RevealItem>
             <RevealItem className="mt-10 hidden items-center gap-6 lg:flex">
               <NexusMark className="h-28 w-28 shrink-0" animated={false} />
               <div>

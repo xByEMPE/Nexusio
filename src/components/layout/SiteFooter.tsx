@@ -1,9 +1,12 @@
 import type { Dictionary } from "@/i18n";
 import { NexusMark, Wordmark } from "@/components/brand/NexusMark";
+import { companyPath } from "@/i18n/routes";
+import { SITE, SOCIAL_PROFILES, socialLabel } from "@/lib/seo";
 
 export function SiteFooter({ t }: { t: Dictionary }) {
   const f = t.footer;
   const year = new Date().getFullYear();
+  const locale = t.meta.locale === "en" ? "en" : "es";
   return (
     <footer className="border-t border-border-subtle">
       <div className="container grid gap-10 py-14 sm:grid-cols-2 md:grid-cols-12">
@@ -45,9 +48,43 @@ export function SiteFooter({ t }: { t: Dictionary }) {
           </ul>
         </nav>
 
-        <div className="sm:col-span-2 md:col-span-3">
-          <div className="label-caps mb-4">{f.notice}</div>
-          <p className="text-xs leading-relaxed text-foreground-subtle">{f.noticeBody}</p>
+        <nav aria-label={t.company.nav} className="md:col-span-3">
+          <div className="label-caps mb-4">{t.company.nav}</div>
+          <ul className="space-y-2 text-sm">
+            <li>
+              <a href={companyPath(locale, "about")} className="text-foreground-muted hover:text-foreground">
+                {t.company.aboutLink}
+              </a>
+            </li>
+            <li>
+              <a href={companyPath(locale, "contact")} className="text-foreground-muted hover:text-foreground">
+                {t.company.contactLink}
+              </a>
+            </li>
+            <li>
+              <a href={`mailto:${SITE.email}`} className="text-foreground-muted hover:text-foreground">
+                {SITE.email}
+              </a>
+            </li>
+            {SOCIAL_PROFILES.map((url) => (
+              <li key={url}>
+                <a
+                  href={url}
+                  rel="me noopener noreferrer"
+                  target="_blank"
+                  aria-label={`${socialLabel(url)} (${f.social})`}
+                  className="text-foreground-muted hover:text-foreground"
+                >
+                  {socialLabel(url)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="sm:col-span-2 md:col-span-12">
+          <div className="label-caps mb-3">{f.notice}</div>
+          <p className="max-w-3xl text-xs leading-relaxed text-foreground-subtle">{f.noticeBody}</p>
         </div>
       </div>
       <div className="border-t border-border-subtle">

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { getDictionary, type Locale } from "./index";
-import { SERVICE_SLUGS, servicePath } from "./routes";
+import { COMPANY_PATHS, SERVICE_SLUGS, servicePath, type CompanyPage } from "./routes";
 import { OG_IMAGE, SITE } from "@/lib/seo";
 
 /** Enlaces hreflang de una página en ambos idiomas. */
@@ -64,5 +64,28 @@ export function serviceMetadata(locale: Locale, slug: string): Metadata {
       images: [og],
     },
     twitter: { card: "summary_large_image", title: page.metaTitle, description: page.metaDescription, images: [og.url] },
+  };
+}
+
+/** Metadatos de las páginas Acerca y Contacto, con su par en el otro idioma. */
+export function companyMetadata(locale: Locale, page: CompanyPage): Metadata {
+  const t = getDictionary(locale);
+  const c = t.company[page === "about" ? "aboutPage" : "contactPage"];
+  const path = COMPANY_PATHS[page][locale];
+  const og = { ...OG_IMAGE, url: locale === "es" ? "/opengraph-image" : "/en/opengraph-image", alt: t.meta.ogAlt };
+  return {
+    title: { absolute: c.metaTitle },
+    description: c.metaDescription,
+    alternates: { canonical: path, languages: languageAlternates(COMPANY_PATHS[page].es, COMPANY_PATHS[page].en) },
+    openGraph: {
+      type: "website",
+      url: path,
+      siteName: SITE.name,
+      locale: t.meta.ogLocale,
+      title: c.metaTitle,
+      description: c.metaDescription,
+      images: [og],
+    },
+    twitter: { card: "summary_large_image", title: c.metaTitle, description: c.metaDescription, images: [og.url] },
   };
 }

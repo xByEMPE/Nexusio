@@ -4,7 +4,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Reveal, RevealItem } from "@/components/ui/Reveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { getDictionary, type Locale } from "@/i18n";
-import { absoluteUrl, SITE } from "@/lib/seo";
+import { absoluteUrl, ORG_ID } from "@/lib/seo";
 
 /** Página de un servicio (orientada a SEO) en el idioma indicado. */
 export function ServicePageView({ locale, slug }: { locale: Locale; slug: string }) {
@@ -29,7 +29,7 @@ export function ServicePageView({ locale, slug }: { locale: Locale; slug: string
         url,
         areaServed: [{ "@type": "Country", name: "México" }, "Worldwide"],
         inLanguage: t.meta.htmlLang,
-        provider: { "@id": `${SITE.url}/#organizacion` },
+        provider: { "@id": ORG_ID },
       },
       {
         "@type": "BreadcrumbList",
