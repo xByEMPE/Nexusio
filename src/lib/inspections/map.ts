@@ -4,15 +4,53 @@ export type MapStatus = "pending" | "captured" | "processing" | "in_review" | "a
 
 export const NO_INSPECTION_COLOR = "#64748B";
 export const IN_PROGRESS_COLOR = "#3B82F6";
-export const IN_REVIEW_COLOR = "#F59E0B";
-export const APPROVED_CLEAN_COLOR = "#10B981";
+/** Ámbar de «moderado» (Cat 3); la Cat 4 naranja también se pinta con él para que la leyenda sea simple. */
+export const MODERATE_COLOR = SEVERITY_COLOR[3] ?? "#F59E0B";
+export const CRITICAL_COLOR = SEVERITY_COLOR[5] ?? "#EF4444";
+export const OK_COLOR = "#10B981";
 
-/** Color del marcador según el estado de la inspección más reciente y la mayor severidad visible. */
-export function turbineColor(status: MapStatus | null, maxSeverity: number | null): string {
-  if (!status) return NO_INSPECTION_COLOR;
-  if (status === "in_review") return IN_REVIEW_COLOR;
-  if (status === "approved") return maxSeverity ? (SEVERITY_COLOR[maxSeverity] ?? APPROVED_CLEAN_COLOR) : APPROVED_CLEAN_COLOR;
-  return IN_PROGRESS_COLOR;
+/** Estado general de una turbina en el mapa (solo cuentan los daños confirmados). */
+export type TurbineHealth = "critical" | "moderate" | "ok" | "in_progress" | "none";
+
+/** Animación del marcador: parpadeo (crítico), pulso, pulso suave, pulso lento o estático. */
+export type HealthAnim = "blink" | "pulse" | "soft" | "slow" | "none";
+
+export const HEALTH_META: Record<
+  TurbineHealth,
+  { label: string; color: string; anim: HealthAnim; animClass: string; animLabel: string; spin: boolean }
+> = {
+  critical: { label: "Crítico", color: CRITICAL_COLOR, anim: "blink", animClass: "animate-signal-blink", animLabel: "Parpadeo", spin: true },
+  moderate: { label: "Moderado", color: MODERATE_COLOR, anim: "pulse", animClass: "animate-signal-pulse", animLabel: "Pulso", spin: true },
+  ok: { label: "Sin hallazgos críticos", color: OK_COLOR, anim: "soft", animClass: "animate-signal-pulse-soft", animLabel: "Pulso suave", spin: true },
+  in_progress: { label: "En proceso", color: IN_PROGRESS_COLOR, anim: "slow", animClass: "animate-signal-pulse-slow", animLabel: "Pulso lento", spin: true },
+  none: { label: "Sin inspección", color: NO_INSPECTION_COLOR, anim: "none", animClass: "", animLabel: "Estático", spin: false },
+};
+
+/** Orden de la leyenda, de más a menos urgente. */
+export const HEALTH_ORDER: TurbineHealth[] = ["critical", "moderate", "ok", "in_progress", "none"];
+
+type Counts = Partial<Record<number, number>>;
+
+/**
+ * Estado general: Cat 5 → crítico; Cat 3–4 → moderado; inspección aprobada o en revisión sin daños Cat ≥ 3 → ok;
+ * inspección aún sin revisar (pendiente, capturada, procesando) → en proceso; sin inspección → none.
+ */
+export function turbineHealth(status: MapStatus | null, counts: Counts | null): TurbineHealth {
+  if (!status) return "none";
+  if ((counts?.[5] ?? 0) > 0) return "critical";
+  if ((counts?.[3] ?? 0) > 0 || (counts?.[4] ?? 0) > 0) return "moderate";
+  return status === "approved" || status === "in_review" ? "ok" : "in_progress";
+}
+
+/** Color del marcador según su estado general. */
+export function turbineColor(status: MapStatus | null, counts: Counts | null): string {
+  return HEALTH_META[turbineHealth(status, counts)].color;
+}
+
+/** Texto para lectores de pantalla, p. ej. «WTG 25: Crítico, categoría 5». */
+export function turbineAriaLabel(name: string, health: TurbineHealth, maxSeverity: number | null): string {
+  const base = `${name}: ${HEALTH_META[health].label}`;
+  return (health === "critical" || health === "moderate") && maxSeverity ? `${base}, categoría ${maxSeverity}` : base;
 }
 
 const MIN_SPAN_DEG = 0.01;

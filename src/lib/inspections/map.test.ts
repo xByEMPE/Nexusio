@@ -1,18 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { boundsOf, canUseInspectionPosition, latestInspectionPositions, turbineColor } from "./map";
+import { boundsOf, canUseInspectionPosition, HEALTH_META, HEALTH_ORDER, latestInspectionPositions, turbineAriaLabel, turbineColor, turbineHealth } from "./map";
 
-describe("turbineColor", () => {
-  it("sin inspección es gris", () => expect(turbineColor(null, null)).toBe("#64748B"));
-  it.each(["pending", "captured", "processing"] as const)("%s es azul", (s) => expect(turbineColor(s, null)).toBe("#3B82F6"));
-  it("in_review es ámbar", () => expect(turbineColor("in_review", 5)).toBe("#F59E0B"));
-  it("approved sin daños es verde", () => expect(turbineColor("approved", null)).toBe("#10B981"));
+const C = (c: Partial<Record<1 | 2 | 3 | 4 | 5, number>>) => c;
+
+describe("turbineHealth", () => {
   it.each([
-    [1, "#10B981"],
-    [2, "#84CC16"],
-    [3, "#F59E0B"],
-    [4, "#F97316"],
-    [5, "#EF4444"],
-  ] as const)("approved con Cat %i usa su color", (sev, c) => expect(turbineColor("approved", sev)).toBe(c));
+    ["cat 5 sola", "approved", C({ 5: 1 }), "critical"],
+    ["cat 5 con otras", "in_review", C({ 1: 3, 3: 2, 4: 1, 5: 2 }), "critical"],
+    ["cat 5 aunque esté procesando", "processing", C({ 5: 1 }), "critical"],
+    ["cat 4", "approved", C({ 4: 2 }), "moderate"],
+    ["cat 3", "in_review", C({ 3: 1, 1: 5 }), "moderate"],
+    ["cat 3 y 4", "approved", C({ 3: 1, 4: 1 }), "moderate"],
+    ["solo cat 1-2 aprobada", "approved", C({ 1: 2, 2: 4 }), "ok"],
+    ["sin daños aprobada", "approved", C({}), "ok"],
+    ["sin daños en revisión", "in_review", C({}), "ok"],
+    ["sin daños capturada", "captured", C({}), "in_progress"],
+    ["sin daños pendiente", "pending", C({}), "in_progress"],
+    ["sin daños procesando", "processing", C({ 2: 1 }), "in_progress"],
+    ["sin inspección", null, C({}), "none"],
+    ["sin inspección ni conteos", null, null, "none"],
+  ] as const)("%s", (_n, status, counts, expected) => expect(turbineHealth(status, counts)).toBe(expected));
+
+  it("conteos ausentes con inspección aprobada es ok", () => expect(turbineHealth("approved", null)).toBe("ok"));
+});
+
+describe("turbineColor y metadatos", () => {
+  it("usa los colores del sitio", () => {
+    expect(turbineColor(null, null)).toBe("#64748B");
+    expect(turbineColor("pending", null)).toBe("#3B82F6");
+    expect(turbineColor("approved", C({ 4: 1 }))).toBe("#F59E0B");
+    expect(turbineColor("approved", C({ 5: 1 }))).toBe("#EF4444");
+    expect(turbineColor("approved", C({}))).toBe("#10B981");
+  });
+  it("el crítico parpadea, el moderado pulsa y sin inspección no se anima ni gira", () => {
+    expect(HEALTH_META.critical.anim).toBe("blink");
+    expect(HEALTH_META.moderate.anim).toBe("pulse");
+    expect(HEALTH_META.none.anim).toBe("none");
+    expect(HEALTH_META.none.spin).toBe(false);
+    expect(HEALTH_META.in_progress.spin).toBe(true);
+  });
+  it("la leyenda trae los 5 estados", () => expect(new Set(HEALTH_ORDER).size).toBe(5));
+});
+
+describe("turbineAriaLabel", () => {
+  it("crítico y moderado llevan la categoría", () => {
+    expect(turbineAriaLabel("WTG 25", "critical", 5)).toBe("WTG 25: Crítico, categoría 5");
+    expect(turbineAriaLabel("WTG 3", "moderate", 4)).toBe("WTG 3: Moderado, categoría 4");
+  });
+  it("el resto solo el estado", () => {
+    expect(turbineAriaLabel("WTG 1", "ok", 2)).toBe("WTG 1: Sin hallazgos críticos");
+    expect(turbineAriaLabel("WTG 2", "in_progress", null)).toBe("WTG 2: En proceso");
+    expect(turbineAriaLabel("WTG 4", "none", null)).toBe("WTG 4: Sin inspección");
+  });
 });
 
 describe("boundsOf", () => {

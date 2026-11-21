@@ -94,12 +94,25 @@ const config: Config = {
           "0%, 100%": { opacity: "1" },
           "50%": { opacity: "0.35" },
         },
+        // Mapa de turbinas: parpadeo marcado (crítico) y pulso más suave (sin hallazgos / en proceso).
+        "signal-blink": {
+          "0%, 49%": { opacity: "1" },
+          "50%, 100%": { opacity: "0.12" },
+        },
+        "signal-pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.55" },
+        },
       },
       animation: {
         "rotor-spin": "rotor-spin 1.6s linear infinite",
         "rotor-spin-reverse": "rotor-spin 1.6s linear infinite reverse",
         "scan-sweep": "scan-sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "signal-pulse": "signal-pulse 1.8s ease-in-out infinite",
+        "signal-blink": "signal-blink 1.1s steps(1, end) infinite",
+        "signal-pulse-soft": "signal-pulse-soft 2.6s ease-in-out infinite",
+        "signal-pulse-slow": "signal-pulse-soft 4.5s ease-in-out infinite",
+        "rotor-spin-slow": "rotor-spin 9s linear infinite",
       },
     },
   },

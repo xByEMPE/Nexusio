@@ -174,3 +174,73 @@
 .nexus-map-tip.maplibregl-popup-anchor-right .maplibregl-popup-tip {
   border-left-color: #0a1124;
 }
+
+/* Marcadores HTML de turbinas del mapa (turbine-marker.ts). --tm-size lo fija el zoom en el contenedor;
+   data-tm-labels muestra los nombres solo con zoom suficiente para que no se encimen. */
+.nexus-tm {
+  position: relative;
+  display: block;
+  width: var(--tm-size, 28px);
+  height: var(--tm-size, 28px);
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 9999px;
+}
+.nexus-tm-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transition: transform 120ms ease-out;
+}
+.nexus-tm:hover .nexus-tm-icon,
+.nexus-tm:focus-visible .nexus-tm-icon {
+  transform: scale(1.18);
+}
+.nexus-tm:focus-visible {
+  outline: 2px solid #f8fafc;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 5px #2f7bfe;
+}
+.nexus-tm-label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 1px;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+  color: #f8fafc;
+  text-shadow: 0 0 3px #0a1124, 0 0 3px #0a1124, 0 0 2px #0a1124;
+  pointer-events: none;
+  display: none;
+}
+[data-tm-labels] .nexus-tm-label,
+.nexus-tm:hover .nexus-tm-label,
+.nexus-tm:focus-visible .nexus-tm-label {
+  display: block;
+}
+.nexus-tm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+/* Rendimiento: con muchos marcadores no giran las aspas. */
+[data-tm-lite] .nexus-tm-rotor {
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nexus-tm-tint,
+  .nexus-tm-rotor {
+    animation: none !important;
+  }
+  .nexus-tm-icon {
+    transition: none;
+  }
+}

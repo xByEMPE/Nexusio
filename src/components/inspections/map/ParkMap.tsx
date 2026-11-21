@@ -2,55 +2,25 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, Map as MlMap } from "maplibre-gl";
+import type { Map as MlMap } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { INSPECTION_STATUS_LABEL } from "@/lib/inspections/labels";
-import { boundsOf, turbineColor } from "@/lib/inspections/map";
+import { boundsOf, HEALTH_META, turbineHealth } from "@/lib/inspections/map";
 import { isFatalMapError, mapErrorDetail } from "@/lib/maplibre/map-errors";
 import { WORKER_URL_PATH } from "@/lib/maplibre/worker-url";
 import type { MapTurbine } from "@/services/inspections/map-data";
+import { MapLegend } from "./MapLegend";
 import { MapFilters, NO_FILTERS, type MapFilterState } from "./MapFilters";
 import { nexusStyle, satelliteStyle } from "./nexus-style";
+import { createTurbineLayer, type PositionedTurbine } from "./turbine-marker";
 import { TurbinePopup } from "./TurbinePopup";
 
 // El worker lo sirve una ruta de Next con tipo JavaScript (ver src/app/api/maplibre-worker): el servidor
 // estático del hosting entregaba el .mjs como text/plain y el navegador lo rechazaba.
 maplibregl.setWorkerUrl(`${WORKER_URL_PATH}?v=${maplibregl.getVersion()}`);
 
-const SRC = "turbines";
-
-function addLayers(map: MlMap, data: GeoJSON.FeatureCollection) {
-  if (map.getSource(SRC)) return;
-  map.addSource(SRC, { type: "geojson", data });
-  map.addLayer({
-    id: "turbine-circles",
-    type: "circle",
-    source: SRC,
-    paint: {
-      "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 6, 14, 11],
-      "circle-color": ["get", "color"],
-      "circle-stroke-color": "#F8FAFC",
-      "circle-stroke-width": 2,
-    },
-  });
-  map.addLayer({
-    id: "turbine-labels",
-    type: "symbol",
-    source: SRC,
-    layout: {
-      "text-field": ["get", "name"],
-      "text-font": ["Noto Sans Regular"],
-      "text-size": 11,
-      "text-offset": [0, 1.6],
-      "text-anchor": "top",
-      "text-allow-overlap": true,
-    },
-    paint: { "text-color": "#F8FAFC", "text-halo-color": "#0A1124", "text-halo-width": 1.4 },
-  });
-}
-
 /** Contenido del recuadro al pasar sobre una turbina: nombre y estado (estilo en globals.css). */
-function tipContent(name: string, status: string | null): HTMLElement {
+function tipContent(name: string, status: string | null, health: string | null): HTMLElement {
   const el = document.createElement("div");
   const n = document.createElement("div");
   n.style.fontWeight = "600";
@@ -62,10 +32,16 @@ function tipContent(name: string, status: string | null): HTMLElement {
     s.textContent = status;
     el.append(s);
   }
+  if (health) {
+    const h = document.createElement("div");
+    h.className = "nexus-map-tip-status";
+    h.textContent = health;
+    el.append(h);
+  }
   return el;
 }
 
-type Positioned = MapTurbine & { lat: number; lon: number };
+type Positioned = PositionedTurbine;
 
 export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapTurbine[]; satelliteEnabled: boolean }) {
   const box = useRef<HTMLDivElement>(null);
@@ -90,22 +66,12 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
     [positioned, filters],
   );
 
-  const collection = useMemo<GeoJSON.FeatureCollection>(
-    () => ({
-      type: "FeatureCollection",
-      features: visible.map((t) => ({
-        type: "Feature",
-        geometry: { type: "Point", coordinates: [t.lon, t.lat] },
-        properties: { id: t.assetId, name: t.name, color: turbineColor(t.status, t.maxSeverity) },
-      })),
-    }),
-    [visible],
-  );
-  const dataRef = useRef(collection);
   const turbinesRef = useRef(positioned);
+  const visibleRef = useRef(visible);
+  const layerRef = useRef<ReturnType<typeof createTurbineLayer> | null>(null);
   useEffect(() => {
-    dataRef.current = collection;
     turbinesRef.current = positioned;
+    visibleRef.current = visible;
   });
 
   // El mapa se crea una vez.
@@ -138,32 +104,35 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
       if (dead || !isFatalMapError(ev, { loaded })) return;
       dead = true;
       setFailure(mapErrorDetail(ev));
+      layer.destroy();
+      layerRef.current = null;
       map.remove();
       mapRef.current = null;
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: "nexus-map-tip" });
-    map.on("style.load", () => addLayers(map, dataRef.current));
-    map.on("mousemove", "turbine-circles", (e) => {
-      map.getCanvas().style.cursor = "pointer";
-      const f = e.features?.[0];
-      if (!f) return;
-      const t = turbinesRef.current.find((x) => x.assetId === f.properties.id);
-      tip
-        .setLngLat((f.geometry as GeoJSON.Point).coordinates as [number, number])
-        .setDOMContent(tipContent(t?.name ?? String(f.properties.name ?? ""), t ? (t.status ? INSPECTION_STATUS_LABEL[t.status] : "Sin inspección") : null))
-        .addTo(map);
+    const tip = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 24, className: "nexus-map-tip" });
+    const layer = createTurbineLayer(map, {
+      onSelect: (t) => {
+        tip.remove();
+        setSelected(t);
+      },
+      onHover: (t) => {
+        if (!t) {
+          tip.remove();
+          return;
+        }
+        tip
+          .setLngLat([t.lon, t.lat])
+          .setDOMContent(tipContent(t.name, t.status ? INSPECTION_STATUS_LABEL[t.status] : "Sin inspección", HEALTH_META[turbineHealth(t.status, t.counts)].label))
+          .addTo(map);
+      },
     });
-    map.on("mouseleave", "turbine-circles", () => {
-      map.getCanvas().style.cursor = "";
-      tip.remove();
-    });
-    map.on("click", "turbine-circles", (e) => {
-      const id = e.features?.[0]?.properties.id;
-      setSelected(turbinesRef.current.find((t) => t.assetId === id) ?? null);
-    });
+    layerRef.current = layer;
+    layer.sync(visibleRef.current);
     return () => {
       dead = true;
+      layer.destroy();
+      layerRef.current = null;
       if (mapRef.current === map) {
         map.remove();
         mapRef.current = null;
@@ -171,10 +140,10 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
     };
   }, []);
 
-  // Los filtros solo actualizan los datos de la capa, sin recargar el mapa.
+  // Los filtros actualizan los marcadores por diferencias (crea, actualiza, elimina), sin recargar el mapa.
   useEffect(() => {
-    (mapRef.current?.getSource(SRC) as GeoJSONSource | undefined)?.setData(collection);
-  }, [collection]);
+    layerRef.current?.sync(visible);
+  }, [visible]);
 
   function toggleSatellite() {
     const key = process.env.NEXT_PUBLIC_ESRI_API_KEY;
@@ -208,6 +177,7 @@ export default function ParkMap({ turbines, satelliteEnabled }: { turbines: MapT
             {satellite ? "Sencilla" : "Satélite"}
           </button>
         )}
+        {!failure && <MapLegend />}
         {selected && visible.some((t) => t.assetId === selected.assetId) && <TurbinePopup turbine={selected} onClose={() => setSelected(null)} />}
         {positioned.length === 0 && !failure && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-foreground-muted">
