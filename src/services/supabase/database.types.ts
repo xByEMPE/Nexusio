@@ -143,14 +143,14 @@ isOneToOne: false
                   ]
                 },"change_log": {
                   Row: {
-                    "action": string,"actor_id": string | null,"at": string,"id": number,"new": Json | null,"old": Json | null,"project_id": string,"row_id": string,"table_name": string
+                    "action": string,"actor_id": string | null,"at": string,"id": number,"new": Json | null,"old": Json | null,"project_id": string | null,"row_id": string,"table_name": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"actor_id"?: string | null,"at"?: string,"id"?: never,"new"?: Json | null,"old"?: Json | null,"project_id": string,"row_id": string,"table_name": string
+                    "action": string,"actor_id"?: string | null,"at"?: string,"id"?: never,"new"?: Json | null,"old"?: Json | null,"project_id"?: string | null,"row_id": string,"table_name": string
                   }
                   Update: {
-                    "action"?: string,"actor_id"?: string | null,"at"?: string,"id"?: never,"new"?: Json | null,"old"?: Json | null,"project_id"?: string,"row_id"?: string,"table_name"?: string
+                    "action"?: string,"actor_id"?: string | null,"at"?: string,"id"?: never,"new"?: Json | null,"old"?: Json | null,"project_id"?: string | null,"row_id"?: string,"table_name"?: string
                   }
                   Relationships: [
                     
@@ -563,7 +563,10 @@ isOneToOne: true
             [_ in never]: never
           }
           Functions: {
-            "ai_pending_captures":
+            "admin_delete_user":
+{ Args: { "p_user_id": string }; Returns: Json
+                           },
+"ai_pending_captures":
 { Args: { "p_limit"?: number }; Returns: { "asset_id": string,"attempts": number,"blade": Database["public"]['Enums']["blade_position"] | null,"capture_id": string,"face": Database["public"]['Enums']["blade_face"] | null,"file_name": string,"gsd_mm_px": number | null,"height_px": number,"inspection_id": string,"inspection_kind": Database["public"]['Enums']["inspection_kind"],"original_path": string,"project_id": string,"radius_center_m": number | null,"width_px": number }[]
                            },
 "ai_record_run":

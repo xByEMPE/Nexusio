@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/admin/inspecciones/usuarios", label: "Usuarios" },
   { href: "/admin/inspecciones/sitios", label: "Sitios" },
   { href: "/admin/inspecciones/proyectos", label: "Proyectos" },
+  { href: "/admin/inspecciones/cambios", label: "Registro de cambios" },
 ];
 
 export function InspectionsNav() {

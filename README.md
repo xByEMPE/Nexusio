@@ -153,6 +153,28 @@ El borrado de inspecciones, máquinas y proyectos (solo admin) se controla con l
 
 ---
 
+## Eliminar usuarios y registro de cambios
+
+**Quitar vs. eliminar.** «Quitar de la organización» solo borra la membresía: la cuenta sigue existiendo y su correo queda ocupado (aparece en Usuarios > «Cuentas sin acceso»). «Eliminar usuario» (solo admin, confirmando con el correo) borra la cuenta por completo: primero `public.admin_delete_user` purga sus datos en una transacción (`private.purge_user`) y después el servidor borra el usuario de Auth con la llave de servicio, lo que libera el correo.
+
+- Se borran: perfil (lo borra Auth), membresías, asignaciones a proyectos y los comentarios que escribió.
+- Se conservan, con el autor en `null`: daños, fotos e inspecciones que creó, corrigió, calibró o aprobó.
+- El historial (`change_log`) es inmutable y se conserva anonimizado: solo guarda el id del actor y el panel lo muestra como «Usuario eliminado». La purga deja un único evento sin correo ni nombre (id, rol y organizaciones).
+- No puedes eliminar tu propia cuenta ni al último administrador activo.
+- Si Auth falla tras la purga, la acción muestra el error exacto y la cuenta queda sin acceso en «Cuentas sin acceso»; repetir «Eliminar» es seguro (idempotente).
+- Invitar un correo que ya existe: si la cuenta no tiene acceso (huérfana) se reutiliza (se le asigna el acceso y se reenvía el enlace con las reglas de «Reenviar acceso»); si tiene acceso, el mensaje dice dónde está (personal u organización) o que está inactiva y debe activarse.
+
+**Registro de cambios** (`/admin/inspecciones/cambios`, solo lectura). El admin ve todas las modificaciones de todos los usuarios, incluidos los eventos globales (usuarios, organizaciones, sitios, activos, catálogo); el técnico solo las de los proyectos que puede leer (la RLS de `change_log` lo impone); el cliente nunca. Filtros por usuario, entidad, acción, proyecto, fechas (hora de la Ciudad de México) y texto; 50 por página con cursor por id descendente. Solo se muestran columnas de una lista blanca (nunca correos, tokens ni hashes; los comentarios se truncan a 200 caracteres en la base). `ai_runs`, miniaturas y demás tablas de alta cardinalidad no se auditan.
+
+**Pasos para producción (en este orden)**
+1. Respaldo y revisión de `supabase/migrations/20261122000100_activity_log.sql` (reversible con `supabase/rollbacks/20261122000100_activity_log.down.sql`).
+2. Si es posible, correr antes las pruebas pgTAP contra una base local (`supabase/tests/15_activity_log.test.sql`).
+3. Aplicar la migración al proyecto de Supabase (`supabase db push` o el SQL Editor). Es aditiva: no pierde datos.
+4. Desplegar el portal (el código nuevo llama a `admin_delete_user` y lee `change_log` con `project_id` nulo: sin la migración fallaría).
+5. Limpiar las cuentas huérfanas existentes desde Usuarios > «Cuentas sin acceso» (Eliminar o Reutilizar).
+
+---
+
 ## Caché de imágenes (egress en caché de Supabase)
 
 Objetivo: que las imágenes consultadas se sirvan desde caché al menos 6 meses y reducir el *uncached egress* de Supabase, **sin volver público** el bucket privado `inspection-media`.

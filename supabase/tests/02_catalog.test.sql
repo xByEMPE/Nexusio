@@ -18,9 +18,9 @@ select results_eq('select id from public.organizations', format('values (%L::uui
 select is((select count(*) from public.inspections), 1::bigint, 'tech_a ve solo la inspección A');
 select is((select count(*) from public.wind_turbine_specs), 1::bigint, 'tech_a ve solo las specs de A');
 select is((select blade_length_m from public.wind_turbine_specs), 61.2::numeric, 'specs con blade_length_m = 61.2');
-select lives_ok(format('update public.inspections set notes = ''x'' where id = %L', :'insp_a'), 'tech_a edita notas en A');
-select is((select notes from public.inspections where id = :'insp_a'), 'x', 'la nota quedó guardada');
-select is(tests.affected(format('update public.inspections set notes = ''x'' where id = %L', :'insp_b')), 0::bigint, 'tech_a no edita en B');
+select lives_ok(format('update public.inspections set status = ''captured'' where id = %L', :'insp_a'), 'tech_a actualiza el estado en A');
+select is((select status::text from public.inspections where id = :'insp_a'), 'captured', 'el estado quedó guardado');
+select is(tests.affected(format('update public.inspections set status = ''captured'' where id = %L', :'insp_b')), 0::bigint, 'tech_a no edita en B');
 select throws_ok(format('update public.inspections set status = ''approved'' where id = %L', :'insp_a'), 'P0001', null, 'tech_a no aprueba');
 select throws_ok(format('insert into public.inspections (project_id, asset_id, kind) values (%L, %L, ''solar'')', :'project_b', :'asset_b'), '42501', null, 'tech_a no crea inspecciones en B');
 select throws_ok(format('insert into public.sites (organization_id, kind, name) values (%L, ''wind_farm'', ''N'')', :'org_a'), '42501', null, 'tech_a no crea sitios');
@@ -67,7 +67,7 @@ select throws_ok(format('insert into public.inspections (project_id, asset_id, k
 select throws_ok(format('update public.inspections set project_id = %L where id = %L', :'project_b', :'insp_a'), 'P0001', null, 'tech_a no cambia el project_id de una inspección');
 select is((select count(*) from public.project_assignments), 1::bigint, 'tech_a ve solo su asignación');
 select tests.login_as(:'service_a');
-select is(tests.affected(format('update public.inspections set notes = ''s'' where id = %L', :'insp_a')), 1::bigint, 'service_a edita notas de inspección A');
+select is(tests.affected(format('update public.inspections set status = ''captured'' where id = %L', :'insp_a')), 1::bigint, 'service_a actualiza el estado de la inspección A');
 select tests.logout();
 
 -- Visor de cliente

@@ -26,3 +26,12 @@ export function pickHistoryFields(row: unknown): Record<string, unknown> | null 
   for (const k of HISTORY_FIELDS) if (k in src) out[k] = k === "region" ? true : src[k];
   return out;
 }
+
+/** Reduce una fila `old`/`new` de `change_log` a una lista blanca de columnas (lo demás nunca sale del servidor). */
+export function pickAllowedFields(row: unknown, allowed: readonly string[]): Record<string, unknown> | null {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+  const src = row as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of allowed) if (k in src) out[k] = src[k];
+  return out;
+}

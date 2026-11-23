@@ -6,6 +6,7 @@ import { InviteUserSchema } from "@/contracts/inspections-admin";
 import { COOLDOWN_MESSAGE, decideResend, lastSentAt, RESET_RATE_MESSAGE, type ResendResult } from "@/lib/auth/access-rules";
 import { resendByUser } from "@/lib/auth/reset-limits";
 import { dbErrorMessage, fail, requireAdminAction, type ActionResult } from "@/lib/inspections/admin-action";
+import { deleteUserAccount } from "@/lib/inspections/delete-user";
 import { inviteWithAccess } from "@/lib/inspections/invite";
 import { createAnonClient, createServiceClient, createSessionClient } from "@/services/supabase/server";
 
@@ -19,7 +20,9 @@ function revalidateUsers() {
   revalidatePath("/admin/inspecciones/organizaciones", "layout");
 }
 
-export async function inviteUser(fd: FormData): Promise<ActionResult> {
+type ActionWithMessage = { ok: true; message?: string } | { ok: false; message: string };
+
+export async function inviteUser(fd: FormData): Promise<ActionWithMessage> {
   const gate = await requireAdminAction();
   if ("error" in gate) return gate.error;
   const parsed = InviteUserSchema.safeParse({
@@ -40,10 +43,10 @@ export async function inviteUser(fd: FormData): Promise<ActionResult> {
   const sb = await createSessionClient();
   if (!service || !sb) return fail("El servicio no está configurado.");
 
-  const invited = await inviteWithAccess(service, sb, input);
+  const invited = await inviteWithAccess(service, sb, input, createAnonClient());
   if (!invited.ok) return fail(invited.message);
   revalidateUsers();
-  return { ok: true };
+  return invited.message ? { ok: true, message: invited.message } : { ok: true };
 }
 
 export async function setUserActive(fd: FormData): Promise<ActionResult> {
@@ -80,6 +83,28 @@ export async function removeMembership(fd: FormData): Promise<ActionResult> {
   if (!data?.length) return fail("No se encontró la membresía.");
   revalidateUsers();
   return { ok: true };
+}
+
+/**
+ * «Eliminar usuario»: borra la cuenta por completo (datos en la base y usuario de Auth) y deja el correo libre.
+ * Solo admin; pide escribir el correo. Ver `deleteUserAccount` para las guardas y la idempotencia.
+ */
+export async function deleteUser(fd: FormData): Promise<ActionWithMessage> {
+  const gate = await requireAdminAction();
+  if ("error" in gate) return gate.error;
+  const id = z.uuid().safeParse(str(fd, "user_id"));
+  if (!id.success) return fail("Solicitud no válida.");
+  const service = createServiceClient();
+  const sb = await createSessionClient();
+  if (!service || !sb) return fail("El servicio no está configurado.");
+  const result = await deleteUserAccount(sb, service, {
+    userId: id.data,
+    viewerId: gate.viewer.user.id,
+    confirmEmail: str(fd, "confirm_email"),
+  });
+  revalidateUsers();
+  revalidatePath("/admin/inspecciones/cambios");
+  return result;
 }
 
 /**

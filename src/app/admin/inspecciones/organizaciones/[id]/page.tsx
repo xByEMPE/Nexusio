@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { TextInput } from "@/components/assessment/fields";
 import { ActionForm } from "@/components/inspections/admin/ActionForm";
+import { DeleteUserDialog } from "@/components/inspections/admin/DeleteUserDialog";
 import { requireStaff } from "@/lib/auth/viewer";
 import { assertInspectionsEnabled } from "@/lib/inspections/flag";
 import { createSessionClient } from "@/services/supabase/server";
@@ -26,7 +27,7 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
   if (!org) notFound();
 
   const [{ data: members }, { count: projectCount }] = await Promise.all([
-    sb.from("organization_members").select("user_id, role, profiles(email, full_name, is_active)").eq("organization_id", id).order("created_at"),
+    sb.from("organization_members").select("user_id, role, profiles(id, email, full_name, is_active)").eq("organization_id", id).order("created_at"),
     sb.from("projects").select("id", { count: "exact", head: true }).eq("organization_id", id),
   ]);
 
@@ -73,10 +74,13 @@ export default async function OrganizationDetailPage({ params }: { params: Promi
                   </div>
                 </div>
                 {isAdmin && (
-                  <ActionForm action={removeMembership} submitLabel="Quitar" successMessage="Miembro quitado." variant="secondary" inline>
-                    <input type="hidden" name="organization_id" value={org.id} />
-                    <input type="hidden" name="user_id" value={m.user_id} />
-                  </ActionForm>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ActionForm action={removeMembership} submitLabel="Quitar de la organización" successMessage="Miembro quitado." variant="secondary" inline>
+                      <input type="hidden" name="organization_id" value={org.id} />
+                      <input type="hidden" name="user_id" value={m.user_id} />
+                    </ActionForm>
+                    {m.profiles?.email && <DeleteUserDialog userId={m.user_id} email={m.profiles.email} name={m.profiles.full_name || m.profiles.email} />}
+                  </div>
                 )}
               </li>
             ))}
