@@ -32,13 +32,13 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
 
   const { data: site } = await sb
     .from("sites")
-    .select("id, name, kind, lat, lon, organization_id, organizations(name)")
+    .select("id, name, kind, lat, lon, organization_id, state, city, organizations(name)")
     .eq("id", id)
     .maybeSingle();
   if (!site) notFound();
   const { data: assets, error } = await sb
     .from("assets")
-    .select("id, name, kind, code, lat, lon, wind_turbine_specs(manufacturer, model, blade_length_m, rotor_diameter_m)")
+    .select("id, name, kind, code, lat, lon, wind_turbine_specs(manufacturer, model, hub_height_m, blade_length_m, rotor_diameter_m)")
     .eq("site_id", id)
     .order("name");
 
@@ -69,6 +69,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
       <h1 className="mt-3 text-2xl font-medium">{site.name}</h1>
       <p className="mt-1 text-sm text-foreground-muted">
         {SITE_KIND_LABEL[site.kind]} · {site.organizations?.name}
+        {(site.state || site.city) && <> · {[site.state, site.city].filter(Boolean).join(", ")}</>}
         {site.lat != null && site.lon != null && (
           <span className="tabular">
             {" "}
@@ -105,6 +106,7 @@ export default async function SiteDetailPage({ params }: { params: Promise<{ id:
               const spec = [
                 t?.manufacturer,
                 t?.model,
+                t?.hub_height_m != null && `buje ${t.hub_height_m} m`,
                 t?.blade_length_m != null && `pala ${t.blade_length_m} m`,
                 t?.rotor_diameter_m != null && `rotor ${t.rotor_diameter_m} m`,
               ].filter(Boolean);

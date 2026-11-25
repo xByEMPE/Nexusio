@@ -4,6 +4,7 @@ export type FieldStepKey =
   | "organization"
   | "site"
   | "turbines"
+  | "catalog"
   | "project"
   | "defaults"
   | "link"

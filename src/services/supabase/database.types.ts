@@ -493,14 +493,14 @@ isOneToOne: false
                   ]
                 },"sites": {
                   Row: {
-                    "created_at": string,"id": string,"kind": Database["public"]['Enums']["site_kind"],"lat": number | null,"lon": number | null,"name": string,"notes": string | null,"organization_id": string,"updated_at": string
+                    "city": string | null,"created_at": string,"id": string,"kind": Database["public"]['Enums']["site_kind"],"lat": number | null,"lon": number | null,"name": string,"notes": string | null,"organization_id": string,"state": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"id"?: string,"kind": Database["public"]['Enums']["site_kind"],"lat"?: number | null,"lon"?: number | null,"name": string,"notes"?: string | null,"organization_id": string,"updated_at"?: string
+                    "city"?: string | null,"created_at"?: string,"id"?: string,"kind": Database["public"]['Enums']["site_kind"],"lat"?: number | null,"lon"?: number | null,"name": string,"notes"?: string | null,"organization_id": string,"state"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["site_kind"],"lat"?: number | null,"lon"?: number | null,"name"?: string,"notes"?: string | null,"organization_id"?: string,"updated_at"?: string
+                    "city"?: string | null,"created_at"?: string,"id"?: string,"kind"?: Database["public"]['Enums']["site_kind"],"lat"?: number | null,"lon"?: number | null,"name"?: string,"notes"?: string | null,"organization_id"?: string,"state"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {

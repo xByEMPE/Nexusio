@@ -1,18 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { TextArea, TextInput } from "@/components/assessment/fields";
+import { NEW_SITE, SiteCombobox } from "@/components/inspections/admin/SiteCombobox";
 import { Button } from "@/components/ui/Button";
 import { MAX_FIELD_STAFF } from "@/contracts/inspections-admin";
 import { FIELD_STEP_STATUS_LABEL, type FieldProjectResult, type FieldStepStatus } from "@/lib/inspections/field-project";
+import { decideSiteSelection, describeSpecs, mergeMachineLines, turbineListText, type CatalogMachine, type PickerSite } from "@/lib/inspections/catalog";
 import { parseTurbineList } from "@/lib/inspections/form";
 import { PROJECT_STATUS_LABEL } from "@/lib/inspections/labels";
 
 type Org = { id: string; name: string };
-type Site = { id: string; name: string; organization_id: string };
+type MachinesState =
+  | { status: "idle" }
+  | { status: "loading"; siteId: string }
+  | { status: "ready"; siteId: string; machines: CatalogMachine[]; truncated: boolean }
+  | { status: "error"; siteId: string; message: string };
 
-const NEW = "__new__";
+const NEW = NEW_SITE;
 
 type StaffRow = { id: number; name: string; role: "pilot" | "assistant"; email: string };
 
@@ -52,15 +58,24 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
 export function FieldProjectForm({
   orgs,
   sites,
+  catalogOrgId,
   action,
+  loadMachines,
 }: {
   orgs: Org[];
-  sites: Site[];
+  sites: PickerSite[];
+  /** Organización dueña del catálogo NEXUS (null si no existe). */
+  catalogOrgId: string | null;
   action: (fd: FormData) => Promise<FieldProjectResult>;
+  /** Carga (solo lectura, solo admin) las máquinas de un parque. */
+  loadMachines: (siteId: string) => Promise<{ ok: true; machines: CatalogMachine[]; truncated: boolean } | { ok: false; message: string }>;
 }) {
   const [orgChoice, setOrgChoice] = useState("");
   const [siteChoice, setSiteChoice] = useState(NEW);
   const [turbines, setTurbines] = useState("");
+  /** true mientras la lista de turbinas es la precargada del parque (sin que el usuario la haya tocado). */
+  const [preloaded, setPreloaded] = useState(false);
+  const [machinesState, setMachinesState] = useState<MachinesState>({ status: "idle" });
   const [pending, start] = useTransition();
   const [result, setResult] = useState<FieldProjectResult | null>(null);
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -69,9 +84,78 @@ export function FieldProjectForm({
     setStaff((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   const orgIsNew = orgChoice === NEW;
-  const orgSites = useMemo(() => sites.filter((s) => s.organization_id === orgChoice), [sites, orgChoice]);
-  const siteIsNew = orgIsNew || orgSites.length === 0 || siteChoice === NEW;
+  const ownSites = useMemo(() => (orgIsNew ? [] : sites.filter((s) => s.organization_id === orgChoice)), [sites, orgChoice, orgIsNew]);
+  // Catálogo NEXUS: los parques de la organización del catálogo que no son ya «propios» de la organización elegida.
+  const catalogSites = useMemo(
+    () => (catalogOrgId && catalogOrgId !== orgChoice ? sites.filter((s) => s.organization_id === catalogOrgId) : []),
+    [sites, catalogOrgId, orgChoice],
+  );
+  // Un parque del catálogo se envía como «catalog» aun con «+ Nueva organización» (el servidor lo copia a la nueva).
+  const siteMode = decideSiteSelection({ orgChoice, orgIsNew, siteChoice, sites, catalogOrgId });
+  const siteIsNew = siteMode === "new";
+  const siteIsCatalog = siteMode === "catalog";
+  const turbinesRef = useRef("");
+  const preloadedRef = useRef(false);
+  useEffect(() => {
+    turbinesRef.current = turbines;
+    preloadedRef.current = preloaded;
+  }, [turbines, preloaded]);
   const preview = useMemo(() => parseTurbineList(turbines), [turbines]);
+
+  // Al elegir un parque existente o del catálogo se cargan SUS máquinas (bajo demanda) y se precarga la lista.
+  const pickedId = siteIsNew ? null : siteChoice;
+  useEffect(() => {
+    if (!pickedId) return;
+    let cancelled = false;
+    setMachinesState({ status: "loading", siteId: pickedId });
+    loadMachines(pickedId)
+      .then((r) => {
+        if (cancelled) return;
+        if (!r.ok) return setMachinesState({ status: "error", siteId: pickedId, message: r.message });
+        setMachinesState({ status: "ready", siteId: pickedId, machines: r.machines, truncated: r.truncated });
+        // No se pierden las líneas que el usuario ya escribió: se reemplaza solo una precarga previa sin tocar (o el
+        // texto vacío); si no, se conservan y se agregan las máquinas cuyo nombre no esté ya en la lista.
+        const snapshot = turbinesRef.current;
+        const replace = preloadedRef.current || snapshot.trim() === "";
+        setTurbines((prev) => mergeMachineLines(prev, r.machines, replace && prev === snapshot));
+        setPreloaded(replace);
+      })
+      .catch(() => {
+        if (!cancelled) setMachinesState({ status: "error", siteId: pickedId, message: "No se pudieron cargar las máquinas del parque." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickedId, loadMachines]);
+
+  const chooseSite = (id: string) => {
+    setSiteChoice(id);
+    if (id === NEW) {
+      setMachinesState({ status: "idle" });
+      // Quita la lista precargada de otro parque; lo que el usuario escribió a mano se conserva.
+      if (preloaded) setTurbines("");
+      setPreloaded(false);
+    }
+  };
+  const readyMachines = machinesState.status === "ready" && machinesState.siteId === pickedId ? machinesState : null;
+  const machineNames = useMemo(() => new Set((readyMachines?.machines ?? []).map((m) => m.name)), [readyMachines]);
+  const selectedCount = preview.turbines.filter((t) => machineNames.has(t.name)).length;
+  const selectAll = () => {
+    if (!readyMachines) return;
+    // Todas las del parque + las líneas que el usuario agregó a mano (nombres que no son del parque).
+    const extras = turbines
+      .split(/\r?\n/)
+      .filter((l) => l.trim() !== "" && !machineNames.has(l.split("|")[0]!.trim()));
+    setTurbines([turbineListText(readyMachines.machines), ...extras].join("\n"));
+  };
+  const selectNone = () => {
+    setTurbines(
+      turbines
+        .split(/\r?\n/)
+        .filter((l) => l.trim() !== "" && !machineNames.has(l.split("|")[0]!.trim()))
+        .join("\n"),
+    );
+  };
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -94,9 +178,10 @@ export function FieldProjectForm({
       {result && <ResultPanel result={result} />}
       <form onSubmit={onSubmit} className="flex flex-col gap-6">
         <input type="hidden" name="org_mode" value={orgIsNew ? "new" : "existing"} />
-        <input type="hidden" name="site_mode" value={siteIsNew ? "new" : "existing"} />
+        <input type="hidden" name="site_mode" value={siteMode} />
         {!orgIsNew && <input type="hidden" name="organization_id" value={orgChoice} />}
-        {!siteIsNew && <input type="hidden" name="site_id" value={siteChoice} />}
+        {!siteIsNew && !siteIsCatalog && <input type="hidden" name="site_id" value={siteChoice} />}
+        {!siteIsNew && siteIsCatalog && <input type="hidden" name="catalog_site_id" value={siteChoice} />}
 
         <Section title="1 · Cliente y parque eólico" hint="Elige uno existente o crea uno nuevo.">
           <Labeled label="Organización">
@@ -105,7 +190,7 @@ export function FieldProjectForm({
               value={orgChoice}
               onChange={(e) => {
                 setOrgChoice(e.target.value);
-                setSiteChoice(NEW);
+                chooseSite(NEW);
               }}
               className={selectClass}
             >
@@ -128,16 +213,16 @@ export function FieldProjectForm({
               </Labeled>
             </div>
           )}
-          {orgChoice !== "" && !orgIsNew && orgSites.length > 0 && (
-            <Labeled label="Parque eólico">
-              <select value={siteChoice} onChange={(e) => setSiteChoice(e.target.value)} className={selectClass}>
-                {orgSites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-                <option value={NEW}>+ Nuevo parque eólico</option>
-              </select>
+          {orgChoice !== "" && (
+            <Labeled
+              label="Parque eólico"
+              hint={
+                catalogSites.length > 0
+                  ? `Busca entre los parques de la organización y el catálogo NEXUS (${catalogSites.length} parques). Un parque del catálogo se copia a la organización con sus máquinas y especificaciones.`
+                  : undefined
+              }
+            >
+              <SiteCombobox ownSites={ownSites} catalogSites={catalogSites} value={siteIsNew ? NEW : siteChoice} onChange={chooseSite} />
             </Labeled>
           )}
           {orgChoice !== "" && siteIsNew && (
@@ -156,13 +241,48 @@ export function FieldProjectForm({
         </Section>
 
         <Section title="2 · Turbinas" hint="Una por línea: nombre | código | latitud | longitud. Código y coordenadas son opcionales; las líneas vacías y las que empiezan con # se ignoran.">
+          {machinesState.status === "loading" && <p role="status" className="text-xs text-foreground-muted">Cargando las máquinas del parque…</p>}
+          {machinesState.status === "error" && <p role="alert" className="text-xs text-signal-critical">{machinesState.message}</p>}
+          {readyMachines && (
+            <div className="flex flex-col gap-2 rounded-[2px] border border-border-subtle p-3 text-xs">
+              <p className="text-foreground-muted">
+                {readyMachines.machines.length === 0
+                  ? "Este parque aún no tiene máquinas registradas: escribe las turbinas abajo."
+                  : `${readyMachines.machines.length} ${readyMachines.machines.length === 1 ? "máquina" : "máquinas"} en el parque${siteIsCatalog ? " (catálogo NEXUS)" : ""}.`}
+                {readyMachines.truncated && " Se muestran solo las primeras; agrega el resto a mano."}
+              </p>
+              {readyMachines.machines.length > 0 && (
+                <>
+                  <p className="text-foreground-muted" data-testid="catalog-specs">
+                    {describeSpecs(readyMachines.machines) || "Sin especificaciones registradas."}
+                    {" "}
+                    <span className="text-foreground-subtle">(altura de buje solo informativa; las especificaciones se copian solas)</span>
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button type="button" variant="secondary" onClick={selectAll}>
+                      Seleccionar todas
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={selectNone}>
+                      Ninguna
+                    </Button>
+                    <span aria-live="polite" className="tabular text-foreground-muted">
+                      {selectedCount} de {readyMachines.machines.length} seleccionadas
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <TextArea
             name="turbines"
             aria-label="Lista de turbinas"
             rows={8}
-            required
+            required={preview.turbines.length === 0}
             value={turbines}
-            onChange={(e) => setTurbines(e.target.value)}
+            onChange={(e) => {
+              setTurbines(e.target.value);
+              setPreloaded(false);
+            }}
             className="font-mono text-xs"
             placeholder={"WTG-01 | A1 | 52.5012 | 13.4001\nWTG-02\nWTG-03 | C3"}
             invalid={preview.errors.length > 0}
@@ -197,7 +317,7 @@ export function FieldProjectForm({
               <TextInput name="rotor_diameter_m" inputMode="decimal" />
             </Labeled>
           </div>
-          <p className="-mt-2 text-xs text-foreground-subtle">Medidas comunes opcionales: se aplican a las turbinas nuevas y a las ya existentes que no tengan especificaciones. Las turbinas que ya existen en el parque se reutilizan por nombre y no se modifican su código ni sus coordenadas.</p>
+          <p className="-mt-2 text-xs text-foreground-subtle">Medidas comunes opcionales: se aplican a las turbinas nuevas y a las ya existentes que no tengan especificaciones (en un parque del catálogo solo completan lo que el catálogo no trae). Las turbinas que ya existen en el parque se reutilizan por nombre y no se modifican su código ni sus coordenadas.</p>
         </Section>
 
         <Section title="3 · Proyecto">

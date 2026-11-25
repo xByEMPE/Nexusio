@@ -224,6 +224,8 @@ const FIELD_SPECS: Record<string, Record<string, FieldSpec>> = {
     name: { label: "Nombre" },
     lat: { label: "Latitud" },
     lon: { label: "Longitud" },
+    state: { label: "Estado" },
+    city: { label: "Municipio" },
   },
   assets: {
     organization_id: { label: "Organización", ref: "organization" },

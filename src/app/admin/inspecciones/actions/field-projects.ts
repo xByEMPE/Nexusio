@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { FieldProjectSchema, type FieldProjectInput } from "@/contracts/inspections-admin";
 import {
   CONCURRENT_MESSAGE,
@@ -15,15 +16,52 @@ import {
   type TechnicianPlan,
 } from "@/lib/inspections/field-project-rules";
 import { requireAdminAction } from "@/lib/inspections/admin-action";
+import { catalogOrgSlug, compareMachines, MAX_CATALOG_MACHINES, type CatalogMachine } from "@/lib/inspections/catalog";
 import type { FieldProjectResult, FieldStep, FieldStepKey } from "@/lib/inspections/field-project";
 import { readFieldProjectForm } from "@/lib/inspections/form";
 import { inviteWithAccess } from "@/lib/inspections/invite";
+import type { Json } from "@/services/supabase/database.types";
 import { createServiceClient, createSessionClient } from "@/services/supabase/server";
 
 const NO_SERVICE = "El servicio no está configurado.";
 
+export type SiteMachinesResult =
+  | { ok: true; machines: CatalogMachine[]; truncated: boolean }
+  | { ok: false; message: string };
+
 /**
- * «Nuevo proyecto de campo»: organización → sitio → turbinas → proyecto (con piloto/asistente/dron por defecto) →
+ * Máquinas (turbinas) de un parque con su fabricante, modelo y altura de buje, para precargar la lista de turbinas
+ * del asistente. Solo lectura y solo admin; devuelve como máximo MAX_CATALOG_MACHINES (y avisa si hubo más).
+ */
+export async function listSiteMachines(siteId: string): Promise<SiteMachinesResult> {
+  const gate = await requireAdminAction();
+  if ("error" in gate) return { ok: false, message: "No tienes permiso para esta acción." };
+  if (!z.uuid().safeParse(siteId).success) return { ok: false, message: "Parque no válido." };
+  const sb = await createSessionClient();
+  if (!sb) return { ok: false, message: NO_SERVICE };
+  const { data, error } = await sb
+    .from("assets")
+    .select("name, code, wind_turbine_specs(manufacturer, model, hub_height_m)")
+    .eq("site_id", siteId)
+    .eq("kind", "wind_turbine")
+    .order("name")
+    .limit(MAX_CATALOG_MACHINES + 1);
+  if (error) return { ok: false, message: "No se pudieron cargar las máquinas del parque." };
+  const rows = data ?? [];
+  const machines: CatalogMachine[] = rows.slice(0, MAX_CATALOG_MACHINES).map((a) => ({
+    name: a.name,
+    code: a.code,
+    manufacturer: a.wind_turbine_specs?.manufacturer ?? null,
+    model: a.wind_turbine_specs?.model ?? null,
+    hub_height_m: a.wind_turbine_specs?.hub_height_m ?? null,
+  }));
+  machines.sort(compareMachines);
+  return { ok: true, machines, truncated: rows.length > MAX_CATALOG_MACHINES };
+}
+
+/**
+ * «Nuevo proyecto de campo»: organización → sitio (propio, nuevo o del catálogo NEXUS, que se copia a la organización
+ * del cliente) → turbinas → proyecto (con piloto/asistente/dron por defecto) →
  * sitio ligado → técnico → asignación → personal adicional con correo (misma lógica que el técnico).
  * Solo admin. Cada paso reutiliza lo que ya existe (nombre/slug/código) en vez de duplicar, de modo que un
  * fallo a medias se corrige reenviando el mismo formulario. Todo va por RLS con la sesión del admin; solo la
@@ -89,10 +127,12 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
 
   // 1. Organización
   let orgId: string;
+  let orgName: string;
   if (v.org.mode === "existing") {
     const { data: org, error } = await sb.from("organizations").select("id, name").eq("id", v.org.id).maybeSingle();
     if (error || !org) return stop("organization", "Organización", "No se encontró la organización.");
     orgId = org.id;
+    orgName = org.name;
     add("organization", "Organización", "reused", `«${org.name}» (existente).`);
   } else {
     const { data: found } = await sb.from("organizations").select("id, name").eq("slug", v.org.slug).maybeSingle();
@@ -100,17 +140,53 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
       const d = decideOrganization(found.name, v.org.name);
       if (d.action === "stop") return stop("organization", "Organización", d.message);
       orgId = found.id;
+      orgName = found.name;
       add("organization", "Organización", "reused", `«${found.name}» ya existía con el identificador ${v.org.slug}.`);
     } else {
       const { data, error } = await sb.from("organizations").insert({ name: v.org.name, slug: v.org.slug }).select("id").single();
       if (error || !data) return stop("organization", "Organización", dupOr(error, "No se pudo crear la organización."));
       orgId = data.id;
+      orgName = v.org.name;
       add("organization", "Organización", "created", `«${v.org.name}» (${v.org.slug}).`);
     }
   }
 
-  // 2. Sitio (parque eólico)
+  // 2. Sitio (parque eólico): existente, nuevo o del catálogo NEXUS
   let siteId: string;
+  let catalog: CatalogInfo | undefined;
+  /** Busca un parque por nombre en la organización (se reutiliza) o lo crea; si el alta se detiene, devuelve el resultado. */
+  const findOrCreateSite = async (
+    values: { name: string; state?: string | null; city?: string | null; lat?: number | null; lon?: number | null },
+    createdDetail: string,
+  ): Promise<{ id: string; created: boolean } | FieldProjectResult> => {
+    const { data: found } = await sb
+      .from("sites")
+      .select("id, name, kind")
+      .eq("organization_id", orgId)
+      .eq("name", values.name)
+      .maybeSingle();
+    if (found) {
+      if (found.kind !== "wind_farm") return stop("site", "Sitio", `Ya existe «${found.name}» en la organización, pero no es un parque eólico.`);
+      add("site", "Sitio", "reused", `«${found.name}» ya existía en la organización.`);
+      return { id: found.id, created: false };
+    }
+    const { data, error } = await sb
+      .from("sites")
+      .insert({
+        organization_id: orgId,
+        kind: "wind_farm",
+        name: values.name,
+        ...(values.state != null ? { state: values.state } : {}),
+        ...(values.city != null ? { city: values.city } : {}),
+        lat: values.lat ?? null,
+        lon: values.lon ?? null,
+      })
+      .select("id")
+      .single();
+    if (error || !data) return stop("site", "Sitio", dupOr(error, "No se pudo crear el sitio."));
+    add("site", "Sitio", "created", createdDetail);
+    return { id: data.id, created: true };
+  };
   if (v.site.mode === "existing") {
     const { data: site } = await sb.from("sites").select("id, name, kind, organization_id").eq("id", v.site.id).maybeSingle();
     if (!site) return stop("site", "Sitio", "No se encontró el sitio.");
@@ -118,27 +194,42 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
     if (site.kind !== "wind_farm") return stop("site", "Sitio", "El sitio elegido no es un parque eólico.");
     siteId = site.id;
     add("site", "Sitio", "reused", `«${site.name}» (existente).`);
-  } else {
-    const { data: found } = await sb
+  } else if (v.site.mode === "catalog") {
+    // El parque debe pertenecer a la organización del catálogo (si no, se rechaza: no se copian parques ajenos).
+    const { data: catOrg } = await sb.from("organizations").select("id, name").eq("slug", catalogOrgSlug()).maybeSingle();
+    if (!catOrg) return stop("site", "Sitio", "El catálogo de parques no está disponible.");
+    const { data: src } = await sb
       .from("sites")
-      .select("id, name, kind")
-      .eq("organization_id", orgId)
-      .eq("name", v.site.name)
+      .select("id, name, kind, organization_id, state, city, lat, lon")
+      .eq("id", v.site.catalog_site_id)
       .maybeSingle();
-    if (found) {
-      if (found.kind !== "wind_farm") return stop("site", "Sitio", `Ya existe «${found.name}» en la organización, pero no es un parque eólico.`);
-      siteId = found.id;
-      add("site", "Sitio", "reused", `«${found.name}» ya existía en la organización.`);
-    } else {
-      const { data, error } = await sb
-        .from("sites")
-        .insert({ organization_id: orgId, kind: "wind_farm", name: v.site.name, lat: v.site.lat ?? null, lon: v.site.lon ?? null })
-        .select("id")
-        .single();
-      if (error || !data) return stop("site", "Sitio", dupOr(error, "No se pudo crear el sitio."));
-      siteId = data.id;
-      add("site", "Sitio", "created", `«${v.site.name}».`);
+    if (!src || src.organization_id !== catOrg.id || src.kind !== "wind_farm") {
+      return stop("site", "Sitio", "El parque elegido no pertenece al catálogo NEXUS.");
     }
+    const { data: machines, error: machinesErr } = await sb
+      .from("assets")
+      .select("name, wind_turbine_specs(manufacturer, model, hub_height_m, blade_length_m, rotor_diameter_m, wtgm)")
+      .eq("site_id", src.id)
+      .eq("kind", "wind_turbine");
+    if (machinesErr) return stop("site", "Sitio", "No se pudieron leer las máquinas del parque del catálogo.");
+    const specsByName = new Map((machines ?? []).map((m) => [m.name, m.wind_turbine_specs ?? null]));
+    if (orgId === catOrg.id) {
+      siteId = src.id;
+      add("site", "Sitio", "reused", `«${src.name}» (catálogo, misma organización).`);
+      catalog = { name: src.name, clone: false, siteCreated: false, specsByName };
+    } else {
+      const r = await findOrCreateSite(
+        { name: src.name, state: src.state, city: src.city, lat: src.lat, lon: src.lon },
+        `«${src.name}» copiado del catálogo.`,
+      );
+      if (!("id" in r)) return r;
+      siteId = r.id;
+      catalog = { name: src.name, clone: true, siteCreated: r.created, specsByName };
+    }
+  } else {
+    const r = await findOrCreateSite({ name: v.site.name, lat: v.site.lat, lon: v.site.lon }, `«${v.site.name}».`);
+    if (!("id" in r)) return r;
+    siteId = r.id;
   }
 
   // 3. Turbinas en lote (las que ya existen en el sitio se reutilizan)
@@ -150,8 +241,9 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
     return stop("turbines", "Turbinas", `«${wrongKind[0]!.name}» ya existe en el sitio como otro tipo de activo.`);
   }
   const fresh = v.turbines.filter((t) => !byName.has(t.name));
-  const reusedIds = v.turbines.filter((t) => byName.has(t.name)).map((t) => byName.get(t.name)!.id);
-  const newIds: string[] = [];
+  const reused = v.turbines.filter((t) => byName.has(t.name)).map((t) => ({ id: byName.get(t.name)!.id, name: t.name }));
+  const reusedIds = reused.map((r) => r.id);
+  const created: { id: string; name: string }[] = [];
   if (fresh.length > 0) {
     const { data, error } = await sb
       .from("assets")
@@ -166,28 +258,53 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
           lon: t.lon ?? null,
         })),
       )
-      .select("id");
+      .select("id, name");
     if (error || !data) return stop("turbines", "Turbinas", dupOr(error, "No se pudieron crear las turbinas."));
-    newIds.push(...data.map((r) => r.id));
+    created.push(...data);
   }
-  // Medidas comunes: se completan solo las turbinas que aún no tienen especificaciones (no se pisan las existentes).
-  if (v.specs) {
-    const allIds = [...newIds, ...reusedIds];
-    const { data: have, error: haveErr } = await sb.from("wind_turbine_specs").select("asset_id").in("asset_id", allIds);
+  // Especificaciones: solo para las turbinas que aún no tienen (no se pisan las existentes). Al copiar un parque del
+  // catálogo a otra organización se copian las de la máquina homónima (fabricante, modelo, buje, pala, rotor); las
+  // medidas comunes del formulario completan lo que quedó sin valor.
+  const catalogSpecs = catalog?.clone ? catalog.specsByName : undefined;
+  let specsCopied = 0;
+  if (v.specs || catalogSpecs) {
+    const targets = [...created, ...reused];
+    const { data: have, error: haveErr } = await sb
+      .from("wind_turbine_specs")
+      .select("asset_id")
+      .in("asset_id", targets.map((t) => t.id));
     if (haveErr) return stop("turbines", "Turbinas", "Las turbinas se guardaron, pero no se pudieron leer sus especificaciones.");
     const withSpecs = new Set((have ?? []).map((r) => r.asset_id));
-    const rows = allIds
-      .filter((id) => !withSpecs.has(id))
-      .map((asset_id) => ({
-        asset_id,
-        manufacturer: v.specs!.manufacturer ?? null,
-        model: v.specs!.model ?? null,
-        blade_length_m: v.specs!.blade_length_m ?? null,
-        rotor_diameter_m: v.specs!.rotor_diameter_m ?? null,
-      }));
+    const rows = targets
+      .filter((t) => !withSpecs.has(t.id))
+      .map((t) => {
+        const c = catalogSpecs?.get(t.name) ?? null;
+        return {
+          fromCatalog: c !== null,
+          row: {
+            asset_id: t.id,
+            manufacturer: c?.manufacturer ?? v.specs?.manufacturer ?? null,
+            model: c?.model ?? v.specs?.model ?? null,
+            hub_height_m: c?.hub_height_m ?? null,
+            blade_length_m: c?.blade_length_m ?? v.specs?.blade_length_m ?? null,
+            rotor_diameter_m: c?.rotor_diameter_m ?? v.specs?.rotor_diameter_m ?? null,
+            wtgm: c?.wtgm ?? null,
+          },
+        };
+      })
+      .filter((r) => r.row.manufacturer !== null || r.row.model !== null || r.row.hub_height_m !== null || r.row.blade_length_m !== null || r.row.rotor_diameter_m !== null || r.row.wtgm !== null);
     if (rows.length > 0) {
-      const { error } = await sb.from("wind_turbine_specs").insert(rows);
+      const { error } = await sb.from("wind_turbine_specs").insert(rows.map((r) => r.row));
       if (error) return stop("turbines", "Turbinas", "Las turbinas se guardaron, pero no sus especificaciones.");
+      specsCopied = rows.filter((r) => r.fromCatalog).length;
+    }
+  }
+  if (catalog) {
+    const unknown = fresh.filter((t) => !catalog!.specsByName.has(t.name));
+    if (unknown.length > 0) {
+      warnings.push(
+        `${unknown.length} ${unknown.length === 1 ? "turbina no existe" : "turbinas no existen"} en el catálogo de «${catalog.name}» (${unknown.slice(0, 3).map((t) => t.name).join(", ")}${unknown.length > 3 ? "…" : ""}); se ${unknown.length === 1 ? "creó como turbina nueva" : "crearon como turbinas nuevas"} sin especificaciones del catálogo.`,
+      );
     }
   }
   const reusedWarning = reusedTurbinesWarning(v.turbines, byName);
@@ -198,6 +315,18 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
     fresh.length > 0 ? "created" : "reused",
     `${fresh.length} creadas${reusedIds.length > 0 ? `, ${reusedIds.length} ya existían en el sitio` : ""}.`,
   );
+  if (catalog) {
+    const n = v.turbines.length;
+    const machines = `${n} ${n === 1 ? "máquina" : "máquinas"}`;
+    add(
+      "catalog",
+      "Catálogo",
+      catalog.clone && (catalog.siteCreated || fresh.length > 0) ? "created" : "reused",
+      catalog.clone
+        ? `Parque «${catalog.name}» ${catalog.siteCreated ? "copiado a" : "ya estaba en"} la organización «${orgName}», ${machines}${specsCopied > 0 ? `; especificaciones copiadas a ${specsCopied}` : ""}.`
+        : `Parque «${catalog.name}» del catálogo usado directamente en «${orgName}», ${machines}.`,
+    );
+  }
 
   // 4. Proyecto: por código si lo hay (dentro de la organización); si no, por nombre
   const p = v.project;
@@ -370,6 +499,18 @@ async function run(sb: Sb, service: Service, v: FieldProjectInput): Promise<Fiel
   revalidatePath("/admin/inspecciones/usuarios");
   return { ok: true, projectId, steps, warnings, invited, technicianEmail: email, technicianNote, staffNotes };
 }
+
+type CatalogInfo = {
+  name: string;
+  /** true si el parque se copia a otra organización; false si la organización del proyecto es la del catálogo. */
+  clone: boolean;
+  siteCreated: boolean;
+  /** Especificaciones de cada máquina del parque del catálogo, por nombre (null = sin especificaciones). */
+  specsByName: Map<
+    string,
+    { manufacturer: string | null; model: string | null; hub_height_m: number | null; blade_length_m: number | null; rotor_diameter_m: number | null; wtgm: Json | null } | null
+  >;
+};
 
 type Profile = { id: string; email: string | null; platform_role: "admin" | "technician" | "service" | null; is_active: boolean };
 type Person = { email: string; fullName: string };

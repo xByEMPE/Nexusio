@@ -175,6 +175,27 @@ El borrado de inspecciones, máquinas y proyectos (solo admin) se controla con l
 
 ---
 
+## Catálogo de parques
+
+El catálogo NEXUS son los parques eólicos (`sites` con `kind = wind_farm`) y sus máquinas (`assets` `wind_turbine`, con
+`wind_turbine_specs`: fabricante, modelo y altura de buje) de **una organización dueña**, la de identificador (`slug`)
+`nexus-01` por defecto. Se cambia con la variable de entorno **`CATALOG_ORG_SLUG`** (solo servidor; ver `.env.example`;
+la constante está en `src/lib/inspections/catalog.ts`).
+
+- **Asistente «Nuevo proyecto de campo»**: tras elegir la organización, el selector de parque es un buscador (por nombre,
+  estado o municipio) con los parques de la organización, el catálogo NEXUS y «+ Nuevo parque eólico». Al elegir un parque
+  se cargan sus máquinas en la lista de turbinas (editable, con «Seleccionar todas / Ninguna» y un contador) y se muestran
+  sus especificaciones (la altura de buje es solo informativa). Las máquinas se piden bajo demanda a la acción
+  `listSiteMachines` (solo admin, máximo 300).
+- **Si la organización del proyecto es la del catálogo**, se usa el parque y sus máquinas tal cual. **Si es otra** (un
+  cliente), `createFieldProject` copia el parque a la organización del cliente (nombre, estado, municipio y coordenadas;
+  si ya hay uno con ese nombre se reutiliza sin modificarlo) y crea o reutiliza las máquinas elegidas por nombre,
+  copiándoles fabricante, modelo, altura de buje, longitud de pala y diámetro de rotor desde la homónima del catálogo
+  solo si no tienen especificaciones. Las medidas comunes del formulario solo completan lo que el catálogo no trae. Es
+  idempotente: reenviar el formulario no duplica nada. No cambia RLS ni guardas.
+- **Recargar el catálogo**: ver `supabase/seeds/README.md` (formato esperado). La migración
+  `20261125000100_sites_state_city.sql` solo versiona las columnas `sites.state` y `sites.city` (idempotente).
+
 ## Caché de imágenes (egress en caché de Supabase)
 
 Objetivo: que las imágenes consultadas se sirvan desde caché al menos 6 meses y reducir el *uncached egress* de Supabase, **sin volver público** el bucket privado `inspection-media`.

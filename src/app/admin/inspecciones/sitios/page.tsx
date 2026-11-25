@@ -17,7 +17,7 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
   const isAdmin = viewer.platformRole === "admin";
   const sb = await createSessionClient();
 
-  let sitesQuery = sb?.from("sites").select("id, name, kind, organization_id, organizations(name), assets(count)").order("name");
+  let sitesQuery = sb?.from("sites").select("id, name, kind, organization_id, state, city, organizations(name), assets(count)").order("name");
   if (sitesQuery && org) sitesQuery = sitesQuery.eq("organization_id", org);
   const [sites, orgs] =
     sb && sitesQuery ? await Promise.all([sitesQuery, sb.from("organizations").select("id, name").order("name")]) : [null, null];
@@ -47,7 +47,7 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
                     <div className="min-w-0">
                       <div className="truncate font-medium">{s.name}</div>
                       <div className="text-xs text-foreground-subtle">
-                        {SITE_KIND_LABEL[s.kind]} · {s.organizations?.name}
+                        {[SITE_KIND_LABEL[s.kind], s.organizations?.name, s.state, s.city].filter(Boolean).join(" · ")}
                       </div>
                     </div>
                     <span className="tabular whitespace-nowrap text-xs text-foreground-muted">

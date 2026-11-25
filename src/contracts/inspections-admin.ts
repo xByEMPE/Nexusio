@@ -151,6 +151,8 @@ export const FieldProjectSchema = z
     ]),
     site: z.discriminatedUnion("mode", [
       z.object({ mode: z.literal("existing"), id: z.uuid("Elige el sitio") }),
+      // Parque del catálogo NEXUS: se reutiliza si la organización es la del catálogo; si no, se copia a la del cliente.
+      z.object({ mode: z.literal("catalog"), catalog_site_id: z.uuid("Elige el parque del catálogo") }),
       z.object({
         mode: z.literal("new"),
         kind: z.literal("wind_farm", "El sitio debe ser un parque eólico"),

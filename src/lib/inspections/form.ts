@@ -134,7 +134,9 @@ export function readFieldProjectForm(fd: FormData): { input: unknown; lineErrors
         ? { mode: "new", name: optStr(fd, "org_name"), slug: optStr(fd, "org_slug") }
         : { mode: "existing", id: optStr(fd, "organization_id") },
     site:
-      optStr(fd, "site_mode") === "new"
+      optStr(fd, "site_mode") === "catalog"
+        ? { mode: "catalog", catalog_site_id: optStr(fd, "catalog_site_id") }
+        : optStr(fd, "site_mode") === "new"
         ? {
             mode: "new",
             kind: "wind_farm",
